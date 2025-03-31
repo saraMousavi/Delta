@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="customfontstyle" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="fontFamily">@font/yekan</item>
+    </style>
+    <style name="Theme.Delta" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
