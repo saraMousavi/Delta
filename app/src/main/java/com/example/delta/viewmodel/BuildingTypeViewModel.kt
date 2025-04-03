@@ -1,10 +1,8 @@
-package com.example.delta
-
+package com.example.delta.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.delta.data.entity.BuildingType
-import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -14,18 +12,18 @@ class BuildingTypeViewModel(application: Application) : AndroidViewModel(applica
 
     private val buildingTypeDao = database.buildingTypeDao()
 
-    fun insertBuildingType(buildingType: BuildingType) {
+    fun insertBuildingType(buildingTypes: BuildingTypes) {
         viewModelScope.launch {
-            buildingTypeDao.insertBuildingType(buildingType)
+            buildingTypeDao.insertBuildingType(buildingTypes)
         }
     }
 
 
-    fun deleteBuildingType(buildingType: BuildingType) = viewModelScope.launch {
-        buildingTypeDao.deleteBuildingType(buildingType)
+    fun deleteBuildingType(buildingTypes: BuildingTypes) = viewModelScope.launch {
+        buildingTypeDao.deleteBuildingType(buildingTypes)
     }
 
-    fun getAllBuildingType(): Flow<List<BuildingType>> {
+    fun getAllBuildingType(): Flow<List<BuildingTypes>> {
         return buildingTypeDao.getAllBuildingTypes()
     }
 }

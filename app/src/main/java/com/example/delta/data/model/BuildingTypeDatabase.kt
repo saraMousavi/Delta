@@ -5,9 +5,9 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.delta.data.dao.BuildingTypeDao
-import com.example.delta.data.entity.BuildingType
+import com.example.delta.data.entity.BuildingTypes
 
-@Database(entities = [BuildingType::class], version = 1, exportSchema = false)
+@Database(entities = [BuildingTypes::class], version = 1, exportSchema = false)
 abstract class BuildingTypeDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
 

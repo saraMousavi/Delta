@@ -6,11 +6,11 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.BuildingType
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 
 @Database(
-    entities = [Buildings::class, BuildingType::class, BuildingUsage::class],
+    entities = [Buildings::class, BuildingTypes::class, BuildingUsages::class],
     version = 1,
     exportSchema = false
 )

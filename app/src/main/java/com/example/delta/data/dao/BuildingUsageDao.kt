@@ -2,17 +2,17 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.data.entity.BuildingUsages
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BuildingUsageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBuildingUsage(buildingUsage: BuildingUsage)
+    suspend fun insertBuildingUsage(buildingUsages: BuildingUsages)
 
     @Delete()
-    suspend fun deleteBuildingUsage(buildingUsage: BuildingUsage)
+    suspend fun deleteBuildingUsage(buildingUsages: BuildingUsages)
 
-    @Query("SELECT * FROM building_usage")
-    fun getAllBuildingUsages(): Flow<List<BuildingUsage>>
+    @Query("SELECT * FROM building_usages")
+    fun getAllBuildingUsages(): Flow<List<BuildingUsages>>
 }

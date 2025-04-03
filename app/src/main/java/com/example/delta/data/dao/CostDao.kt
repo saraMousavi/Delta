@@ -1,21 +1,21 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
-import com.example.delta.data.entity.Cost
+import com.example.delta.data.entity.Costs
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CostDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCost(cost: Cost)
+    suspend fun insertCost(costs: Costs)
 
     @Delete()
-    suspend fun deleteCost(cost: Cost)
+    suspend fun deleteCost(costs: Costs)
 
     @Query("SELECT * FROM costs")
-    fun getAllCost(): Flow<List<Cost>>
+    fun getAllCost(): Flow<List<Costs>>
 
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId")
-    fun getCostsForBuilding(buildingId: Long): Flow<List<Cost>>
+    fun getCostsForBuilding(buildingId: Long): Flow<List<Costs>>
 }

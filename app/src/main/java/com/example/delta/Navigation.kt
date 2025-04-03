@@ -166,7 +166,7 @@ fun DetailDrawer(
                         label = { Text(context.getString(R.string.income_list)) },
                         selected = false,
                         onClick = {
-                            context.startActivity(Intent(context, IncomeActivity::class.java))
+                            context.startActivity(Intent(context, EarningsActivity::class.java))
                         }
                     )
                     Spacer(Modifier.height(12.dp))

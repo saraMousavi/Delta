@@ -41,7 +41,7 @@
             android:name=".BuildingUsageActivity"
             android:exported="false"  />
         <activity
-            android:name=".IncomeActivity"
+            android:name=".EarningsActivity"
             android:exported="false" />
         <activity
             android:name=".LoginActivity"

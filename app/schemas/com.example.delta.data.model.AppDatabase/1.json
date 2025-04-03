@@ -2,10 +2,10 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "56fe4ebef5891d51a0cf7349003e2a49",
+    "identityHash": "6c92c9bd68450b7ca97f86f61b033672",
     "entities": [
       {
-        "tableName": "building_type",
+        "tableName": "building_types",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_type_name` TEXT NOT NULL)",
         "fields": [
           {
@@ -31,7 +31,7 @@
         "foreignKeys": []
       },
       {
-        "tableName": "building_usage",
+        "tableName": "building_usages",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_usage_name` TEXT NOT NULL)",
         "fields": [
           {
@@ -58,7 +58,7 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `ownerName` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `nationalCode` TEXT NOT NULL, `postCode` TEXT NOT NULL, `address` TEXT NOT NULL, `fundNumber` TEXT NOT NULL, `currentBalance` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_type`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usage`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `ownerName` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `nationalCode` TEXT NOT NULL, `postCode` TEXT NOT NULL, `address` TEXT NOT NULL, `fundNumber` TEXT NOT NULL, `currentBalance` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
@@ -161,7 +161,7 @@
         ],
         "foreignKeys": [
           {
-            "table": "building_type",
+            "table": "building_types",
             "onDelete": "SET NULL",
             "onUpdate": "NO ACTION",
             "columns": [
@@ -172,7 +172,7 @@
             ]
           },
           {
-            "table": "building_usage",
+            "table": "building_usages",
             "onDelete": "SET NULL",
             "onUpdate": "NO ACTION",
             "columns": [
@@ -251,8 +251,8 @@
         ]
       },
       {
-        "tableName": "incomes",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `income_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "tableName": "earnings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -261,8 +261,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "incomeName",
-            "columnName": "income_name",
+            "fieldPath": "earningsName",
+            "columnName": "earnings_name",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -293,13 +293,13 @@
         },
         "indices": [
           {
-            "name": "index_incomes_buildingId",
+            "name": "index_earnings_buildingId",
             "unique": false,
             "columnNames": [
               "buildingId"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_incomes_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_earnings_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
           }
         ],
         "foreignKeys": [
@@ -320,7 +320,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '56fe4ebef5891d51a0cf7349003e2a49')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6c92c9bd68450b7ca97f86f61b033672')"
     ]
   }
 }

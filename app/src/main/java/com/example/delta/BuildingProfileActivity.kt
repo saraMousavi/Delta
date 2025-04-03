@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Divider
@@ -50,7 +48,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,20 +64,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.example.delta.data.entity.BuildingWithCosts
-import com.example.delta.data.entity.BuildingWithIncomes
 import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.Cost
-import com.example.delta.data.entity.Income
+import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Earnings
 import com.example.delta.factory.BuildingsViewModelFactory
-import com.example.delta.factory.IncomeViewModelFactory
+import com.example.delta.factory.EarningsViewModelFactory
+import com.example.delta.viewmodel.BuildingsViewModel
+import com.example.delta.viewmodel.EarningsViewModel
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 class BuildingProfileActivity : ComponentActivity() {
-    private val incomeViewModel: IncomeViewModel by viewModels {
-        IncomeViewModelFactory(application = this.application)
+    private val earningsViewModel: EarningsViewModel by viewModels {
+        EarningsViewModelFactory(application = this.application)
     }
 
     private val buildingViewModel: BuildingsViewModel by viewModels {
@@ -174,7 +170,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
-        val buildingWithIncomes by buildingViewModel.buildingWithIncomes.collectAsState(initial = null)
+        val buildingWithIncomes by buildingViewModel.buildingWithEarnings.collectAsState(initial = null)
         val buildingWithCosts by buildingViewModel.buildingWithCosts.collectAsState(initial = null)
         LaunchedEffect(building.buildingId) {
             buildingViewModel.selectBuilding(building.buildingId)
@@ -213,7 +209,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
             // Tab Row
             var selectedTab by remember { mutableStateOf(0) }
-            val tabTitles = listOf("Income", "Cost")
+            val tabTitles = listOf("Earnings", "Costs")
 
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
@@ -241,7 +237,7 @@ class BuildingProfileActivity : ComponentActivity() {
             // Content Area
             when (selectedTab) {
                 0 -> IncomeSection(
-                    incomes = buildingWithIncomes?.incomes ?: emptyList(),
+                    earnings = buildingWithIncomes?.earnings ?: emptyList(),
                     onAddIncome = { buildingViewModel.showIncomeDialog(building.buildingId) }
                 )
                 1 -> CostSection(
@@ -256,9 +252,9 @@ class BuildingProfileActivity : ComponentActivity() {
             IncomeDialog(
                 building = building,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                incomeFlow = incomeViewModel.getAllIncome(),
+                earningsFlow = earningsViewModel.getAllEarnings(),
                 onConfirm = { income ->
-                    buildingViewModel.insertIncome(income)
+                    buildingViewModel.insertEarnings(income)
                     buildingViewModel.hideDialogs()
                 }
             )
@@ -278,7 +274,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     private fun IncomeSection(
-        incomes: List<Income>,
+        earnings: List<Earnings>,
         onAddIncome: () -> Unit
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -288,9 +284,9 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(bottom = 80.dp),
                 state = rememberLazyListState()
             ) {
-                itemsIndexed(incomes) { index, income ->
-                    IncomeItem(income = income)
-                    if (index < incomes.lastIndex) {
+                itemsIndexed(earnings) { index, income ->
+                    IncomeItem(earnings = income)
+                    if (index < earnings.lastIndex) {
                         Divider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant
@@ -298,10 +294,10 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 }
 
-                if (incomes.isEmpty()) {
+                if (earnings.isEmpty()) {
                     item {
                         Text(
-                            text = "No incomes recorded",
+                            text = "No earnings recorded",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(24.dp),
@@ -317,8 +313,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
-                icon = { Icon(Icons.Default.Add, "Add Income") },
-                text = { Text("Add Income") },
+                icon = { Icon(Icons.Default.Add, "Add Earnings") },
+                text = { Text("Add Earnings") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -328,7 +324,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     private fun CostSection(
-        costs: List<Cost>,
+        costs: List<Costs>,
         onAddCost: () -> Unit
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -339,7 +335,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 state = rememberLazyListState()
             ) {
                 itemsIndexed(costs) { index, cost ->
-                    CostItem(cost = cost)
+                    CostItem(costs = cost)
                     if (index < costs.lastIndex) {
                         Divider(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -367,8 +363,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
-                icon = { Icon(Icons.Default.Add, "Add Cost") },
-                text = { Text("Add Cost") },
+                icon = { Icon(Icons.Default.Add, "Add Costs") },
+                text = { Text("Add Costs") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -377,7 +373,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    private fun IncomeItem(income: Income) {
+    private fun IncomeItem(earnings: Earnings) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -388,7 +384,7 @@ class BuildingProfileActivity : ComponentActivity() {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = income.incomeName,
+                    text = earnings.earningsName,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -398,12 +394,12 @@ class BuildingProfileActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxWidth()
                 ) {
 //                    Text(
-//                        text = income.date.format(DateTimeFormatter.ISO_DATE),
+//                        text = earnings.date.format(DateTimeFormatter.ISO_DATE),
 //                        style = MaterialTheme.typography.bodyMedium,
 //                        color = MaterialTheme.colorScheme.onSurfaceVariant
 //                    )
                     Text(
-                        text = "$${income.amount}",
+                        text = "$${earnings.amount}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -414,7 +410,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    private fun CostItem(cost: Cost) {
+    private fun CostItem(costs: Costs) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -425,7 +421,7 @@ class BuildingProfileActivity : ComponentActivity() {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = cost.costName,
+                    text = costs.costName,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -435,12 +431,12 @@ class BuildingProfileActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxWidth()
                 ) {
 //                    Text(
-//                        text = cost.date.format(DateTimeFormatter.ISO_DATE),
+//                        text = costs.date.format(DateTimeFormatter.ISO_DATE),
 //                        style = MaterialTheme.typography.bodyMedium,
 //                        color = MaterialTheme.colorScheme.onSurfaceVariant
 //                    )
                     Text(
-                        text = "$${cost.amount}",
+                        text = "$${costs.amount}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -478,7 +474,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @Composable
     fun UnitsTab(building: Buildings) {
 //        LazyColumn(modifier = Modifier.padding(16.dp)) {
-//            items(building.incomes) { income ->
+//            items(building.earnings) { income ->
 //                Card(
 //                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
 //                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -525,16 +521,16 @@ class BuildingProfileActivity : ComponentActivity() {
     @Composable
     fun IncomeDialog(
         building: Buildings,
-        incomeFlow: Flow<List<Income>>,
+        earningsFlow: Flow<List<Earnings>>,
         onDismiss: () -> Unit,
-        onConfirm: (Income) -> Unit
+        onConfirm: (Earnings) -> Unit
     ) {
         val description = remember { mutableStateOf("") }
         val amount = remember { mutableStateOf("") }
         val selectedIncomeName = remember { mutableStateOf("") }
         var expanded by remember { mutableStateOf(false) }
-        val incomes by incomeFlow.collectAsState(initial = emptyList())
-        val selectedIncome = remember { mutableStateOf<Income?>(null) }
+        val incomes by earningsFlow.collectAsState(initial = emptyList())
+        val selectedEarnings = remember { mutableStateOf<Earnings?>(null) }
 
         Dialog(onDismissRequest = onDismiss) {
             Surface(
@@ -549,7 +545,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         .fillMaxWidth()
                 ) {
                     Text(
-                        text = "Add Income",
+                        text = "Add Earnings",
                         style = MaterialTheme.typography.titleLarge
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -570,7 +566,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             value = selectedIncomeName.value,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Income Name") },
+                            label = { Text("Earnings Name") },
                             trailingIcon = {
                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded)
                             },
@@ -586,9 +582,9 @@ class BuildingProfileActivity : ComponentActivity() {
                         ) {
                             incomes.forEach { income ->
                                 DropdownMenuItem(
-                                    text = { Text(income.incomeName) },
+                                    text = { Text(income.earningsName) },
                                     onClick = {
-                                        selectedIncome.value = income
+                                        selectedEarnings.value = income
                                         expanded = false
                                     }
                                 )
@@ -606,14 +602,14 @@ class BuildingProfileActivity : ComponentActivity() {
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                val income = Income(
+                                val earnings = Earnings(
                                     buildingId = building.buildingId,
                                     amount = (amount.value.toDoubleOrNull() ?: 0.0),
-                                    incomeName = description.value,
+                                    earningsName = description.value,
 //                                    date = LocalDate.now(),
                                     currency =  LocalDate.now().toString()
                                 )
-                                onConfirm(income)
+                                onConfirm(earnings)
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(

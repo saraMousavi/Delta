@@ -10,7 +10,7 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 @Entity(
-    tableName = "incomes",
+    tableName = "costs",
     foreignKeys = [
         ForeignKey(
             entity = Buildings::class,
@@ -23,9 +23,9 @@ import kotlinx.parcelize.Parcelize
         Index("buildingId")
     ]
 )
-data class Income(
+data class Costs(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    @ColumnInfo(name = "income_name") val incomeName: String,
+    @ColumnInfo(name = "cost_name") val costName: String,
     @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
     @ColumnInfo(name = "amount") val amount: Double,
     @ColumnInfo(name = "currency") val currency: String

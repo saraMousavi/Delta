@@ -1,9 +1,9 @@
-package com.example.delta
+package com.example.delta.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.delta.data.entity.Cost
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -13,15 +13,15 @@ class CostViewModel (application: Application) : AndroidViewModel(application) {
     private val costsDao = database.costDao()
 
 
-    fun insertCost(cost: Cost) = viewModelScope.launch {
-        costsDao.insertCost(cost)
+    fun insertCost(costs: Costs) = viewModelScope.launch {
+        costsDao.insertCost(costs)
     }
 
-    fun deleteCost(cost: Cost) = viewModelScope.launch {
-        costsDao.deleteCost(cost)
+    fun deleteCost(costs: Costs) = viewModelScope.launch {
+        costsDao.deleteCost(costs)
     }
 
-    fun getAllCost(): Flow<List<Cost>> {
+    fun getAllCost(): Flow<List<Costs>> {
         return costsDao.getAllCost()
     }
 }

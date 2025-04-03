@@ -10,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -18,18 +17,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.example.delta.CostForm
-import com.example.delta.GenericItem
-import com.example.delta.GenericList
-import com.example.delta.CostViewModel
-import com.example.delta.R
-import com.example.delta.data.entity.Cost
+import com.example.delta.viewmodel.CostViewModel
+import com.example.delta.data.entity.Costs
 import com.example.delta.factory.CostViewModelFactory
-import java.time.LocalDate
-import java.util.Date
 
 class CostActivity : ComponentActivity() {
     private val viewModel: CostViewModel by viewModels {
@@ -61,14 +53,14 @@ class CostActivity : ComponentActivity() {
                     CostForm(
                         viewModel = viewModel,
                         insertItem = { name ->
-                            viewModel.insertCost(Cost(buildingId = 0 , costName = name, amount = 0.0  , currency = name))
+                            viewModel.insertCost(Costs(buildingId = 0 , costName = name, amount = 0.0  , currency = name))
                         },
                         listContent = { vm ->
                             GenericList(
                                 viewModel = vm,
                                 items = costs,
                                 itemContent = { item ->
-                                    GenericItem(item = item, itemName = { (it as Cost).costName })
+                                    GenericItem(item = item, itemName = { (it).costName })
                                 },
                                 onDeleteItem = { item ->
                                     vm.deleteCost(item)

@@ -1,11 +1,10 @@
 package com.example.delta
 
 
-import com.example.delta.data.entity.BuildingType
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
 import android.os.Bundle
-import android.os.Message
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.delta.viewmodel.BuildingTypeViewModel
+import com.example.delta.viewmodel.BuildingUsageViewModel
+import com.example.delta.viewmodel.BuildingsViewModel
 
 class BuildingFormActivity : ComponentActivity() {
     private val viewModel: BuildingsViewModel by viewModels()
@@ -48,12 +50,12 @@ class BuildingFormActivity : ComponentActivity() {
 @Composable
 fun BuildingFormScreen(
     viewModel: BuildingsViewModel,
-    buildingTypes: List<BuildingType>,
-    buildingUsages: List<BuildingUsage>
+    buildingTypes: List<BuildingTypes>,
+    buildingUsages: List<BuildingUsages>
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedBuildingType by remember { mutableStateOf<BuildingType?>(null) }
-    var selectedBuildingUsage by remember { mutableStateOf<BuildingUsage?>(null) }
+    var selectedBuildingTypes by remember { mutableStateOf<BuildingTypes?>(null) }
+    var selectedBuildingUsages by remember { mutableStateOf<BuildingUsages?>(null) }
     var ownerName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -189,8 +191,8 @@ fun BuildingFormScreen(
         item {
             ExposedDropdownMenuBoxExample(
                 items = buildingTypes,
-                selectedItem = selectedBuildingType,
-                onItemSelected = { selectedBuildingType = it },
+                selectedItem = selectedBuildingTypes,
+                onItemSelected = { selectedBuildingTypes = it },
                 label = context.getString(R.string.building_type),
                 itemLabel = { it.buildingTypeName }
             )
@@ -204,8 +206,8 @@ fun BuildingFormScreen(
         item {
             ExposedDropdownMenuBoxExample(
                 items = buildingUsages,
-                selectedItem = selectedBuildingUsage,
-                onItemSelected = { selectedBuildingUsage = it },
+                selectedItem = selectedBuildingUsages,
+                onItemSelected = { selectedBuildingUsages = it },
                 label = context.getString(R.string.building_usage),
                 itemLabel = { it.buildingUsageName }
             )
@@ -219,8 +221,8 @@ fun BuildingFormScreen(
             modifier = Modifier.fillMaxWidth(),
             onClick = {
                 // Handle form submission
-                if (selectedBuildingType?.id != null && selectedBuildingUsage?.id != null) {
-                    Log.d("BuildingForm", "Building Type ID: ${selectedBuildingType?.id}, Building Usage ID: ${selectedBuildingUsage?.id}")
+                if (selectedBuildingTypes?.id != null && selectedBuildingUsages?.id != null) {
+                    Log.d("BuildingForm", "Building Type ID: ${selectedBuildingTypes?.id}, Building Usage ID: ${selectedBuildingUsages?.id}")
                     viewModel.insertBuildings(Buildings(
                         name = name,
                         ownerName = ownerName,
@@ -231,8 +233,8 @@ fun BuildingFormScreen(
                         address = address,
                         fundNumber = address,
                         currentBalance = address,
-                        buildingTypeId = selectedBuildingType?.id!!,
-                        buildingUsageId = selectedBuildingUsage?.id!!
+                        buildingTypeId = selectedBuildingTypes?.id!!,
+                        buildingUsageId = selectedBuildingUsages?.id!!
                     ))
                     // Optionally, navigate back or clear the form
                     (context as? BuildingFormActivity)?.finish()

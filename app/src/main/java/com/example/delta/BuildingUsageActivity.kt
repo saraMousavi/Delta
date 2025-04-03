@@ -8,7 +8,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -16,14 +15,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.example.delta.GenericItem
-import com.example.delta.GenericList
-import com.example.delta.BuildingUsageViewModel
-import com.example.delta.R
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.viewmodel.BuildingUsageViewModel
+import com.example.delta.data.entity.BuildingUsages
 
 class BuildingUsageActivity : ComponentActivity() {
     private val viewModel: BuildingUsageViewModel by viewModels()
@@ -53,7 +48,7 @@ class BuildingUsageActivity : ComponentActivity() {
                     CostForm(
                         viewModel = viewModel,
                         insertItem = { name ->
-                            viewModel.insertBuildingUsage(BuildingUsage(buildingUsageName = name))
+                            viewModel.insertBuildingUsage(BuildingUsages(buildingUsageName = name))
                         },
                         listContent = { vm ->
                             GenericList(
@@ -62,7 +57,7 @@ class BuildingUsageActivity : ComponentActivity() {
                                 itemContent = { item ->
                                     GenericItem(
                                         item = item,
-                                        itemName = { (it as BuildingUsage).buildingUsageName })
+                                        itemName = { (it as BuildingUsages).buildingUsageName })
                                 },
                                 onDeleteItem = { item ->
                                     vm.deleteBuildingUsage(item)

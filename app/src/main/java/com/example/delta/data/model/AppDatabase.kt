@@ -8,23 +8,26 @@ import com.example.delta.data.dao.BuildingTypeDao
 import com.example.delta.data.dao.BuildingUsageDao
 import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
-import com.example.delta.data.dao.IncomeDao
-import com.example.delta.data.entity.BuildingType
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.Cost
-import com.example.delta.data.entity.Income
+import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Earnings
 
-@Database(entities = [BuildingType::class, BuildingUsage::class,Buildings::class, Cost::class, Income::class], version = 1, exportSchema = true)
+@Database(entities = [BuildingTypes::class, BuildingUsages::class,Buildings::class, Costs::class, Earnings::class], version = 1, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
     abstract fun buildingUsageDao(): BuildingUsageDao
     abstract fun buildingsDao(): BuildingsDao
     abstract fun costDao(): CostDao
-    abstract fun incomeDao(): IncomeDao
+    abstract fun earningsDao(): EarningsDao
+
+
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
+
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {

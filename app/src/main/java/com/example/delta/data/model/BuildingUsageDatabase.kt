@@ -5,9 +5,9 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.delta.data.dao.BuildingUsageDao
-import com.example.delta.data.entity.BuildingUsage
+import com.example.delta.data.entity.BuildingUsages
 
-@Database(entities = [BuildingUsage::class], version = 1, exportSchema = false)
+@Database(entities = [BuildingUsages::class], version = 1, exportSchema = false)
 abstract class BuildingUsageDatabase : RoomDatabase() {
     abstract fun buildingUsageDao(): BuildingUsageDao
 

@@ -3,10 +3,10 @@ package com.example.delta.factory
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.example.delta.IncomeViewModel
+import com.example.delta.viewmodel.EarningsViewModel
 
-class IncomeViewModelFactory (private val application: Application) : ViewModelProvider.NewInstanceFactory() {
+class EarningsViewModelFactory (private val application: Application) : ViewModelProvider.NewInstanceFactory() {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return IncomeViewModel(application) as T
+        return EarningsViewModel(application) as T
     }
 }

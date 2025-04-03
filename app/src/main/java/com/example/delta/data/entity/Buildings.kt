@@ -11,13 +11,13 @@ import kotlinx.parcelize.Parcelize
     tableName = "buildings",
     foreignKeys = [
         ForeignKey(
-            entity = BuildingType::class,
+            entity = BuildingTypes::class,
             parentColumns = ["id"],
             childColumns = ["buildingTypeId"],
             onDelete = ForeignKey.SET_NULL
         ),
         ForeignKey(
-            entity = BuildingUsage::class,
+            entity = BuildingUsages::class,
             parentColumns = ["id"],
             childColumns = ["buildingUsageId"],
             onDelete = ForeignKey.SET_NULL

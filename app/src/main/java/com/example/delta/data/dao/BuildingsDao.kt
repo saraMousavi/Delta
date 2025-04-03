@@ -2,7 +2,9 @@ package com.example.delta.data.dao
 
 import androidx.room.*
 import com.example.delta.data.entity.BuildingWithCosts
-import com.example.delta.data.entity.BuildingWithIncomes
+import com.example.delta.data.entity.BuildingWithEarnings
+import com.example.delta.data.entity.BuildingWithType
+import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
 import kotlinx.coroutines.flow.Flow
 
@@ -20,9 +22,17 @@ interface BuildingsDao {
 
     @Transaction // Indicates that this query involves multiple tables.
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
-    fun getBuildingWithIncomes(buildingId: Long): Flow<BuildingWithIncomes>
+    fun getBuildingWithEarnings(buildingId: Long): Flow<BuildingWithEarnings>
 
     @Transaction // Indicates that this query involves multiple tables.
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
     fun getBuildingWithCosts(buildingId: Long): Flow<BuildingWithCosts>
+
+    @Transaction
+    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
+    fun getBuildingWithType(buildingId: Long): Flow<BuildingWithType>
+
+    @Transaction
+    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
+    fun getBuildingWithUsage(buildingId: Long): Flow<BuildingWithUsage>
 }
