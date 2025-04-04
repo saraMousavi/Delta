@@ -42,13 +42,13 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _selectedBuildingId = MutableStateFlow<Long?>(null)
 
-    val buildingWithEarnings: Flow<BuildingWithEarnings?> = _selectedBuildingId.flatMapLatest { id ->
-        id?.let { buildingsDao.getBuildingWithEarnings(it) } ?: flowOf(null)
-    }
+//    val buildingWithEarnings: Flow<BuildingWithEarnings?> = _selectedBuildingId.flatMapLatest { id ->
+//        id?.let { buildingsDao.getBuildingWithEarnings(it) } ?: flowOf(null)
+//    }
 
-    val buildingWithCosts: Flow<BuildingWithCosts?> = _selectedBuildingId.flatMapLatest { id ->
-        id?.let { buildingsDao.getBuildingWithCosts(it) } ?: flowOf(null)
-    }
+//    val buildingWithCosts: Flow<BuildingWithCosts?> = _selectedBuildingId.flatMapLatest { id ->
+//        id?.let { buildingsDao.getBuildingWithCosts(it) } ?: flowOf(null)
+//    }
 
     fun selectBuilding(buildingId: Long) {
         _selectedBuildingId.value = buildingId

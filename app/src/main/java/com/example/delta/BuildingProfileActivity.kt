@@ -68,8 +68,10 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.factory.BuildingsViewModelFactory
+import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.viewmodel.BuildingsViewModel
+import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
@@ -77,6 +79,10 @@ import java.time.LocalDate
 class BuildingProfileActivity : ComponentActivity() {
     private val earningsViewModel: EarningsViewModel by viewModels {
         EarningsViewModelFactory(application = this.application)
+    }
+
+    private val costsViewModel: CostViewModel by viewModels {
+        CostViewModelFactory(application = this.application)
     }
 
     private val buildingViewModel: BuildingsViewModel by viewModels {
@@ -170,8 +176,8 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
-        val buildingWithIncomes by buildingViewModel.buildingWithEarnings.collectAsState(initial = null)
-        val buildingWithCosts by buildingViewModel.buildingWithCosts.collectAsState(initial = null)
+        val buildingWithIncomes = earningsViewModel.fetchAndProcessEarnings(building.buildingId).collectAsState(initial = null)
+        val buildingWithCosts = costsViewModel.fetchAndProcessCosts(building.buildingId).collectAsState(initial = null)
         LaunchedEffect(building.buildingId) {
             buildingViewModel.selectBuilding(building.buildingId)
         }
@@ -237,11 +243,11 @@ class BuildingProfileActivity : ComponentActivity() {
             // Content Area
             when (selectedTab) {
                 0 -> IncomeSection(
-                    earnings = buildingWithIncomes?.earnings ?: emptyList(),
+                    earnings = buildingWithIncomes?.value ?: emptyList(),
                     onAddIncome = { buildingViewModel.showIncomeDialog(building.buildingId) }
                 )
                 1 -> CostSection(
-                    costs = buildingWithCosts?.costs ?: emptyList(),
+                    costs = buildingWithCosts?.value ?: emptyList(),
                     onAddCost = { buildingViewModel.showCostDialog(building.buildingId) }
                 )
             }

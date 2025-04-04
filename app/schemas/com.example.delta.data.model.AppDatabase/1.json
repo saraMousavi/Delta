@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "6c92c9bd68450b7ca97f86f61b033672",
+    "identityHash": "aed024b60fba7d360e9362220a590105",
     "entities": [
       {
         "tableName": "building_types",
@@ -186,7 +186,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cost_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cost_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -225,34 +225,12 @@
             "id"
           ]
         },
-        "indices": [
-          {
-            "name": "index_costs_buildingId",
-            "unique": false,
-            "columnNames": [
-              "buildingId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_costs_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "buildings",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "buildingId"
-            ],
-            "referencedColumns": [
-              "buildingId"
-            ]
-          }
-        ]
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "earnings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -291,36 +269,14 @@
             "id"
           ]
         },
-        "indices": [
-          {
-            "name": "index_earnings_buildingId",
-            "unique": false,
-            "columnNames": [
-              "buildingId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_earnings_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "buildings",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "buildingId"
-            ],
-            "referencedColumns": [
-              "buildingId"
-            ]
-          }
-        ]
+        "indices": [],
+        "foreignKeys": []
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6c92c9bd68450b7ca97f86f61b033672')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'aed024b60fba7d360e9362220a590105')"
     ]
   }
 }

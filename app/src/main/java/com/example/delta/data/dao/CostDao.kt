@@ -1,6 +1,7 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
+import com.example.delta.data.entity.BuildingWithCosts
 import com.example.delta.data.entity.Costs
 import kotlinx.coroutines.flow.Flow
 

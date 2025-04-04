@@ -3,6 +3,7 @@ package com.example.delta.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.flow.Flow
@@ -23,5 +24,9 @@ class EarningsViewModel (application: Application) : AndroidViewModel(applicatio
 
     fun getAllEarnings(): Flow<List<Earnings>> {
         return earningsDao.getAllEarnings()
+    }
+
+    fun fetchAndProcessEarnings(buildingId: Long) : Flow<List<Earnings>> {
+        return earningsDao.getEarningsForBuilding(buildingId)
     }
 }

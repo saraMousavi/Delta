@@ -20,13 +20,6 @@ interface BuildingsDao {
     @Query("SELECT * FROM buildings")
     fun getAllBuildings(): Flow<List<Buildings>>
 
-    @Transaction // Indicates that this query involves multiple tables.
-    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
-    fun getBuildingWithEarnings(buildingId: Long): Flow<BuildingWithEarnings>
-
-    @Transaction // Indicates that this query involves multiple tables.
-    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
-    fun getBuildingWithCosts(buildingId: Long): Flow<BuildingWithCosts>
 
     @Transaction
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
