@@ -26,6 +26,9 @@
             android:name=".AuthActivity"
             android:exported="false"  />
         <activity
+            android:name=".UnitDetailsActivity"
+            android:exported="false"  />
+        <activity
             android:name=".BuildingFormActivity"
             android:exported="false"  />
         <activity

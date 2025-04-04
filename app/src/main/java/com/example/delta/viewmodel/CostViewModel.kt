@@ -3,7 +3,6 @@ package com.example.delta.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.delta.data.entity.BuildingWithCosts
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +27,18 @@ class CostViewModel (application: Application) : AndroidViewModel(application) {
 
     fun getAllCost(): Flow<List<Costs>> {
         return costsDao.getAllCost()
+    }
+
+    fun getCost(costId : Long): Costs {
+        return costsDao.getCost(costId)
+    }
+
+    fun getAllMenuCost(): Flow<List<Costs>> {
+        return costsDao.getAllMenuCost()
+    }
+
+    fun getLastCostId(): Long{
+        return costsDao.getLastCostId()
     }
 
     fun fetchAndProcessCosts(buildingId: Long) : Flow<List<Costs>> {

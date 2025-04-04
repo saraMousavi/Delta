@@ -231,8 +231,8 @@ fun BuildingFormScreen(
                         nationalCode = nationalCode,
                         postCode = postCode,
                         address = address,
-                        fundNumber = address,
-                        currentBalance = address,
+                        fundNumber = 0,
+                        currentBalance = 0,
                         buildingTypeId = selectedBuildingTypes?.id!!,
                         buildingUsageId = selectedBuildingUsages?.id!!
                     ))
@@ -251,51 +251,6 @@ fun BuildingFormScreen(
                 style = MaterialTheme.typography.titleLarge
             )
         }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun <T> ExposedDropdownMenuBoxExample(
-    items: List<T>,
-    selectedItem: T?,
-    onItemSelected: (T) -> Unit,
-    label: String,
-    itemLabel: (T) -> String
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
-            readOnly = true,
-            value = selectedItem?.let { itemLabel(it) } ?: "",
-            onValueChange = { },
-            label = { Text(label) },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(
-                    expanded = expanded
-                )
-            }
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            items.forEach { item ->
-                DropdownMenuItem(
-                    text = { Text(itemLabel(item)) },
-                    onClick = {
-                        onItemSelected(item)
-                        expanded = false
-                    }
-                )
-            }
         }
     }
 }

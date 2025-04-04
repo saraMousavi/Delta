@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "aed024b60fba7d360e9362220a590105",
+    "identityHash": "2899df1b9659368986e647d35a431096",
     "entities": [
       {
         "tableName": "building_types",
@@ -58,7 +58,7 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `ownerName` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `nationalCode` TEXT NOT NULL, `postCode` TEXT NOT NULL, `address` TEXT NOT NULL, `fundNumber` TEXT NOT NULL, `currentBalance` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `ownerName` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `nationalCode` TEXT NOT NULL, `postCode` TEXT NOT NULL, `address` TEXT NOT NULL, `fundNumber` INTEGER NOT NULL, `currentBalance` INTEGER NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
@@ -111,13 +111,13 @@
           {
             "fieldPath": "fundNumber",
             "columnName": "fundNumber",
-            "affinity": "TEXT",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
             "fieldPath": "currentBalance",
             "columnName": "currentBalance",
-            "affinity": "TEXT",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -271,12 +271,172 @@
         },
         "indices": [],
         "foreignKeys": []
+      },
+      {
+        "tableName": "units",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `unitNumber` INTEGER NOT NULL, `metrage` REAL NOT NULL, `ownerName` TEXT NOT NULL, `tenantName` TEXT NOT NULL, `numberOfTenants` INTEGER NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "unitId",
+            "columnName": "unitId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unitNumber",
+            "columnName": "unitNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metrage",
+            "columnName": "metrage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ownerName",
+            "columnName": "ownerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tenantName",
+            "columnName": "tenantName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numberOfTenants",
+            "columnName": "numberOfTenants",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "unitId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": [
+          {
+            "table": "buildings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "buildingId"
+            ],
+            "referencedColumns": [
+              "buildingId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "debts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`debtId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `unitId` INTEGER NOT NULL, `costId` INTEGER NOT NULL, `description` TEXT NOT NULL, `dueDate` TEXT NOT NULL, `paymentFlag` INTEGER NOT NULL, FOREIGN KEY(`costId`) REFERENCES `costs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "debtId",
+            "columnName": "debtId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unitId",
+            "columnName": "unitId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costId",
+            "columnName": "costId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDate",
+            "columnName": "dueDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paymentFlag",
+            "columnName": "paymentFlag",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "debtId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_debts_costId",
+            "unique": false,
+            "columnNames": [
+              "costId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_debts_costId` ON `${TABLE_NAME}` (`costId`)"
+          },
+          {
+            "name": "index_debts_unitId",
+            "unique": false,
+            "columnNames": [
+              "unitId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_debts_unitId` ON `${TABLE_NAME}` (`unitId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "costs",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "costId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "units",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "unitId"
+            ],
+            "referencedColumns": [
+              "unitId"
+            ]
+          }
+        ]
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'aed024b60fba7d360e9362220a590105')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2899df1b9659368986e647d35a431096')"
     ]
   }
 }

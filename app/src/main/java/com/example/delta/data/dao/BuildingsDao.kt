@@ -1,8 +1,6 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
-import com.example.delta.data.entity.BuildingWithCosts
-import com.example.delta.data.entity.BuildingWithEarnings
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings

@@ -1,13 +1,17 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Parcelable
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,20 +26,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Divider
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -66,15 +69,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.Units
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
+import com.example.delta.factory.UnitsViewModelFactory
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
+import com.example.delta.viewmodel.UnitsViewModel
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
+import kotlin.collections.forEach
 
 class BuildingProfileActivity : ComponentActivity() {
     private val earningsViewModel: EarningsViewModel by viewModels {
@@ -89,6 +97,10 @@ class BuildingProfileActivity : ComponentActivity() {
         BuildingsViewModelFactory(application = this.application)
     }
 
+    private val unitsViewModel: UnitsViewModel by viewModels {
+        UnitsViewModelFactory(application = this.application)
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -99,8 +111,6 @@ class BuildingProfileActivity : ComponentActivity() {
                 val building = intent.getParcelableExtra("BUILDING_DATA") as? Buildings
                 setContent {
                     AppTheme {
-
-
                             MaterialTheme {
                                 building?.let { BuildingProfileScreen(it) }
                             }
@@ -176,7 +186,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
-        val buildingWithIncomes = earningsViewModel.fetchAndProcessEarnings(building.buildingId).collectAsState(initial = null)
+        val buildingWithEarnings = earningsViewModel.fetchAndProcessEarnings(building.buildingId).collectAsState(initial = null)
         val buildingWithCosts = costsViewModel.fetchAndProcessCosts(building.buildingId).collectAsState(initial = null)
         LaunchedEffect(building.buildingId) {
             buildingViewModel.selectBuilding(building.buildingId)
@@ -242,9 +252,9 @@ class BuildingProfileActivity : ComponentActivity() {
 
             // Content Area
             when (selectedTab) {
-                0 -> IncomeSection(
-                    earnings = buildingWithIncomes?.value ?: emptyList(),
-                    onAddIncome = { buildingViewModel.showIncomeDialog(building.buildingId) }
+                0 -> EarningsSection(
+                    earnings = buildingWithEarnings?.value ?: emptyList(),
+                    onAddEarnings = { buildingViewModel.showEarningsDialog(building.buildingId) }
                 )
                 1 -> CostSection(
                     costs = buildingWithCosts?.value ?: emptyList(),
@@ -254,34 +264,39 @@ class BuildingProfileActivity : ComponentActivity() {
         }
 
         // Dialog handling
-        if (buildingViewModel.showIncomeDialog.value) {
-            IncomeDialog(
+        if (buildingViewModel.showEarningsDialog.value) {
+            EarningsDialog(
                 building = building,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                earningsFlow = earningsViewModel.getAllEarnings(),
-                onConfirm = { income ->
-                    buildingViewModel.insertEarnings(income)
+                earningsFlow = earningsViewModel.getAllMenuEarnings(),
+                onConfirm = { earning ->
+                    buildingViewModel.insertEarnings(earning)
                     buildingViewModel.hideDialogs()
                 }
             )
         }
         if (buildingViewModel.showCostDialog.value) {
-//            CostDialog(
-//                onDismiss = { viewModel.hideDialogs() },
-//                onConfirm = { cost ->
-//                    viewModel.insertCost(cost)
-//                    viewModel.hideDialogs()
-//                }
-//            )
+            CostDialog(
+                building = building,
+                onDismiss = { buildingViewModel.hideDialogs() },
+                costsFlow = costsViewModel.getAllMenuCost(),
+                onConfirm = { cost ->
+                    buildingViewModel.insertCost(cost)
+                    buildingViewModel.hideDialogs()
+                },
+                onInsertDebt = { debt ->
+                    buildingViewModel.insertDebt(debt)
+                }
+            )
         }
     }
 
 
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    private fun IncomeSection(
+    private fun EarningsSection(
         earnings: List<Earnings>,
-        onAddIncome: () -> Unit
+        onAddEarnings: () -> Unit
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -290,8 +305,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(bottom = 80.dp),
                 state = rememberLazyListState()
             ) {
-                itemsIndexed(earnings) { index, income ->
-                    IncomeItem(earnings = income)
+                itemsIndexed(earnings) { index, earning ->
+                    EarningsItem(earnings = earning)
                     if (index < earnings.lastIndex) {
                         Divider(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -315,7 +330,7 @@ class BuildingProfileActivity : ComponentActivity() {
             }
 
             ExtendedFloatingActionButton(
-                onClick = onAddIncome,
+                onClick = onAddEarnings,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
@@ -379,7 +394,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    private fun IncomeItem(earnings: Earnings) {
+    private fun EarningsItem(earnings: Earnings) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -399,13 +414,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-//                    Text(
-//                        text = earnings.date.format(DateTimeFormatter.ISO_DATE),
-//                        style = MaterialTheme.typography.bodyMedium,
-//                        color = MaterialTheme.colorScheme.onSurfaceVariant
-//                    )
                     Text(
-                        text = "$${earnings.amount}",
+                        text = "${earnings.amount}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -436,13 +446,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-//                    Text(
-//                        text = costs.date.format(DateTimeFormatter.ISO_DATE),
-//                        style = MaterialTheme.typography.bodyMedium,
-//                        color = MaterialTheme.colorScheme.onSurfaceVariant
-//                    )
                     Text(
-                        text = "$${costs.amount}",
+                        text = "${costs.amount}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -477,24 +482,110 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun UnitsTab(building: Buildings) {
-//        LazyColumn(modifier = Modifier.padding(16.dp)) {
-//            items(building.earnings) { income ->
-//                Card(
-//                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-//                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-//                ) {
-//                    Row(
-//                        modifier = Modifier.padding(16.dp),
-//                        verticalAlignment = Alignment.CenterVertically
-//                    ) {
-//                        Text(income, style = MaterialTheme.typography.bodyMedium)
-//                    }
-//                }
-//            }
-//        }
+        val buildingWithUnits = unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = null)
+
+        Column {
+            UnitsList(units = buildingWithUnits?.value ?: emptyList(),
+                onAddUnits = { buildingViewModel.showUnitsDialog(building.buildingId)})
+
+        }
+        // Dialog handling
+        if (buildingViewModel.showUnitsDialog.value) {
+            UnitsDialog(
+                building = building,
+                onDismiss = { buildingViewModel.hideDialogs() },
+                onConfirm = { unit ->
+                    buildingViewModel.insertUnits(unit)
+                    buildingViewModel.hideDialogs()
+                },
+                onInsertDebt = { debt ->
+                    buildingViewModel.insertDebt(debt)
+                }
+            )
+        }
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    private fun UnitsList(
+        units: List<Units>,
+        onAddUnits: () -> Unit
+    ) {
+        val context = LocalContext.current
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 80.dp),
+                state = rememberLazyListState()
+            ) {
+                itemsIndexed(units) { index, unit ->
+                    UnitItem(unit = unit){
+                        val intent = Intent(context, UnitDetailsActivity::class.java).apply {
+                            putExtra("UNIT_DATA", unit as Parcelable)
+                        }
+                        context.startActivity(intent)
+                    }
+                    if (index < units.lastIndex) {
+                        Divider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                }
+
+                if (units.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No units recorded",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            ExtendedFloatingActionButton(
+                onClick = onAddUnits,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                icon = { Icon(Icons.Default.Add, "Add Units") },
+                text = { Text("Add Units") },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    private fun UnitItem(unit: Units, onClick: () -> Unit) {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+                .clickable{onClick},
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = unit.unitNumber.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+
 
     @Composable
     fun ReportsTab() {
@@ -525,7 +616,7 @@ class BuildingProfileActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    fun IncomeDialog(
+    fun EarningsDialog(
         building: Buildings,
         earningsFlow: Flow<List<Earnings>>,
         onDismiss: () -> Unit,
@@ -533,10 +624,8 @@ class BuildingProfileActivity : ComponentActivity() {
     ) {
         val description = remember { mutableStateOf("") }
         val amount = remember { mutableStateOf("") }
-        val selectedIncomeName = remember { mutableStateOf("") }
-        var expanded by remember { mutableStateOf(false) }
-        val incomes by earningsFlow.collectAsState(initial = emptyList())
-        val selectedEarnings = remember { mutableStateOf<Earnings?>(null) }
+        val earnings by earningsFlow.collectAsState(initial = emptyList())
+        var selectedEarnings by remember { mutableStateOf<Earnings?>(null) }
 
         Dialog(onDismissRequest = onDismiss) {
             Surface(
@@ -563,40 +652,15 @@ class BuildingProfileActivity : ComponentActivity() {
                         keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
                     )
 
-                    // ComboBox for incomeName
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded }
-                    ) {
-                        TextField(
-                            value = selectedIncomeName.value,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Earnings Name") },
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                            },
-                            colors = ExposedDropdownMenuDefaults.textFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor() // Align dropdown with TextField
-                        )
-
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            incomes.forEach { income ->
-                                DropdownMenuItem(
-                                    text = { Text(income.earningsName) },
-                                    onClick = {
-                                        selectedEarnings.value = income
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    // ComboBox for earningName
+                    val context = LocalContext.current
+                    ExposedDropdownMenuBoxExample(
+                        items = earnings,
+                        selectedItem = selectedEarnings,
+                        onItemSelected = { selectedEarnings = it },
+                        label = context.getString(R.string.costs),
+                        itemLabel = { it.earningsName }
+                    )
 
                     Row(
                         modifier = Modifier
@@ -608,15 +672,28 @@ class BuildingProfileActivity : ComponentActivity() {
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                val earnings = Earnings(
-                                    buildingId = building.buildingId,
-                                    amount = (amount.value.toDoubleOrNull() ?: 0.0),
-                                    earningsName = description.value,
+                                val amountValue = amount.value
+                                // Convert to ASCII digits
+                                val asciiAmount = amountValue.replace("۰", "0").replace("۱", "1").replace("۲", "2")
+                                    .replace("۳", "3").replace("۴", "4").replace("۵", "5")
+                                    .replace("۶", "6").replace("۷", "7").replace("۸", "8")
+                                    .replace("۹", "9")
+                                if (asciiAmount.isNotEmpty()) {
+                                    val amountDouble = asciiAmount.toDoubleOrNull() ?: 0.0
+
+                                    val earnings = Earnings(
+                                        buildingId = building.buildingId,
+                                        amount = amountDouble,
+                                        earningsName = description.value,
 //                                    date = LocalDate.now(),
-                                    currency =  LocalDate.now().toString()
-                                )
-                                onConfirm(earnings)
-                                onDismiss()
+                                        currency = LocalDate.now().toString()
+                                    )
+                                    onConfirm(earnings)
+                                    onDismiss()
+                                } else {
+                                    Log.d("EarningsDialog", "Amount is empty")
+                                    // Handle empty input
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
@@ -634,12 +711,259 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    fun CostDialog(
+        building: Buildings,
+        costsFlow: Flow<List<Costs>>,
+        onDismiss: () -> Unit,
+        onConfirm: (Costs) -> Unit,
+        onInsertDebt: (Debts) -> Unit
+    ) {
+        val amount = remember { mutableStateOf("") }
+        val costs by costsFlow.collectAsState(initial = emptyList())
+        var selectedCosts by remember { mutableStateOf<Costs?>(null) }
+        val units by unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = emptyList())
+        Dialog(onDismissRequest = onDismiss) {
+            Surface(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .width(IntrinsicSize.Min),
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Add Cost",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    TextField(
+                        value = amount.value,
+                        onValueChange = { amount.value = it },
+                        label = { Text("Amount") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                    )
+
+                    // ComboBox for earningName
+                    val context = LocalContext.current
+                    ExposedDropdownMenuBoxExample(
+                        items = costs,
+                        selectedItem = selectedCosts,
+                        onItemSelected = { selectedCosts = it },
+                        label = context.getString(R.string.costs),
+                        itemLabel = { it.costName }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        val context = LocalContext.current
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                val amountValue = amount.value
+                                // Convert to ASCII digits
+                                val asciiAmount = amountValue.replace("۰", "0").replace("۱", "1").replace("۲", "2")
+                                    .replace("۳", "3").replace("۴", "4").replace("۵", "5")
+                                    .replace("۶", "6").replace("۷", "7").replace("۸", "8")
+                                    .replace("۹", "9")
+                                if (asciiAmount.isNotEmpty()) {
+                                    val amountDouble = asciiAmount.toDoubleOrNull() ?: 0.0
 
 
+                                    val costs = Costs(
+                                        buildingId = building.buildingId,
+                                        amount = amountDouble,
+                                        costName = selectedCosts?.costName ?: "",
+                                        currency = "USD" // Example currency
+                                    )
+                                    onConfirm(costs)
+                                    units.forEach { unit ->
+                                        val debt = Debts(
+                                            unitId = unit.unitId,
+                                            costId = costsViewModel.getLastCostId(),
+                                            description = "",
+                                            dueDate = "",
+                                            paymentFlag = false
+                                        )
+                                        onInsertDebt(debt)
+                                    }
+                                    onDismiss()
+                                    // Proceed with costs
+                                } else {
+                                    Log.d("CostDialog", "Amount is empty")
+                                    // Handle empty input
+                                }
+
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                            )
+                        ) {
+                            Text(
+                                text = context.getString(R.string.insert),
+                                modifier = Modifier.padding(2.dp),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    fun UnitsDialog(
+        building: Buildings,
+        onDismiss: () -> Unit,
+        onConfirm: (Units) -> Unit,
+        onInsertDebt: (Debts) -> Unit
+    ) {
+
+        var metrage by remember { mutableStateOf("") }
+        var ownerName by remember { mutableStateOf("") }
+        var tenantName by remember { mutableStateOf("") }
+        var unitNumber by remember { mutableStateOf("") }
+        var numberOfTenant by remember { mutableStateOf("") }
+        val costs by costsViewModel.fetchAndProcessCosts(building.buildingId).collectAsState(initial = emptyList())
+
+        Dialog(onDismissRequest = onDismiss) {
+            Surface(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .width(IntrinsicSize.Min),
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Add Unit",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = unitNumber,
+                        onValueChange = { unitNumber = it },
+                        label = { Text("Unit Number") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    TextField(
+                        value = metrage,
+                        onValueChange = { metrage = it },
+                        label = { Text("Metrage") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = ownerName,
+                        onValueChange = { ownerName = it },
+                        label = { Text("Owner Name") }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = tenantName,
+                        onValueChange = { tenantName = it },
+                        label = { Text("Tenant Name") }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = numberOfTenant,
+                        onValueChange = { numberOfTenant = it },
+                        label = { Text("Number of Tenant") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        val context = LocalContext.current
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                // Convert to ASCII digits
+                                val asciiUnitNumber = unitNumber.replace("۰", "0").replace("۱", "1").replace("۲", "2")
+                                    .replace("۳", "3").replace("۴", "4").replace("۵", "5")
+                                    .replace("۶", "6").replace("۷", "7").replace("۸", "8")
+                                    .replace("۹", "9")
+                                val asciiMetrage = metrage.replace("۰", "0").replace("۱", "1").replace("۲", "2")
+                                    .replace("۳", "3").replace("۴", "4").replace("۵", "5")
+                                    .replace("۶", "6").replace("۷", "7").replace("۸", "8")
+                                    .replace("۹", "9")
+                                val asciiNumberOfTenant = numberOfTenant.replace("۰", "0").replace("۱", "1").replace("۲", "2")
+                                    .replace("۳", "3").replace("۴", "4").replace("۵", "5")
+                                    .replace("۶", "6").replace("۷", "7").replace("۸", "8")
+                                    .replace("۹", "9")
+                                if (asciiUnitNumber.isNotEmpty()) {
+                                    val unitNumberInt = asciiUnitNumber.toInt()
+                                    val metrageDouble = asciiMetrage.toDoubleOrNull() ?: 0.0
+                                    val numberOfTenantInt = asciiNumberOfTenant.toInt()
+
+                                    val units = Units(
+                                        buildingId = building.buildingId,
+                                        unitNumber = unitNumberInt,
+                                        metrage = metrageDouble,
+                                        ownerName = ownerName,
+                                        tenantName = tenantName,
+                                        numberOfTenants = numberOfTenantInt
+                                    )
+
+                                    var unit = onConfirm(units)
+                                    costs.forEach { cost ->
+                                        val debt = Debts(
+                                            unitId = (unit as Long),
+                                            costId = cost.id,
+                                            description = cost.costName,
+                                            dueDate = "",
+                                            paymentFlag = false
+                                        )
+                                        onInsertDebt(debt)
+                                    }
+                                    onDismiss()
+                                } else {
+                                    Log.d("UnitsDialog", "Number of Unit is empty")
+                                    // Handle empty input
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                            )
+                        ) {
+                            Text(
+                                text = context.getString(R.string.insert),
+                                modifier = Modifier.padding(2.dp),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+ }
 
 
-
-}
 
 
 

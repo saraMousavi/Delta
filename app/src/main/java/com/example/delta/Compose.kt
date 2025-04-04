@@ -21,6 +21,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -315,6 +319,52 @@ fun AddItemDialog(
     }
 }
 
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> ExposedDropdownMenuBoxExample(
+    items: List<T>,
+    selectedItem: T?,
+    onItemSelected: (T) -> Unit,
+    label: String,
+    itemLabel: (T) -> String
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            readOnly = true,
+            value = selectedItem?.let { itemLabel(it) } ?: "",
+            onValueChange = { },
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(
+                    expanded = expanded
+                )
+            }
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            items.forEach { item ->
+                DropdownMenuItem(
+                    text = { Text(itemLabel(item)) },
+                    onClick = {
+                        onItemSelected(item)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
 
 
 

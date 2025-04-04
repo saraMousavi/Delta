@@ -47,4 +47,5 @@
     <string name="address">آدرس</string>
     <string name="national_code">کد ملی</string>
     <string name="building_profile">پروفایل ساختمان</string>
+    <string name="costs">هزینه ها</string>
 </resources>

@@ -38,8 +38,8 @@ data class Buildings(
     val nationalCode: String,
     val postCode: String,
     val address: String,
-    val fundNumber: String,
-    val currentBalance: String,
+    val fundNumber: Long,
+    val currentBalance: Long,
     val buildingTypeId: Int? = null,
     val buildingUsageId: Int? = null
 ) : Parcelable
