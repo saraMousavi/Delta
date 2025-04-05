@@ -3,7 +3,9 @@ package com.example.delta.viewmodel
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.delta.data.dao.CostDao
 import kotlinx.coroutines.launch
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
@@ -52,18 +54,18 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
 
-
-    fun insertCost(costs: Costs) = viewModelScope.launch {
-        costsDao.insertCost(costs)
+    suspend fun insertCost(cost: Costs): Long {
+        return costsDao.insertCost(cost)
     }
+
 
     fun insertDebt(debt: Debts) = viewModelScope.launch {
         debtsDao.insertDebt(debt)
     }
 
 
-    fun insertUnits(units: Units) = viewModelScope.launch {
-        unitsDao.insertUnits(units)
+    suspend fun insertUnits(units: Units) : Long {
+        return unitsDao.insertUnits(units)
     }
 
     fun showEarningsDialog(buildingId: Long) {

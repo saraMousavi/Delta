@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +83,7 @@ import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.UnitsViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.collections.forEach
 
@@ -281,8 +284,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 onDismiss = { buildingViewModel.hideDialogs() },
                 costsFlow = costsViewModel.getAllMenuCost(),
                 onConfirm = { cost ->
-                    buildingViewModel.insertCost(cost)
-                    buildingViewModel.hideDialogs()
+                    val insertedCostId = buildingViewModel.insertCost(cost) // Assuming this returns the ID
+                    insertedCostId
                 },
                 onInsertDebt = { debt ->
                     buildingViewModel.insertDebt(debt)
@@ -498,8 +501,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 building = building,
                 onDismiss = { buildingViewModel.hideDialogs() },
                 onConfirm = { unit ->
-                    buildingViewModel.insertUnits(unit)
-                    buildingViewModel.hideDialogs()
+                    val insertedUnitId = buildingViewModel.insertUnits(unit)
+                    insertedUnitId
                 },
                 onInsertDebt = { debt ->
                     buildingViewModel.insertDebt(debt)
@@ -522,18 +525,14 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(bottom = 80.dp),
                 state = rememberLazyListState()
             ) {
-                itemsIndexed(units) { index, unit ->
+
+                items(units) {unit ->
                     UnitItem(unit = unit){
+                        Log.d("UnitClick", "Clicked on unit ${unit.unitId}")
                         val intent = Intent(context, UnitDetailsActivity::class.java).apply {
                             putExtra("UNIT_DATA", unit as Parcelable)
                         }
                         context.startActivity(intent)
-                    }
-                    if (index < units.lastIndex) {
-                        Divider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
                     }
                 }
 
@@ -571,7 +570,7 @@ class BuildingProfileActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
-                .clickable{onClick},
+                .clickable{onClick()},
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -718,7 +717,7 @@ class BuildingProfileActivity : ComponentActivity() {
         building: Buildings,
         costsFlow: Flow<List<Costs>>,
         onDismiss: () -> Unit,
-        onConfirm: (Costs) -> Unit,
+        onConfirm: suspend (Costs) -> Long,
         onInsertDebt: (Debts) -> Unit
     ) {
         val amount = remember { mutableStateOf("") }
@@ -766,6 +765,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.End
                     ) {
                         val context = LocalContext.current
+                        val scope = rememberCoroutineScope()
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -785,18 +785,21 @@ class BuildingProfileActivity : ComponentActivity() {
                                         costName = selectedCosts?.costName ?: "",
                                         currency = "USD" // Example currency
                                     )
-                                    onConfirm(costs)
-                                    units.forEach { unit ->
-                                        val debt = Debts(
-                                            unitId = unit.unitId,
-                                            costId = costsViewModel.getLastCostId(),
-                                            description = "",
-                                            dueDate = "",
-                                            paymentFlag = false
-                                        )
-                                        onInsertDebt(debt)
+                                    scope.launch {
+                                        val insertedCostId = onConfirm(costs)
+                                        units.forEach { unit ->
+                                            val debt = Debts(
+                                                unitId = unit.unitId,
+                                                costId = insertedCostId,
+                                                description = "",
+                                                dueDate = "",
+                                                paymentFlag = false
+                                            )
+                                            onInsertDebt(debt)
+                                        }
+                                        onDismiss()
                                     }
-                                    onDismiss()
+
                                     // Proceed with costs
                                 } else {
                                     Log.d("CostDialog", "Amount is empty")
@@ -826,7 +829,7 @@ class BuildingProfileActivity : ComponentActivity() {
     fun UnitsDialog(
         building: Buildings,
         onDismiss: () -> Unit,
-        onConfirm: (Units) -> Unit,
+        onConfirm: suspend (Units) -> Long,
         onInsertDebt: (Debts) -> Unit
     ) {
 
@@ -898,6 +901,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.End
                     ) {
                         val context = LocalContext.current
+                        val scope = rememberCoroutineScope()
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -927,19 +931,21 @@ class BuildingProfileActivity : ComponentActivity() {
                                         tenantName = tenantName,
                                         numberOfTenants = numberOfTenantInt
                                     )
-
-                                    var unit = onConfirm(units)
-                                    costs.forEach { cost ->
-                                        val debt = Debts(
-                                            unitId = (unit as Long),
-                                            costId = cost.id,
-                                            description = cost.costName,
-                                            dueDate = "",
-                                            paymentFlag = false
-                                        )
-                                        onInsertDebt(debt)
+                                    scope.launch {
+                                        var insertedUnitId = onConfirm(units)
+                                        costs.forEach { cost ->
+                                            val debt = Debts(
+                                                unitId = insertedUnitId,
+                                                costId = cost.id,
+                                                description = cost.costName,
+                                                dueDate = "",
+                                                paymentFlag = false
+                                            )
+                                            onInsertDebt(debt)
+                                        }
+                                        onDismiss()
                                     }
-                                    onDismiss()
+
                                 } else {
                                     Log.d("UnitsDialog", "Number of Unit is empty")
                                     // Handle empty input

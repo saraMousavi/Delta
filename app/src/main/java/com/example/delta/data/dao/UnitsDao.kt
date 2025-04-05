@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface UnitsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUnits(units: Units)
+    suspend fun insertUnits(units: Units) : Long
 
     @Delete()
     suspend fun deleteUnits(units: Units)
