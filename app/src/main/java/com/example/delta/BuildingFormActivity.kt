@@ -63,23 +63,30 @@ fun BuildingFormScreen(
     var postCode by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     val context = LocalContext.current
-
+    key(viewModel.getAllBuildings()){
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        item{CenterAlignedTopAppBar(
-            title = { Text( text = context.getString(R.string.buildings_form) , style = MaterialTheme.typography.bodyLarge) },
-            navigationIcon = {
-                IconButton(onClick = {
-                    (context as? BuildingFormActivity)?.finish()
-                     }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        item {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = context.getString(R.string.buildings_form),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        (context as? BuildingFormActivity)?.finish()
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
-            }
-        )}
-        item{Spacer(modifier = Modifier.height(16.dp))}
+            )
+        }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
 
         item {
             OutlinedTextField(
@@ -99,74 +106,78 @@ fun BuildingFormScreen(
         }
 
         item {
-            OutlinedTextField(
-                value = ownerName,
-                onValueChange = { ownerName = it },
-                label = {
-                    Text(
-                        text = context.getString(R.string.name_family),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+            ProvinceStateSelector(viewModel = viewModel)
         }
 
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+//        item {
+//            OutlinedTextField(
+//                value = ownerName,
+//                onValueChange = { ownerName = it },
+//                label = {
+//                    Text(
+//                        text = context.getString(R.string.name_family),
+//                        style = MaterialTheme.typography.titleMedium
+//                    )
+//                },
+//                modifier = Modifier.fillMaxWidth()
+//            )
+//        }
+//
+//        item {
+//            Spacer(modifier = Modifier.height(8.dp))
+//        }
 
-        item {
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = {
-                    Text(
-                        text = context.getString(R.string.email),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+//        item {
+//            OutlinedTextField(
+//                value = email,
+//                onValueChange = { email = it },
+//                label = {
+//                    Text(
+//                        text = context.getString(R.string.email),
+//                        style = MaterialTheme.typography.titleMedium
+//                    )
+//                },
+//                modifier = Modifier.fillMaxWidth()
+//            )
+//        }
+//
+//        item {
+//            Spacer(modifier = Modifier.height(8.dp))
+//        }
 
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+//        item {
+//            OutlinedTextField(
+//                value = nationalCode,
+//                onValueChange = { nationalCode = it },
+//                label = {
+//                    Text(
+//                        text = context.getString(R.string.national_code),
+//                        style = MaterialTheme.typography.titleMedium
+//                    )
+//                },
+//                modifier = Modifier.fillMaxWidth()
+//            )
+//        }
+//
+//        item { Spacer(modifier = Modifier.height(8.dp)) }
 
-        item {
-            OutlinedTextField(
-                value = nationalCode,
-                onValueChange = { nationalCode = it },
-                label = {
-                    Text(
-                        text = context.getString(R.string.national_code),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        item{Spacer(modifier = Modifier.height(8.dp))}
-
-        item {
-            OutlinedTextField(
-                value = postCode,
-                onValueChange = { postCode = it },
-                label = {
-                    Text(
-                        text = context.getString(R.string.post_code),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+//        item {
+//            OutlinedTextField(
+//                value = postCode,
+//                onValueChange = { postCode = it },
+//                label = {
+//                    Text(
+//                        text = context.getString(R.string.post_code),
+//                        style = MaterialTheme.typography.titleMedium
+//                    )
+//                },
+//                modifier = Modifier.fillMaxWidth()
+//            )
+//        }
+//
+//        item {
+//            Spacer(modifier = Modifier.height(8.dp))
+//        }
 
 
 
@@ -187,70 +198,78 @@ fun BuildingFormScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Building Type Dropdown
-        item {
-            ExposedDropdownMenuBoxExample(
-                items = buildingTypes,
-                selectedItem = selectedBuildingTypes,
-                onItemSelected = { selectedBuildingTypes = it },
-                label = context.getString(R.string.building_type),
-                itemLabel = { it.buildingTypeName }
-            )
-        }
+//        // Building Type Dropdown
+//        item {
+//            ExposedDropdownMenuBoxExample(
+//                items = buildingTypes,
+//                selectedItem = selectedBuildingTypes,
+//                onItemSelected = { selectedBuildingTypes = it },
+//                label = context.getString(R.string.building_type),
+//                itemLabel = { it.buildingTypeName }
+//            )
+//        }
+//
+//        item {
+//            Spacer(modifier = Modifier.height(16.dp))
+//        }
+//
+//        // Building Usage Dropdown
+//        item {
+//            ExposedDropdownMenuBoxExample(
+//                items = buildingUsages,
+//                selectedItem = selectedBuildingUsages,
+//                onItemSelected = { selectedBuildingUsages = it },
+//                label = context.getString(R.string.building_usage),
+//                itemLabel = { it.buildingUsageName }
+//            )
+//        }
+//
+//        item {
+//            Spacer(modifier = Modifier.height(16.dp))
+//        }
 
         item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Building Usage Dropdown
-        item {
-            ExposedDropdownMenuBoxExample(
-                items = buildingUsages,
-                selectedItem = selectedBuildingUsages,
-                onItemSelected = { selectedBuildingUsages = it },
-                label = context.getString(R.string.building_usage),
-                itemLabel = { it.buildingUsageName }
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        item{Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                // Handle form submission
-                if (selectedBuildingTypes?.id != null && selectedBuildingUsages?.id != null) {
-                    Log.d("BuildingForm", "Building Type ID: ${selectedBuildingTypes?.id}, Building Usage ID: ${selectedBuildingUsages?.id}")
-                    viewModel.insertBuildings(Buildings(
-                        name = name,
-                        ownerName = ownerName,
-                        phone = phone,
-                        email = email,
-                        nationalCode = nationalCode,
-                        postCode = postCode,
-                        address = address,
-                        fundNumber = 0,
-                        currentBalance = 0,
-                        buildingTypeId = selectedBuildingTypes?.id!!,
-                        buildingUsageId = selectedBuildingUsages?.id!!
-                    ))
-                    // Optionally, navigate back or clear the form
-                    (context as? BuildingFormActivity)?.finish()
-                } else {
-                    Log.e("BuildingForm", "Building Type or Building Usage is null")
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-            )) {
-            Text(
-                text = context.getString(R.string.insert),
-                modifier = Modifier.padding(2.dp),
-                style = MaterialTheme.typography.titleLarge
-            )
-        }
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    // Handle form submission
+                    if (selectedBuildingTypes?.id != null && selectedBuildingUsages?.id != null) {
+                        Log.d(
+                            "BuildingForm",
+                            "Building Type ID: ${selectedBuildingTypes?.id}, Building Usage ID: ${selectedBuildingUsages?.id}"
+                        )
+                        viewModel.insertBuildings(
+                            Buildings(
+                                name = name,
+                                ownerName = ownerName,
+                                phone = phone,
+                                email = email,
+                                nationalCode = nationalCode,
+                                postCode = postCode,
+                                address = address,
+                                fundNumber = 0,
+                                currentBalance = 0,
+                                buildingTypeId = selectedBuildingTypes?.id!!,
+                                buildingUsageId = selectedBuildingUsages?.id!!
+                            )
+                        )
+                        // Optionally, navigate back or clear the form
+                        (context as? BuildingFormActivity)?.finish()
+                    } else {
+                        Log.e("BuildingForm", "Building Type or Building Usage is null")
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )
+            ) {
+                Text(
+                    text = context.getString(R.string.insert),
+                    modifier = Modifier.padding(2.dp),
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
         }
     }
+}
 }

@@ -11,17 +11,6 @@ import kotlinx.parcelize.Parcelize
 @Parcelize
 @Entity(
     tableName = "earnings"
-//    foreignKeys = [
-//        ForeignKey(
-//            entity = Buildings::class,
-//            parentColumns = ["buildingId"],
-//            childColumns = ["buildingId"],
-//            onDelete = ForeignKey.CASCADE //VERY IMPORTANT to prevent orphaned data
-//        )
-//    ],
-//    indices = [
-//        Index("buildingId")
-//    ]
 )
 data class Earnings(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
