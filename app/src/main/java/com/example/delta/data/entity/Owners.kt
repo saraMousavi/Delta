@@ -11,11 +11,14 @@ import kotlinx.parcelize.Parcelize
     tableName = "owners"
 )
 data class Owners(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val ownerId: Long = 0,
     @ColumnInfo(name = "first_name") val firstName: String,
     @ColumnInfo(name = "last_name") val lastName: String,
-    @ColumnInfo(name = "phone_number") val phoneNumber: Double,
-    @ColumnInfo(name = "mobile_number") val mobileNumber: Double,
-    @ColumnInfo(name = "work_number") val workNumber: Double,
-    @ColumnInfo(name = "birthday") val birthday: String
+    @ColumnInfo(name = "phone_number") val phoneNumber: String,
+    @ColumnInfo(name = "mobile_number") val mobileNumber: String,
+    @ColumnInfo(name = "birthday") val birthday: String,
+    @ColumnInfo(name = "address") val address: String,
+    @ColumnInfo(name = "email") val email: String,
+    @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
+
 ) : Parcelable

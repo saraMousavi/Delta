@@ -41,6 +41,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ComposableTarget
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -51,7 +52,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -375,92 +378,40 @@ fun <T> ExposedDropdownMenuBoxExample(
     }
 }
 
-
 @Composable
 fun ProvinceStateSelector(
     viewModel: BuildingsViewModel,
     modifier: Modifier = Modifier
 ) {
-    var provinceExpanded by remember { mutableStateOf(false) }
-    var stateExpanded by remember { mutableStateOf(false) }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        val selectedProvince by viewModel.province.collectAsState()
+        val selectedState by viewModel.state.collectAsState()
+        val availableStates by viewModel.availableStates.collectAsState()
 
-    val selectedProvince by viewModel.province.collectAsState()
-    val selectedState by viewModel.state.collectAsState()
-    val availableStates by viewModel.availableStates.collectAsState()
-
-    // Province Selector
-    ExposedDropdownMenuBox(
-        expanded = provinceExpanded,
-        onExpandedChange = { provinceExpanded = !provinceExpanded }
-    ) {
-        TextField(
-            modifier = modifier.fillMaxWidth(),
-            readOnly = true,
-            value = selectedProvince,
-            onValueChange = {},
-            label = { Text("Province") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = provinceExpanded) }
-        )
-
-        ExposedDropdownMenu(
-            expanded = provinceExpanded,
-            onDismissRequest = { provinceExpanded = false }
-        ) {
-            IranianLocations.provinces.keys.forEach { province ->
-                DropdownMenuItem(
-                    text = { Text(province) },
-                    onClick = {
-                        viewModel.onProvinceSelected(province)
-                        provinceExpanded = false
-                    }
-                )
-            }
-        }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    // State Selector
-    key(availableStates){ //  Add key here to force recomposition
-        ExposedDropdownMenuBox(
-            expanded = stateExpanded,
-            onExpandedChange = { stateExpanded = !stateExpanded }
-        ) {
-            TextField(
-                modifier = modifier.fillMaxWidth(),
-                readOnly = true,
-                value = selectedState,
-                onValueChange = {},
-                label = { Text("State") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateExpanded) }
+        Column(modifier = modifier) {
+            // Province Selector
+            ExposedDropdownMenuBoxExample(
+                items = IranianLocations.provinces.keys.toList(),
+                selectedItem = selectedProvince,
+                onItemSelected = { province ->
+                    viewModel.onProvinceSelected(province)
+                },
+                label = LocalContext.current.getString(R.string.province), // Persian for "Province"
+                itemLabel = { it }
             )
 
-            ExposedDropdownMenu(
-                expanded = stateExpanded,
-                onDismissRequest = { stateExpanded = false }
-            ) {
-                if (availableStates.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("No states available") },
-                        onClick = {}
-                    )
-                } else {
-                    availableStates.forEach { state ->
-                        DropdownMenuItem(
-                            text = { Text(state) },
-                            onClick = {
-                                viewModel.onStateSelected(state)
-                                stateExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // State Selector
+            ExposedDropdownMenuBoxExample(
+                items = availableStates,
+                selectedItem = selectedState,
+                onItemSelected = { state ->
+                    viewModel.onStateSelected(state)
+                },
+                label = LocalContext.current.getString(R.string.state), // Persian for "State"
+                itemLabel = { it }
+            )
         }
     }
 }
-
-
-
-
-

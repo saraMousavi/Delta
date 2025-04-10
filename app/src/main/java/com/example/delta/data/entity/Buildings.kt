@@ -32,16 +32,12 @@ import kotlinx.parcelize.Parcelize
 data class Buildings(
     @PrimaryKey(autoGenerate = true) val buildingId: Long = 0,
     val name: String,
-    val ownerName: String,
     val phone: String,
     val email: String,
-    val nationalCode: String,
     val postCode: String,
-    val address: String,
-    val fundNumber: Long,
-    val currentBalance: Long,
+    val street: String,
     val province: String = "Tehran",  // Default province
-    val state: String = "Central" ,     // Default state
+    val state: String = "Central",     // Default state
     val buildingTypeId: Int? = null,
     val buildingUsageId: Int? = null
 ) : Parcelable

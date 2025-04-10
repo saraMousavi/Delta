@@ -37,34 +37,27 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val buildingsDao = database.buildingsDao()
 
-    private val _province = MutableStateFlow("Tehran")
+    private val _province = MutableStateFlow("تهران")
     val province: StateFlow<String> = _province.asStateFlow()
 
-    private val _state = MutableStateFlow("Central")
+    private val _state = MutableStateFlow("مرکزی")
     val state: StateFlow<String> = _state.asStateFlow()
 
-    // Track available states for current province
     val availableStates: StateFlow<List<String>> = _province
         .map { province ->
-            Log.d("ProvinceMapping", "Mapping Province: $province")  // Log here!
-            Log.d("IranianLocations.provinces[province]", IranianLocations.provinces[province].toString())
             IranianLocations.provinces[province] ?: emptyList()
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000), // Adjust the timeout as needed
-            initialValue = IranianLocations.provinces["Tehran"] ?: emptyList()
+            started = SharingStarted.WhileSubscribed(),
+            initialValue = IranianLocations.provinces["تهران"] ?: emptyList()
         )
 
     fun onProvinceSelected(province: String) {
-        Log.d("ProvinceSelected", "Selected Province: $province")
         _province.value = province
-
-        // Update state only if the selected province exists in IranianLocations
         _state.value = IranianLocations.provinces[province]?.firstOrNull() ?: ""
-        Log.d("NewState", "New State: ${_state.value}")  // Debug: Check state update
-
     }
+
 
     fun onStateSelected(state: String) {
         _state.value = state
@@ -73,7 +66,7 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun insertBuildings(buildings: Buildings) {
         viewModelScope.launch {
-            buildingsDao.insertBuildings(buildings)
+            buildingsDao.insertBuilding(buildings)
         }
     }
 

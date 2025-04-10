@@ -138,7 +138,7 @@ fun BuildingCard(building: Buildings, onClick: () -> Unit) {
             )
 
             Text(
-                text = building.ownerName,
+                text = building.street,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

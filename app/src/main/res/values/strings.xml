@@ -48,4 +48,14 @@
     <string name="national_code">کد ملی</string>
     <string name="building_profile">پروفایل ساختمان</string>
     <string name="costs">هزینه ها</string>
+    <string name="province">استان</string>
+    <string name="street">خیابان</string>
+    <string name="addNew">" اضافه کردن"</string>
+    <string name="state">شهر</string>
+    <string name="back">قبلی</string>
+    <string name="next">بعدی\n</string>
+    <string name="owners_list">لیست مالکین</string>
+    <string name="tenant_list">لیست مستأجرین\n</string>
+    <string name="add_new_tenant">اضافه کردن مستأجر جدید\n</string>
+    <string name="add_new_owner">اضافه کردن مالک جدید</string>
 </resources>

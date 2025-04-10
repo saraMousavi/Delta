@@ -10,6 +10,8 @@ import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.dao.OwnersDao
+import com.example.delta.data.dao.TenantDao
 import com.example.delta.data.dao.UnitsDao
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
@@ -17,9 +19,12 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
+import java.security.acl.Owner
 
-@Database(entities = [BuildingTypes::class, BuildingUsages::class,Buildings::class, Costs::class, Earnings::class, Units::class, Debts::class], version = 1, exportSchema = true)
+@Database(entities = [BuildingTypes::class, BuildingUsages::class,Buildings::class, Costs::class, Earnings::class, Units::class, Debts::class, Owners::class, Tenants::class], version = 1, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
     abstract fun buildingUsageDao(): BuildingUsageDao
@@ -28,6 +33,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun earningsDao(): EarningsDao
     abstract fun unitsDao(): UnitsDao
     abstract fun debtsDao(): DebtsDao
+    abstract fun ownersDao(): OwnersDao
+    abstract fun tenantDao(): TenantDao
 
 
 
