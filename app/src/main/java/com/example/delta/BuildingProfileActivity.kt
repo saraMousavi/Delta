@@ -176,7 +176,6 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Postal Code: ${building.postCode}", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("National Code: ${building.nationalCode}", style = MaterialTheme.typography.bodyMedium)
 
             }
         }
@@ -203,23 +202,23 @@ class BuildingProfileActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Fund Number: ${building.fundNumber}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "Balance: ${building.currentBalance}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+//                Row(
+//                    modifier = Modifier
+//                        .padding(16.dp)
+//                        .fillMaxWidth(),
+//                    verticalAlignment = Alignment.CenterVertically
+//                ) {
+//                    Text(
+//                        text = "Fund Number: ${building.fundNumber}",
+//                        style = MaterialTheme.typography.bodyLarge
+//                    )
+//                    Spacer(modifier = Modifier.weight(1f))
+//                    Text(
+//                        text = "Balance: ${building.currentBalance}",
+//                        style = MaterialTheme.typography.titleMedium,
+//                        color = MaterialTheme.colorScheme.primary
+//                    )
+//                }
             }
 
             // Tab Row
