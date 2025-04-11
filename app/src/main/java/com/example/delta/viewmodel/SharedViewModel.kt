@@ -1,6 +1,7 @@
 package com.example.delta.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +53,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         street = street, province = province, state = state
                     )
                 )
-
                 // Insert owners
                 ownersList.forEach { owner ->
                     val ownerId = buildingDao.insertOwner(owner)

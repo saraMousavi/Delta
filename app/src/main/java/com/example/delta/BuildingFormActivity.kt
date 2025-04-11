@@ -43,8 +43,6 @@ class BuildingFormActivity : ComponentActivity() {
     private val viewModel: BuildingsViewModel by viewModels()
     private val buildingTypeViewModel: BuildingTypeViewModel by viewModels()
     private val buildingUsageViewModel: BuildingUsageViewModel by viewModels()
-    private val ownerViewModel: OwnersViewModel by viewModels()
-    private val tenantViewModel: TenantViewModel by viewModels()
     val sharedViewModel: SharedViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,8 +62,6 @@ class BuildingFormActivity : ComponentActivity() {
                         buildingTypeViewModel = buildingTypeViewModel,
                         buildingUsageViewModel = buildingUsageViewModel,
                         buildingUsages = buildingUsages,
-                        ownerViewModel = ownerViewModel,
-                        tenantViewModel = tenantViewModel,
                         sharedViewModel = sharedViewModel
                     )
                 }
@@ -81,11 +77,9 @@ fun BuildingFormScreen(
     buildingUsageViewModel: BuildingUsageViewModel,
     buildingTypes: List<BuildingTypes>,
     buildingUsages: List<BuildingUsages>,
-    ownerViewModel: OwnersViewModel,
-    tenantViewModel: TenantViewModel,
     sharedViewModel: SharedViewModel,
 ) {
-    var currentPage by remember { mutableStateOf(0) }
+    var currentPage by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     Column {
         if (currentPage == 0) {
@@ -101,14 +95,12 @@ fun BuildingFormScreen(
         } else if (currentPage == 1) {
             OwnersPage(
                 sharedViewModel = sharedViewModel,
-                viewModel = ownerViewModel,
                 onNext = { currentPage++ },
                 onBack = { currentPage = 0 }
             )
         } else if (currentPage == 2) {
             TenantsPage(
                 sharedViewModel = sharedViewModel,
-                viewModel = tenantViewModel,
                 onBack = { currentPage = 1 },
                 onSave = {
                     sharedViewModel.saveBuildingWithOwners(
@@ -146,10 +138,6 @@ fun BuildingInfoPage(
     buildingUsages: List<BuildingUsages>,
     onNext: () -> Unit
 ) {
-
-    var selectedBuildingTypes by remember { mutableStateOf<BuildingTypes?>(null) }
-    var selectedBuildingUsages by remember { mutableStateOf<BuildingUsages?>(null) }
-
 
     var showBuildingTypeDialog by remember { mutableStateOf(false) }
     var showBuildingUsageDialog by remember { mutableStateOf(false) }
@@ -205,13 +193,13 @@ fun BuildingInfoPage(
             item {
                 ExposedDropdownMenuBoxExample(
                     items = buildingTypes + BuildingTypes(0, context.getString(R.string.addNew)), // Add "Add New" option
-                    selectedItem = selectedBuildingTypes,
+                    selectedItem = sharedViewModel.selectedBuildingTypes,
                     onItemSelected = {
                         if (it.buildingTypeName == context.getString(R.string.addNew)) {
                             // Open dialog to add new building type
                             showBuildingTypeDialog = true
                         } else {
-                            selectedBuildingTypes = it
+                            sharedViewModel.selectedBuildingTypes = it
                         }
                     },
                     label = context.getString(R.string.building_type),
@@ -226,13 +214,13 @@ fun BuildingInfoPage(
             item {
                 ExposedDropdownMenuBoxExample(
                     items = buildingUsages + BuildingUsages(0, context.getString(R.string.addNew)), // Add "Add New" option
-                    selectedItem = selectedBuildingUsages,
+                    selectedItem = sharedViewModel.selectedBuildingUsages,
                     onItemSelected = {
                         if (it.buildingUsageName == context.getString(R.string.addNew)) {
                             // Open dialog to add new building usage
                             showBuildingUsageDialog = true
                         } else {
-                            selectedBuildingUsages = it
+                            sharedViewModel.selectedBuildingUsages = it
                         }
                     },
                     label = context.getString(R.string.building_usage),
@@ -336,7 +324,6 @@ fun BuildingInfoPage(
 @Composable
 fun OwnersPage(
     sharedViewModel: SharedViewModel,
-    viewModel: OwnersViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -588,7 +575,6 @@ fun OwnerDialog(
 @Composable
 fun TenantsPage(
     sharedViewModel: SharedViewModel,
-    viewModel: TenantViewModel,
     onBack: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -775,8 +761,6 @@ fun TenantDialog(
     var mobileNumber by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("") }
-    val statuses = listOf("Active", "Inactive")
     var selectedStatus by remember { mutableStateOf("Active") } // Default status
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -856,43 +840,6 @@ fun TenantDialog(
             }
         }
     )
-
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
-        val statuses = remember { listOf("Active", "Inactive") }
-        var expanded by remember { mutableStateOf(false) }
-
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
-        ) {
-            OutlinedTextField(
-                readOnly = true,
-                value = selectedStatus,
-                onValueChange = { },
-                label = { Text("Status") },
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                statuses.forEach { status ->
-                    DropdownMenuItem(
-                        text = { Text(status) },
-                        onClick = {
-                            onStatusSelected(status)
-                            expanded = false
-                        }
-                    )
-                }
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
