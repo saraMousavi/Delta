@@ -64,11 +64,18 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
         Log.d("StateSelected", "Selected State: $state")
     }
 
-    fun insertBuildings(buildings: Buildings) {
+    fun insertBuildings(buildings: Buildings, onSuccess: (Long) -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            buildingsDao.insertBuilding(buildings)
+            try {
+                val buildingId = buildingsDao.insertBuilding(buildings)
+                onSuccess(buildingId) // Invoke onSuccess with the buildingId
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to insert building") // Invoke onError with the error message
+            }
         }
     }
+
+
 
     fun deleteBuildings(buildings: Buildings) = viewModelScope.launch {
         buildingsDao.deleteBuildings(buildings)

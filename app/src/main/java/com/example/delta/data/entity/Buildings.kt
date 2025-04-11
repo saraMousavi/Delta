@@ -12,13 +12,13 @@ import kotlinx.parcelize.Parcelize
     foreignKeys = [
         ForeignKey(
             entity = BuildingTypes::class,
-            parentColumns = ["id"],
+            parentColumns = ["buildingTypeId"],
             childColumns = ["buildingTypeId"],
             onDelete = ForeignKey.SET_NULL
         ),
         ForeignKey(
             entity = BuildingUsages::class,
-            parentColumns = ["id"],
+            parentColumns = ["buildingUsageId"],
             childColumns = ["buildingUsageId"],
             onDelete = ForeignKey.SET_NULL
         )
@@ -38,6 +38,6 @@ data class Buildings(
     val street: String,
     val province: String = "Tehran",  // Default province
     val state: String = "Central",     // Default state
-    val buildingTypeId: Int? = null,
-    val buildingUsageId: Int? = null
+    val buildingTypeId: Long? = null,
+    val buildingUsageId: Long? = null
 ) : Parcelable

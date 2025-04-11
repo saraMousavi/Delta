@@ -22,7 +22,7 @@
     <string name="auth">احراز هویت</string>
     <string name="menu_title">تنظیمات</string>
     <string name="first_sect">بخش یک</string>
-    <string name="account">حساب کاربری\n</string>
+    <string name="account">حساب کاربری</string>
     <string name="customizing">شخصی سازی</string>
     <string name="change_language">تغییر زبان برنامه\n</string>
     <string name="dark_mode">حالت شب</string>
@@ -32,8 +32,8 @@
     <string name="supporting">پشتیبانی</string>
     <string name="app_version">" نسخه برنامه 1.0.0 "</string>
     <string name="second_sect">اطلاعات اولیه</string>
-    <string name="cost_list">لیست هزینه ها\n</string>
-    <string name="income_list">لیست درآمدها\n</string>
+    <string name="cost_list">لیست هزینه ها</string>
+    <string name="income_list">لیست درآمدها</string>
     <string name="insert">ثبت</string>
     <string name="cost_type">نوع هزینه</string>
     <string name="delete">حذف</string>
@@ -53,9 +53,9 @@
     <string name="addNew">" اضافه کردن"</string>
     <string name="state">شهر</string>
     <string name="back">قبلی</string>
-    <string name="next">بعدی\n</string>
+    <string name="next">بعدی</string>
     <string name="owners_list">لیست مالکین</string>
-    <string name="tenant_list">لیست مستأجرین\n</string>
-    <string name="add_new_tenant">اضافه کردن مستأجر جدید\n</string>
+    <string name="tenant_list">لیست مستأجرین</string>
+    <string name="add_new_tenant">اضافه کردن مستأجر جدید</string>
     <string name="add_new_owner">اضافه کردن مالک جدید</string>
 </resources>

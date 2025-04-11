@@ -16,9 +16,7 @@ interface TenantDao {
     @Query("SELECT * FROM tenants")
     fun getAllTenants(): Flow<List<Tenants>>
 
-    @Query("SELECT * FROM tenants where buildingId = 0")
+    @Query("SELECT * FROM tenants")
     fun getAllMenuTenants(): Flow<List<Tenants>>
 
-    @Query("SELECT * FROM tenants WHERE buildingId = :buildingId")
-    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>>
 }

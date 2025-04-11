@@ -16,9 +16,7 @@ interface OwnersDao {
     @Query("SELECT * FROM owners")
     fun getAllOwners(): Flow<List<Owners>>
 
-    @Query("SELECT * FROM owners where buildingId = 0")
+    @Query("SELECT * FROM owners")
     fun getAllMenuOwners(): Flow<List<Owners>>
 
-    @Query("SELECT * FROM owners WHERE buildingId = :buildingId")
-    fun getOwnersForBuilding(buildingId: Long): Flow<List<Owners>>
 }

@@ -1,8 +1,10 @@
 package com.example.delta
 
+import android.content.Intent
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.example.delta.data.entity.BuildingOwnerCrossRef
+import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import com.example.delta.viewmodel.BuildingTypeViewModel
@@ -107,15 +111,26 @@ fun BuildingFormScreen(
                 viewModel = tenantViewModel,
                 onBack = { currentPage = 1 },
                 onSave = {
-                    // Call a save function in your ViewModel
-                    Toast.makeText( context, "Hello, world!", Toast.LENGTH_SHORT).show()
-//                    viewModel.saveBuildingWithRelations(
-//                        buildingName = buildingName, // Pass the building name
-//                        ownersList = ownersList,    // Pass the list of owners
-//                        tenantsList = tenantsList   // Pass the list of tenants
-//                    )
+                    sharedViewModel.saveBuildingWithOwners(
+                        onSuccess = {
+                            sharedViewModel.resetState()
+                            // Get the context
+                            val context = context
+
+                            // Create an Intent to start HomePageActivity
+                            val intent = Intent(context, HomePageActivity::class.java)
+
+                            // Start the activity
+                            context.startActivity(intent)
+                        },
+                        onError = { errorMessage ->
+                            // show a Toast, etc.
+                            Log.e("SaveError", "Error saving building: $errorMessage")
+                        }
+                    )
                 }
             )
+
         }
     }
 }
@@ -131,11 +146,10 @@ fun BuildingInfoPage(
     buildingUsages: List<BuildingUsages>,
     onNext: () -> Unit
 ) {
-    var name = sharedViewModel.name
+
     var selectedBuildingTypes by remember { mutableStateOf<BuildingTypes?>(null) }
     var selectedBuildingUsages by remember { mutableStateOf<BuildingUsages?>(null) }
-    var postCode = sharedViewModel.postCode
-    var street = sharedViewModel.street
+
 
     var showBuildingTypeDialog by remember { mutableStateOf(false) }
     var showBuildingUsageDialog by remember { mutableStateOf(false) }
@@ -170,8 +184,10 @@ fun BuildingInfoPage(
         ) {
             item {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
+                    value = sharedViewModel.name,
+                    onValueChange = { newValue -> // Update the ViewModel on change
+                        sharedViewModel.name = newValue
+                    },
                     label = {
                         Text(
                             text = context.getString(R.string.building_name),
@@ -238,8 +254,10 @@ fun BuildingInfoPage(
 
             item {
                 OutlinedTextField(
-                    value = street,
-                    onValueChange = { street = it },
+                    value = sharedViewModel.street,
+                    onValueChange = { newValue -> // Update the ViewModel on change
+                        sharedViewModel.street = newValue
+                    },
                     label = {
                         Text(
                             text = context.getString(R.string.street),
@@ -256,8 +274,10 @@ fun BuildingInfoPage(
 
             item {
                 OutlinedTextField(
-                    value = postCode,
-                    onValueChange = { postCode = it },
+                    value = sharedViewModel.postCode,
+                    onValueChange = { newValue -> // Update the ViewModel on change
+                        sharedViewModel.postCode = newValue
+                    },
                     label = {
                         Text(
                             text = context.getString(R.string.post_code),
@@ -320,7 +340,6 @@ fun OwnersPage(
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
-    var owners = sharedViewModel.ownersList
     var showOwnerDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -340,7 +359,7 @@ fun OwnersPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            items(owners) { owner ->
+            items(sharedViewModel.ownersList) { owner ->
                 OwnerItem(owner = owner)
             }
 
@@ -383,7 +402,7 @@ fun OwnersPage(
             OwnerDialog(
                 onDismiss = { showOwnerDialog = false },
                 onAddOwner = { newOwner ->
-                    owners = owners + newOwner
+                    sharedViewModel.ownersList = sharedViewModel.ownersList + newOwner
                     showOwnerDialog = false
                 }
             )
@@ -551,7 +570,7 @@ fun OwnerDialog(
         confirmButton = {
             Button(onClick = {
                 val newOwner =
-                    Owners(0, firstName, lastName, address, email, phoneNumber, mobileNumber, "", 0)
+                    Owners(firstName = firstName, lastName = lastName, address = address, email = email, phoneNumber = phoneNumber, mobileNumber = mobileNumber, birthday = "")
                 onAddOwner(newOwner)
             }) {
                 Text("Add")
@@ -573,7 +592,6 @@ fun TenantsPage(
     onBack: () -> Unit,
     onSave: () -> Unit
 ) {
-    var tenants = sharedViewModel.tenantsList
     var showTenantDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -593,7 +611,7 @@ fun TenantsPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            items(tenants) { tenant ->
+            items(sharedViewModel.tenantsList) { tenant ->
                 TenantItem(tenants = tenant)
             }
 
@@ -636,7 +654,7 @@ fun TenantsPage(
             TenantDialog(
                 onDismiss = { showTenantDialog = false },
                 onAddTenant = { newTenant ->
-                    tenants = tenants + newTenant
+                    sharedViewModel.tenantsList = sharedViewModel.tenantsList + newTenant
                     showTenantDialog = false
                 }
             )
@@ -758,7 +776,8 @@ fun TenantDialog(
     var startDate by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
-
+    val statuses = listOf("Active", "Inactive")
+    var selectedStatus by remember { mutableStateOf("Active") } // Default status
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add New Tenant") },
@@ -804,10 +823,10 @@ fun TenantDialog(
                     onValueChange = { endDate = it },
                     label = { Text("End Date") }
                 )
-                OutlinedTextField(
-                    value = status,
-                    onValueChange = { status = it },
-                    label = { Text("Status") }
+                // Status Dropdown
+                StatusDropdown(
+                    selectedStatus = selectedStatus,
+                    onStatusSelected = { selectedStatus = it }
                 )
             }
         },
@@ -822,8 +841,7 @@ fun TenantDialog(
                     mobileNumber = mobileNumber,
                     startDate = startDate,
                     endDate = endDate,
-                    status = status,
-                    buildingId = 0,
+                    status = selectedStatus,
                     birthday = ""
                 )
                 onAddTenant(newTenant)
@@ -838,4 +856,79 @@ fun TenantDialog(
             }
         }
     )
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
+        val statuses = remember { listOf("Active", "Inactive") }
+        var expanded by remember { mutableStateOf(false) }
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                readOnly = true,
+                value = selectedStatus,
+                onValueChange = { },
+                label = { Text("Status") },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                statuses.forEach { status ->
+                    DropdownMenuItem(
+                        text = { Text(status) },
+                        onClick = {
+                            onStatusSelected(status)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
+    val statuses = remember { listOf("Active", "Inactive") }
+    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            readOnly = true,
+            value = selectedStatus,
+            onValueChange = { },
+            label = { Text("Status") },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            statuses.forEach { status ->
+                DropdownMenuItem(
+                    text = { Text(status) },
+                    onClick = {
+                        onStatusSelected(status)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
 }

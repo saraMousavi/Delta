@@ -15,25 +15,20 @@ import kotlinx.coroutines.flow.Flow
 interface BuildingsDao {
 
 
-    // Insert a building
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBuilding(building: Buildings): Long
-
-    // Insert an owner
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOwner(owner: Owners): Long
-
-    // Insert a tenant
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTenant(tenant: Tenants): Long
-
-    // Insert cross-reference between building and owner
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBuildingOwnerCrossRef(crossRef: BuildingOwnerCrossRef)
 
-    // Insert cross-reference between building and tenant
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBuildingTenantCrossRef(crossRef: BuildingTenantCrossRef)
+
+    @Insert
+    suspend fun insertBuilding(building: Buildings): Long
+
+    @Insert
+    suspend fun insertOwner(owner: Owners): Long
+
+    @Insert
+    suspend fun insertTenant(tenant: Tenants): Long
 
     // Query buildings with owners and tenants
     @Transaction

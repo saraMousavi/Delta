@@ -29,7 +29,4 @@ class OwnersViewModel (application: Application) : AndroidViewModel(application)
         return ownersDao.getAllMenuOwners()
     }
 
-    fun fetchAndProcessOwners(buildingId: Long) : Flow<List<Owners>> {
-        return ownersDao.getOwnersForBuilding(buildingId)
-    }
 }

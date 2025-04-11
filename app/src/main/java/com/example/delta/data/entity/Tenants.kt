@@ -22,6 +22,5 @@ data class Tenants(
     @ColumnInfo(name = "start_date") val startDate: String,
     @ColumnInfo(name = "end_date") val endDate: String,
     @ColumnInfo(name = "status") val status: String,
-    @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
 
 ) : Parcelable

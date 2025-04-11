@@ -29,7 +29,4 @@ class TenantViewModel (application: Application) : AndroidViewModel(application)
         return tenantsDao.getAllMenuTenants()
     }
 
-    fun fetchAndProcessTenants(buildingId: Long) : Flow<List<Tenants>> {
-        return tenantsDao.getTenantsForBuilding(buildingId)
-    }
 }

@@ -8,7 +8,7 @@ data class BuildingWithType(
     @Embedded val building: Buildings,
     @Relation(
         parentColumn = "buildingTypeId",
-        entityColumn = "id",
+        entityColumn = "buildingTypeId",
         entity = BuildingTypes::class
     )
     val buildingTypes: BuildingTypes?

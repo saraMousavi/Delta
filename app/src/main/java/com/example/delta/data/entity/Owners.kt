@@ -19,6 +19,5 @@ data class Owners(
     @ColumnInfo(name = "birthday") val birthday: String,
     @ColumnInfo(name = "address") val address: String,
     @ColumnInfo(name = "email") val email: String,
-    @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
 
 ) : Parcelable

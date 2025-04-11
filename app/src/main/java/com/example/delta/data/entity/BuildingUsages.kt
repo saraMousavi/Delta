@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "building_usages")
 data class BuildingUsages(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey(autoGenerate = true) val buildingUsageId: Long = 0,
     @ColumnInfo(name = "building_usage_name")
     val buildingUsageName: String
 )
