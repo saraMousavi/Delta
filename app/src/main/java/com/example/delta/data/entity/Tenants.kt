@@ -19,6 +19,7 @@ data class Tenants(
     @ColumnInfo(name = "address") val address: String,
     @ColumnInfo(name = "email") val email: String,
     @ColumnInfo(name = "birthday") val birthday: String,
+    @ColumnInfo(name = "number_of_tenants") val numberOfTenants: String,
     @ColumnInfo(name = "start_date") val startDate: String,
     @ColumnInfo(name = "end_date") val endDate: String,
     @ColumnInfo(name = "status") val status: String,

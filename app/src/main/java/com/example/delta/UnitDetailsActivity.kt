@@ -5,9 +5,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +43,6 @@ import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Units
 import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.DebtsViewModelFactory
-import com.example.delta.factory.UnitsViewModelFactory
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.DebtsViewModel
 import com.example.delta.viewmodel.UnitsViewModel
@@ -54,11 +50,6 @@ import kotlin.getValue
 
 
 class UnitDetailsActivity : ComponentActivity() {
-
-    private val unitsViewModel: UnitsViewModel by viewModels {
-        UnitsViewModelFactory(application = this.application)
-    }
-
 
     private val debtsViewModel: DebtsViewModel by viewModels {
         DebtsViewModelFactory(application = this.application)

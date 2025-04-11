@@ -3,6 +3,8 @@ package com.example.delta.data.dao
 import androidx.room.*
 import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.BuildingTenantCrossRef
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithOwnersAndTenants
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithUsage
@@ -49,4 +51,16 @@ interface BuildingsDao {
     @Transaction
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
     fun getBuildingWithUsage(buildingId: Long): Flow<BuildingWithUsage>
+
+    @Insert
+    suspend fun insertBuildingType(buildingType: BuildingTypes): Long
+
+    @Insert
+    suspend fun insertBuildingUsage(buildingUsage: BuildingUsages): Long
+
+    @Query("SELECT * FROM building_types")
+    suspend fun getAllBuildingTypes(): List<BuildingTypes>
+
+    @Query("SELECT * FROM building_usages")
+    suspend fun getAllBuildingUsages(): List<BuildingUsages>
 }

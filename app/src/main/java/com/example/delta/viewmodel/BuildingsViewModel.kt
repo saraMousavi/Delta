@@ -107,7 +107,7 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
 
     suspend fun insertUnits(units: Units) : Long {
-        return unitsDao.insertUnits(units)
+        return unitsDao.insertUnit(units)
     }
 
     fun showEarningsDialog(buildingId: Long) {

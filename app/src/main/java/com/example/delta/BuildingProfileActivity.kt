@@ -75,11 +75,9 @@ import com.example.delta.data.entity.Units
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
-import com.example.delta.factory.UnitsViewModelFactory
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
-import com.example.delta.viewmodel.UnitsViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -98,9 +96,7 @@ class BuildingProfileActivity : ComponentActivity() {
         BuildingsViewModelFactory(application = this.application)
     }
 
-    private val unitsViewModel: UnitsViewModel by viewModels {
-        UnitsViewModelFactory(application = this.application)
-    }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -483,11 +479,11 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun UnitsTab(building: Buildings) {
-        val buildingWithUnits = unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = null)
+//        val buildingWithUnits = unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = null)
 
         Column {
-            UnitsList(units = buildingWithUnits?.value ?: emptyList(),
-                onAddUnits = { buildingViewModel.showUnitsDialog(building.buildingId)})
+//            UnitsList(units = buildingWithUnits?.value ?: emptyList(),
+//                onAddUnits = { buildingViewModel.showUnitsDialog(building.buildingId)})
 
         }
         // Dialog handling
@@ -718,7 +714,7 @@ class BuildingProfileActivity : ComponentActivity() {
         val amount = remember { mutableStateOf("") }
         val costs by costsFlow.collectAsState(initial = emptyList())
         var selectedCosts by remember { mutableStateOf<Costs?>(null) }
-        val units by unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = emptyList())
+//        val units by unitsViewModel.fetchAndProcessUnits(building.buildingId).collectAsState(initial = emptyList())
         Dialog(onDismissRequest = onDismiss) {
             Surface(
                 modifier = Modifier
@@ -782,16 +778,16 @@ class BuildingProfileActivity : ComponentActivity() {
                                     )
                                     scope.launch {
                                         val insertedCostId = onConfirm(costs)
-                                        units.forEach { unit ->
-                                            val debt = Debts(
-                                                unitId = unit.unitId,
-                                                costId = insertedCostId,
-                                                description = "",
-                                                dueDate = "",
-                                                paymentFlag = false
-                                            )
-                                            onInsertDebt(debt)
-                                        }
+//                                        units.forEach { unit ->
+//                                            val debt = Debts(
+//                                                unitId = unit.unitId,
+//                                                costId = insertedCostId,
+//                                                description = "",
+//                                                dueDate = "",
+//                                                paymentFlag = false
+//                                            )
+//                                            onInsertDebt(debt)
+//                                        }
                                         onDismiss()
                                     }
 
@@ -918,25 +914,25 @@ class BuildingProfileActivity : ComponentActivity() {
                                     val metrageDouble = asciiMetrage.toDoubleOrNull() ?: 0.0
                                     val numberOfTenantInt = asciiNumberOfTenant.toInt()
 
-                                    val units = Units(
-                                        buildingId = building.buildingId,
-                                        unitNumber = unitNumberInt,
-                                        metrage = metrageDouble,
-                                        ownerName = ownerName,
-                                        tenantName = tenantName,
-                                        numberOfTenants = numberOfTenantInt
-                                    )
+//                                    val units = Units(
+//                                        buildingId = building.buildingId,
+//                                        unitNumber = unitNumberInt,
+//                                        area = metrageDouble,
+//                                        ownerName = ownerName,
+//                                        tenantName = tenantName,
+//                                        numberOfTenants = numberOfTenantInt
+//                                    )
                                     scope.launch {
-                                        var insertedUnitId = onConfirm(units)
+//                                        var insertedUnitId = onConfirm(units)
                                         costs.forEach { cost ->
-                                            val debt = Debts(
-                                                unitId = insertedUnitId,
-                                                costId = cost.id,
-                                                description = cost.costName,
-                                                dueDate = "",
-                                                paymentFlag = false
-                                            )
-                                            onInsertDebt(debt)
+//                                            val debt = Debts(
+//                                                unitId = insertedUnitId,
+//                                                costId = cost.id,
+//                                                description = cost.costName,
+//                                                dueDate = "",
+//                                                paymentFlag = false
+//                                            )
+//                                            onInsertDebt(debt)
                                         }
                                         onDismiss()
                                     }

@@ -6,16 +6,20 @@ import androidx.lifecycle.viewModelScope
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.model.AppDatabase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TenantViewModel (application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val tenantsDao = database.tenantDao()
 
 
-    fun insertTenants(tenants: Tenants) = viewModelScope.launch {
-        tenantsDao.insertTenants(tenants)
+    suspend fun insertTenants(tenant: Tenants): Long {
+        return withContext(Dispatchers.IO) {
+            tenantsDao.insertTenants(tenant)
+        }
     }
 
     fun deleteTenants(tenants: Tenants) = viewModelScope.launch {

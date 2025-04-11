@@ -22,7 +22,9 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
+import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
 import java.security.acl.Owner
 
@@ -30,7 +32,9 @@ import java.security.acl.Owner
     BuildingUsages::class,Buildings::class,
     Costs::class, Earnings::class, Units::class,
     Debts::class, Owners::class, Tenants::class
-    , BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class], version = 1, exportSchema = true)
+    , BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
+    OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class]
+    , version = 1, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
     abstract fun buildingUsageDao(): BuildingUsageDao

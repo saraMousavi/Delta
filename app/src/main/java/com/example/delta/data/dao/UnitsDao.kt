@@ -5,24 +5,20 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.example.delta.data.entity.Units
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UnitsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUnits(units: Units) : Long
+    suspend fun insertUnit(unit: Units): Long
 
-    @Delete()
-    suspend fun deleteUnits(units: Units)
+    @Update
+    suspend fun updateUnit(unit: Units)
 
-    @Query("SELECT * FROM units")
-    fun getAllUnits(): Flow<List<Units>>
-
+    @Delete
+    suspend fun deleteUnit(unit: Units)
 
     @Query("SELECT * FROM units WHERE buildingId = :buildingId")
-    fun getUnitsForBuilding(buildingId: Long): Flow<List<Units>>
-
-    @Query("SELECT MAX(unitId) FROM units")
-    fun getLastUnitId(): Long
+    suspend fun getUnitsByBuildingId(buildingId: Int): List<Units>
 }

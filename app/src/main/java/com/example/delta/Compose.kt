@@ -6,6 +6,8 @@ import android.annotation.SuppressLint
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,8 +61,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
+import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import com.example.delta.viewmodel.BuildingsViewModel
+import androidx.compose.material3.InputChip
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier, fontSize: TextUnit) {
@@ -343,36 +348,39 @@ fun <T> ExposedDropdownMenuBoxExample(
     itemLabel: (T) -> String
 ) {
     var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
-            readOnly = true,
-            value = selectedItem?.let { itemLabel(it) } ?: "",
-            onValueChange = { },
-            label = { Text(label) },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(
-                    expanded = expanded
-                )
-            }
-        )
-
-        ExposedDropdownMenu(
+    AppTheme {
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onExpandedChange = { expanded = it }
         ) {
-            items.forEach { item ->
-                DropdownMenuItem(
-                    text = { Text(itemLabel(item)) },
-                    onClick = {
-                        onItemSelected(item)
-                        expanded = false
-                    }
-                )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth().menuAnchor(),
+                readOnly = true,
+                value = selectedItem?.let { itemLabel(it) } ?: "",
+                onValueChange = { },
+                label = { Text(label) },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded
+                    )
+                }
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                items.forEach { item ->
+                    DropdownMenuItem(
+                        text = { Text(
+                            text = itemLabel(item),
+                            style = MaterialTheme.typography.bodyLarge) },
+                        onClick = {
+                            onItemSelected(item)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -415,3 +423,31 @@ fun ProvinceStateSelector(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun ChipGroup(
+    selectedUnits: List<Units>,
+    onSelectionChange: (List<Units>) -> Unit,
+    units: List<Units>
+) {
+    FlowRow(
+        modifier = Modifier.padding(8.dp)
+    ) {
+        units.forEach { unit ->
+            InputChip(
+                selected = selectedUnits.contains(unit),
+                onClick = {
+                    val newSelection = if (selectedUnits.contains(unit)) {
+                        selectedUnits.filter { it != unit }
+                    } else {
+                        selectedUnits + unit
+                    }
+                    onSelectionChange(newSelection)
+                },
+                label = { Text(unit.unitNumber.toString()) }
+            )
+        }
+    }
+}
+
