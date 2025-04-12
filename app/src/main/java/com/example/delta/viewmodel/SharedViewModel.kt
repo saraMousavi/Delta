@@ -12,6 +12,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.delta.data.entity.*
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -21,6 +24,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val ownersDao = AppDatabase.getDatabase(application).ownersDao()
     private val tenantsDao = AppDatabase.getDatabase(application).tenantDao()
     private val unitsDao = AppDatabase.getDatabase(application).unitsDao()
+    private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
+    private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
 
     // State for Building Info Page
     var name by mutableStateOf("")
@@ -34,6 +39,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var buildingUsageId by mutableIntStateOf(0)
 
     // State for Owners Page
+    private set
     var ownersList = mutableStateListOf<Owners>()
         private set
     var tenantsList = mutableStateOf(listOf<Tenants>())
@@ -55,7 +61,63 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     init {
         loadOwners()
         loadTenants()
+        loadBuildingsWithTypesAndUsages()
     }
+
+    fun getUnitsForBuilding(buildingId: Long): Flow<List<Units>> = flow {
+        val units = unitsDao.getUnitsByBuildingId(buildingId)
+        emit(units)
+    }.flowOn(Dispatchers.IO)
+
+    fun getOwnersForBuilding(buildingId: Long): Flow<List<Owners>> = flow {
+        val owners = ownersDao.getOwnersForBuilding(buildingId)
+        emit(owners)
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun getBuildingTypeAndUsage(building: Buildings): Pair<String, String> {
+        val buildingTypeName = buildingTypesDao.getBuildingTypeName(building.buildingTypeId)
+        val buildingUsageName = buildingUsagesDao.getBuildingUsageName(building.buildingUsageId)
+        return Pair(buildingTypeName, buildingUsageName)
+    }
+
+
+    fun loadBuildingsWithTypesAndUsages() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val buildings = buildingDao.getBuildings()
+            val buildingTypes = mutableMapOf<Long?, String>()
+            val buildingUsages = mutableMapOf<Long?, String>()
+
+            // Fetch building types and usages
+            buildings.forEach { building ->
+                if (!buildingTypes.containsKey(building.buildingTypeId)) {
+                    buildingTypes[building.buildingTypeId] = buildingTypesDao.getBuildingTypeName(building.buildingTypeId)
+                    Log.d("building type", buildingTypesDao.getBuildingTypeName(building.buildingTypeId))
+                }
+                if (!buildingUsages.containsKey(building.buildingUsageId)) {
+                    buildingUsages[building.buildingUsageId] = buildingUsagesDao.getBuildingUsageName(building.buildingUsageId)
+                    Log.d("building usage", buildingUsagesDao.getBuildingUsageName(building.buildingUsageId))
+                }
+            }
+
+            // Map building types and usages to buildings
+            val buildingsWithTypesAndUsages = buildings.map { building ->
+                BuildingWithTypesAndUsages(
+                    building = building,
+                    buildingTypeName = buildingTypes[building.buildingTypeId] ?: "",
+                    buildingUsageName = buildingUsages[building.buildingUsageId] ?: ""
+                )
+            }
+
+            withContext(Dispatchers.Main) {
+                // Update your UI with the new data
+                buildingsWithTypesAndUsagesList.value = buildingsWithTypesAndUsages
+            }
+        }
+    }
+
+
+    val buildingsWithTypesAndUsagesList = mutableStateOf(listOf<BuildingWithTypesAndUsages>())
+
 
     fun loadTenants() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -165,6 +227,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                Log.d("Insert", "building")
+                Log.d("selectedBuildingTypes?.buildingTypeId", selectedBuildingTypes?.buildingTypeId.toString())
+                Log.d("selectedBuildingUsages?.buildingUsageId", selectedBuildingUsages?.buildingUsageId.toString())
                 val buildingId = buildingDao.insertBuilding(
                     Buildings(
                         name = name, phone = phone, email = email, postCode = postCode,
@@ -224,6 +289,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    fun addOwner(owner: Owners) {
+        viewModelScope.launch(Dispatchers.IO) {
+            ownersDao.insertOwners(owner)
+            withContext(Dispatchers.Main) {
+                ownersList.add(owner)
+            }
+        }
+    }
+
 
 
     fun resetState() {

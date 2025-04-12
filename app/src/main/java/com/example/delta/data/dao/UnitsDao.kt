@@ -20,5 +20,7 @@ interface UnitsDao {
     suspend fun deleteUnit(unit: Units)
 
     @Query("SELECT * FROM units WHERE buildingId = :buildingId")
-    suspend fun getUnitsByBuildingId(buildingId: Int): List<Units>
+    suspend fun getUnitsByBuildingId(buildingId: Long): List<Units>
+
+
 }

@@ -10,8 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,10 +44,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
+import com.example.delta.viewmodel.SharedViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.lifecycle.viewModelScope
+import com.example.delta.data.entity.BuildingWithTypesAndUsages
+
 
 class HomePageActivity : ComponentActivity() {
     private val viewModel: BuildingsViewModel by viewModels()
-
+    val sharedViewModel: SharedViewModel by viewModels()
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,7 +72,7 @@ class HomePageActivity : ComponentActivity() {
                             .padding(innerPadding)
                     ) {
                         // List of buildings
-                        BuildingList(viewModel = viewModel)
+                        BuildingList(viewModel = viewModel, sharedViewModel = sharedViewModel)
                         val context = LocalContext.current
                         // FAB (fixed alignment)
                         FloatingActionButton(
@@ -83,8 +92,9 @@ class HomePageActivity : ComponentActivity() {
 }
 
 @Composable
-fun BuildingList(viewModel: BuildingsViewModel) {
+fun BuildingList(viewModel: BuildingsViewModel, sharedViewModel: SharedViewModel) {
     val buildings by viewModel.getAllBuildings().collectAsState(initial = emptyList())
+    val buildingsWithTypesAndUsages by sharedViewModel.buildingsWithTypesAndUsagesList
     val context = LocalContext.current
     LazyColumn(
         modifier = Modifier
@@ -93,26 +103,34 @@ fun BuildingList(viewModel: BuildingsViewModel) {
             .padding(16.dp)
     ) {
 
-        items(buildings) { building ->
-            BuildingCard(building = building){
+        items(buildingsWithTypesAndUsages) { buildingWithTypesAndUsages ->
+            BuildingCard(buildingWithTypesAndUsages = buildingWithTypesAndUsages, onClick = {
                 val intent = Intent(context, BuildingProfileActivity::class.java).apply {
-                    putExtra("BUILDING_DATA", building as Parcelable)
+                    putExtra("BUILDING_DATA", buildingWithTypesAndUsages.building as Parcelable)
                 }
                 context.startActivity(intent)
-            }
+            }, building = buildingWithTypesAndUsages.building, sharedViewModel = sharedViewModel)
         }
     }
 }
 
+
+
+
 @Composable
-fun BuildingCard(building: Buildings, onClick: () -> Unit) {
+fun BuildingCard(buildingWithTypesAndUsages: BuildingWithTypesAndUsages, building: Buildings, onClick: () -> Unit, sharedViewModel: SharedViewModel) {
+    // Load units and owners for this building
+    val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
+    val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-        .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        shape = RoundedCornerShape(16.dp) // Card shape
+            .padding(8.dp) // Add padding around the card
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp), // Rounded corners
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // Set background color
     ) {
         Column(
             modifier = Modifier
@@ -126,22 +144,52 @@ fun BuildingCard(building: Buildings, onClick: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth() // Match card width
                     .height(200.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)) // Top corners only
+                    .clip(RoundedCornerShape(16.dp)) // Top corners only
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = building.name,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = building.street,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "${LocalContext.current.getString(R.string.building_name)} : ${building.name}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(bottom = 4.dp),
+                color = MaterialTheme.colorScheme.onSurface
             )
+
+            // Display building type and usage
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${LocalContext.current.getString(R.string.building_type)}: ${buildingWithTypesAndUsages.buildingTypeName}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${LocalContext.current.getString(R.string.building_usage)}: ${buildingWithTypesAndUsages.buildingUsageName}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Number of units and owners
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${LocalContext.current.getString(R.string.number_of_units)}: ${units.size}", // Replace with actual unit count
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${LocalContext.current.getString(R.string.number_of_owners)}: ${owners.size}", // Replace with actual owner count
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
+

@@ -16,10 +16,6 @@ class MyApplication : Application() {
 
     companion object {
         private var appContext: Context? = null
-
-        fun getAppContext(): Context? {
-            return appContext
-        }
     }
 
     private lateinit var buildingDao: BuildingsDao
@@ -45,8 +41,8 @@ class MyApplication : Application() {
             if (buildingTypes == null) {
                 Log.d("MyApplication", "Building Types are empty, inserting defaults")
                 val defaultBuildingTypes = listOf(
-                    BuildingTypes(buildingTypeName = getString(R.string.villa) ?: "Villa"),
-                    BuildingTypes(buildingTypeName = getString(R.string.apartment) ?: "Apartment")
+                    BuildingTypes(buildingTypeName = getString(R.string.villa)),
+                    BuildingTypes(buildingTypeName = getString(R.string.apartment))
                 )
                 defaultBuildingTypes.forEach {
                     Log.d("MyApplication", "Inserting Building Type: ${it.buildingTypeName}")
@@ -62,9 +58,9 @@ class MyApplication : Application() {
             if (buildingUsages == null) {
                 Log.d("MyApplication", "Building Usages are empty, inserting defaults")
                 val defaultBuildingUsages = listOf(
-                    BuildingUsages(buildingUsageName = getString(R.string.residential) ?: "Residential"),
-                    BuildingUsages(buildingUsageName = getString(R.string.commercial) ?: "Commercial"),
-                    BuildingUsages(buildingUsageName = getString(R.string.industrial) ?: "Industrial")
+                    BuildingUsages(buildingUsageName = getString(R.string.residential) ),
+                    BuildingUsages(buildingUsageName = getString(R.string.commercial) ),
+                    BuildingUsages(buildingUsageName = getString(R.string.industrial))
                 )
                 defaultBuildingUsages.forEach {
                     Log.d("MyApplication", "Inserting Building Usage: ${it.buildingUsageName}")

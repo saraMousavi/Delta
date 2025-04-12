@@ -597,6 +597,7 @@ fun OwnerDialog(
                     Owners(firstName = firstName, lastName = lastName, address = address, email = email, phoneNumber = phoneNumber, mobileNumber = mobileNumber, birthday = "")
                 Log.d("selectedUnits confirm", selectedUnits.toString())
                 onAddOwner(newOwner, selectedUnits)
+                sharedViewModel.addOwner(newOwner)
                 sharedViewModel.addOwnerUnits(newOwner, selectedUnits)
             },
                 colors = ButtonDefaults.buttonColors(

@@ -36,5 +36,13 @@ interface OwnersDao {
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
     suspend fun getOwnerById(ownerId: Int): Owners
 
+    @Query("""
+    SELECT o.* FROM Owners o
+    JOIN OwnersUnitsCrossRef ouc ON o.ownerId = ouc.ownerId
+    JOIN Units u ON ouc.unitId = u.unitId
+    WHERE u.buildingId = :buildingId
+""")
+    suspend fun getOwnersForBuilding(buildingId: Long): List<Owners>
+
 
 }

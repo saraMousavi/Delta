@@ -82,4 +82,14 @@
     <string name="number_of_tenants">تعداد افراد</string>
     <string name="personal_information">اطلاعات شخصی</string>
     <string name="lease_information">"اطلاعات اجاره "</string>
+    <string name="number_of_units">تعداد واحدها</string>
+    <string name="number_of_owners">تعداد مالکین</string>
+    <string name="overview">اطلاعات اولیه</string>
+    <string name="funds">صندوق</string>
+    <string name="reports">گزارش</string>
+    <string name="owners">مالکین</string>
+    <string name="units">واحدها</string>
+    <string name="incomes">درآمدها</string>
+    <string name="no_earnings_recorded">هیچ درآمدی ثبت نشده است</string>
+    <string name="no_costs_recorded">هیچ هزینه ای ثبت نشده است.</string>
 </resources>

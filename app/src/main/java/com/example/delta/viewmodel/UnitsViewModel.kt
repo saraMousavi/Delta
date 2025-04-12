@@ -32,7 +32,7 @@ class UnitsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun getUnitsByBuildingId(buildingId: Int): LiveData<List<Units>> {
+    fun getUnitsByBuildingId(buildingId: Long): LiveData<List<Units>> {
         return liveData(Dispatchers.IO) {
             emit(unitDao.getUnitsByBuildingId(buildingId))
         }
