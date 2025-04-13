@@ -39,5 +39,6 @@ data class Buildings(
     val province: String = "Tehran",  // Default province
     val state: String = "Central",     // Default state
     val buildingTypeId: Long? = null,
-    val buildingUsageId: Long? = null
+    val buildingUsageId: Long? = null,
+    val fund: Double
 ) : Parcelable

@@ -24,6 +24,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val ownersDao = AppDatabase.getDatabase(application).ownersDao()
     private val tenantsDao = AppDatabase.getDatabase(application).tenantDao()
     private val unitsDao = AppDatabase.getDatabase(application).unitsDao()
+    private val costsDao = AppDatabase.getDatabase(application).costDao()
     private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
 
@@ -35,14 +36,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var street by mutableStateOf("")
     var province by mutableStateOf("")
     var state by mutableStateOf("")
+    // In SharedViewModel
+    var sameArea by mutableStateOf(false)
+    var numberOfUnits by mutableStateOf("")
+    var unitArea by mutableStateOf("")
+    var sharedUtilities by mutableStateOf(listOf<String>())
+    var unitsAdded by mutableStateOf(false)
     var buildingTypeId by mutableIntStateOf(0)
     var buildingUsageId by mutableIntStateOf(0)
 
     // State for Owners Page
     private set
     var ownersList = mutableStateListOf<Owners>()
-        private set
+    private set
     var tenantsList = mutableStateOf(listOf<Tenants>())
+    private set
+    var costsList = mutableStateOf(listOf<Costs>())
     var unitsList = mutableStateListOf<Units>()
 
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
@@ -57,11 +66,30 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // Maps to store unit associations for owners and tenants
     val ownerUnitMap = mutableMapOf<Owners, List<Units>>()
     val tenantUnitMap = mutableMapOf<Tenants, Units>()
+//        private set
+    var defaultCosts = mutableStateListOf<Costs>()
+        private set
+    //Temporary costs list to store updated amounts
+    var tempCosts = mutableStateListOf<Costs>()
 
     init {
         loadOwners()
         loadTenants()
+        loadCosts()
         loadBuildingsWithTypesAndUsages()
+        loadDefaultCosts()
+    }
+
+    private fun loadDefaultCosts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val defaultCostsFromDb = costsDao.getCosts().filter { it.buildingId == 0L }
+            withContext(Dispatchers.Main) {
+                defaultCosts.clear()
+                defaultCosts.addAll(defaultCostsFromDb)
+                tempCosts.clear()
+                tempCosts.addAll(defaultCostsFromDb)
+            }
+        }
     }
 
     fun getUnitsForBuilding(buildingId: Long): Flow<List<Units>> = flow {
@@ -139,6 +167,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
     fun loadUnitsForOwner(ownerId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val unitsForOwner = ownersDao.getUnitsForOwner(ownerId)
@@ -149,45 +178,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // Add callbacks to saveBuildingWithOwners function
-    fun saveBuildingWithOwners(onSuccess: () -> Unit, onError: (String) -> Unit) {
-        viewModelScope.launch {
-            try {
-                // Insert the building and get its ID
-                val buildingId = buildingDao.insertBuilding(
-                    Buildings(
-                        name = name, phone = phone, email = email, postCode = postCode,
-                        buildingTypeId = selectedBuildingTypes?.buildingTypeId ?: 0,
-                        buildingUsageId = selectedBuildingUsages?.buildingUsageId ?: 0,
-                        street = street, province = province, state = state
-                    )
-                )
-                // Insert owners
-                ownersList.forEach { owner ->
-                    val ownerId = ownersDao.insertOwners(owner)
-                    buildingDao.insertBuildingOwnerCrossRef(BuildingOwnerCrossRef(buildingId, ownerId))
-                }
-                // Insert tenants
-                tenantsList.value.forEach { tenant ->
-                    val tenantId = tenantsDao.insertTenants(tenant)
-                    buildingDao.insertBuildingTenantCrossRef(
-                        BuildingTenantCrossRef(
-                            buildingId,
-                            tenantId
-                        )
-                    )
-                }
 
-                withContext(Dispatchers.Main) {
-                    onSuccess()
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    onError(e.message ?: "Failed to save building with owners")
-                }
-            }
-        }
-    }
 
     fun saveOwnerWithUnits(owner: Owners, units: List<Units>) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -230,12 +221,17 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("Insert", "building")
                 Log.d("selectedBuildingTypes?.buildingTypeId", selectedBuildingTypes?.buildingTypeId.toString())
                 Log.d("selectedBuildingUsages?.buildingUsageId", selectedBuildingUsages?.buildingUsageId.toString())
+                var fund = 0.0
+                tempCosts.forEach { cost ->
+                    Log.d("cost.amount", cost.amount.toString())
+                    fund += cost.amount * unitsList.size
+                }
                 val buildingId = buildingDao.insertBuilding(
                     Buildings(
                         name = name, phone = phone, email = email, postCode = postCode,
                         buildingTypeId = selectedBuildingTypes?.buildingTypeId ?: 0,
                         buildingUsageId = selectedBuildingUsages?.buildingUsageId ?: 0,
-                        street = street, province = province, state = state
+                        street = street, province = province, state = state, fund = fund
                     )
                 )
 
@@ -252,6 +248,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     ownerUnits.forEach { unit ->
                         ownersDao.insertOwnerUnitCrossRef(OwnersUnitsCrossRef(ownerId, unit.unitId))
                     }
+                }
+
+                // Save costs
+                tempCosts.forEach { cost ->
+                    costsDao.insertCost(cost.copy(buildingId = buildingId))
                 }
 
                 // Save tenants and their unit relationships
@@ -296,6 +297,25 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             withContext(Dispatchers.Main) {
                 ownersList.add(owner)
             }
+        }
+    }
+    fun loadCosts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val costsFromDb = costsDao.getCosts()
+            withContext(Dispatchers.Main) {
+                costsList.value = costsFromDb
+            }
+        }
+    }
+
+    fun updateCostAmount(cost: Costs, newAmount: Double) {
+        val index = tempCosts.indexOf(cost)
+        if (index != -1) {
+            val updatedCost = cost.copy(amount = newAmount)
+            tempCosts[index] = updatedCost
+        } else {
+            val newCost = cost.copy(amount = newAmount)
+            tempCosts.add(newCost)
         }
     }
 

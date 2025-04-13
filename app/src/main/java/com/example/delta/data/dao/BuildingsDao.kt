@@ -9,6 +9,7 @@ import com.example.delta.data.entity.BuildingWithOwnersAndTenants
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import kotlinx.coroutines.flow.Flow
@@ -72,4 +73,10 @@ interface BuildingsDao {
 
     @Query("SELECT bu.building_usage_name FROM building_usages bu WHERE bu.buildingUsageId = :buildingUsageId")
     suspend fun getBuildingUsageName(buildingUsageId: Long?): String
+
+    @Query("SELECT * FROM Costs WHERE buildingId = :buildingId")
+    suspend fun getCostsForBuilding(buildingId: Int): List<Costs>
+
+    @Update
+    suspend fun updateCost(cost: Costs)
 }

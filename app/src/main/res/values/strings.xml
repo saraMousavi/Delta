@@ -92,4 +92,24 @@
     <string name="incomes">درآمدها</string>
     <string name="no_earnings_recorded">هیچ درآمدی ثبت نشده است</string>
     <string name="no_costs_recorded">هیچ هزینه ای ثبت نشده است.</string>
+    <string name="tenants">مستأجرین</string>
+    <string name="rent">اجاره</string>
+    <string name="utilities">قبوض</string>
+    <string name="maintenance">تعمیرات</string>
+    <string name="parking">پارکینگ</string>
+    <string name="co_working_space">فضای اشتراکی</string>
+    <string name="pool">استخر</string>
+    <string name="fund_lbl">بودجه</string>
+    <string name="login_user">ورود کاربر</string>
+    <string name="auth_code">کد تایید</string>
+    <string name="login">ورود</string>
+    <string name="amount">مبلغ</string>
+    <string name="all_units_same_area">آیا متراژ تمام واحدها یکسان است؟</string>
+    <string name="gas">گاز</string>
+    <string name="water">آب</string>
+    <string name="electricity">برق</string>
+    <string name="shared_things">موارد مشترک</string>
+    <string name="update">ویرایش</string>
+    <string name="edit_unit">ویرایش واحد</string>
+    <string name="success_update">ویرایش با موفقیت انجام شد.</string>
 </resources>

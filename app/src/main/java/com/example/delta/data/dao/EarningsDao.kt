@@ -16,6 +16,9 @@ interface EarningsDao {
     @Query("SELECT * FROM earnings")
     fun getAllEarnings(): Flow<List<Earnings>>
 
+    @Query("SELECT * FROM earnings")
+    fun getEarnings(): List<Earnings>
+
     @Query("SELECT * FROM earnings where buildingId = 0")
     fun getAllMenuEarnings(): Flow<List<Earnings>>
 

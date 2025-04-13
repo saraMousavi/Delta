@@ -6,6 +6,7 @@ import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -13,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -25,11 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
@@ -46,7 +50,7 @@ class BuildingFormActivity : ComponentActivity() {
     private val buildingTypeViewModel: BuildingTypeViewModel by viewModels()
     private val buildingUsageViewModel: BuildingUsageViewModel by viewModels()
     val sharedViewModel: SharedViewModel by viewModels()
-    val unitsViewModel: UnitsViewModel by viewModels()
+    private val unitsViewModel: UnitsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +97,7 @@ fun BuildingFormScreen(
                 viewModel = viewModel,
                 buildingTypeViewModel = buildingTypeViewModel,
                 buildingUsageViewModel = buildingUsageViewModel,
+                unitsViewModel = unitsViewModel,
                 buildingTypes = buildingTypes,
                 buildingUsages = buildingUsages,
                 onNext = { currentPage++ }
@@ -109,10 +114,10 @@ fun BuildingFormScreen(
                 onBack = { currentPage = 1 }
             )
 
-        } else if (currentPage == 3){
+        } else if (currentPage == 4){
             TenantsPage(
                 sharedViewModel = sharedViewModel,
-                onBack = { currentPage = 2 },
+                onBack = { currentPage = 3 },
                 onSave = {
                     sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
                         onSuccess = {
@@ -132,10 +137,17 @@ fun BuildingFormScreen(
                 }
             )
 
+        } else if (currentPage == 3){
+            CostPage(
+                sharedViewModel = sharedViewModel,
+                onNext = { currentPage++ },
+                onBack = { currentPage = 2 }
+            )
         }
     }
 }
 
+@SuppressLint("UnrememberedMutableState")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildingInfoPage(
@@ -143,6 +155,7 @@ fun BuildingInfoPage(
     viewModel: BuildingsViewModel,
     buildingTypeViewModel: BuildingTypeViewModel,
     buildingUsageViewModel: BuildingUsageViewModel,
+    unitsViewModel : UnitsViewModel,
     buildingTypes: List<BuildingTypes>,
     buildingUsages: List<BuildingUsages>,
     onNext: () -> Unit
@@ -151,6 +164,7 @@ fun BuildingInfoPage(
     var showBuildingTypeDialog by remember { mutableStateOf(false) }
     var showBuildingUsageDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -237,9 +251,12 @@ fun BuildingInfoPage(
                 )
             }
 
+
+
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+
 
             item {
                 ProvinceStateSelector(viewModel = viewModel)
@@ -288,6 +305,71 @@ fun BuildingInfoPage(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = sharedViewModel.sameArea,
+                        onCheckedChange = {
+                            sharedViewModel.sameArea = it
+                        }
+                    )
+                    Text(
+                        text = context.getString(R.string.all_units_same_area),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+
+            item {
+                if (sharedViewModel.sameArea) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        OutlinedTextField(
+                            value = sharedViewModel.numberOfUnits,
+                            onValueChange = {
+                                sharedViewModel.numberOfUnits = it
+                            },
+                            label = { Text(context.getString(R.string.number_of_units)) },
+                            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = sharedViewModel.unitArea,
+                            onValueChange = {
+                                sharedViewModel.unitArea = it
+                            },
+                            label = { Text(context.getString(R.string.area)) },
+                            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+
+            item {
+                ChipGroupShared(
+                    selectedItems = sharedViewModel.sharedUtilities,
+                    onSelectionChange = { newSelection ->
+                        sharedViewModel.sharedUtilities = newSelection
+                    },
+                    items = listOf(context.getString(R.string.gas),
+                        context.getString(R.string.water),
+                        context.getString(R.string.electricity)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
+            }
+
+            item{Spacer(modifier = Modifier.height(16.dp))}
         }
 
         // Fixed Bottom Button
@@ -297,8 +379,33 @@ fun BuildingInfoPage(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.End // Align button to the right
         ) {
+            val lifecycleOwner = LocalLifecycleOwner.current
+            Button(onClick = {
+                lifecycleOwner.lifecycleScope.launch {
+                    if (sharedViewModel.sameArea && !sharedViewModel.unitsAdded) {
+                        val numUnits = sharedViewModel.numberOfUnits.toInt()
+                        val area = sharedViewModel.unitArea.toString()
+                        for (i in 1..numUnits) {
+                            val newUnit = Units(
+                                unitNumber = i.toString(),
+                                area = area,
+                                numberOfRooms = "1"
+                            )
+                            try {
+                                val unitId = unitsViewModel.insertUnit(newUnit)
+                                sharedViewModel.unitsList.add(newUnit.copy(unitId = unitId)) // Update the unitId
 
-            Button(onClick = onNext,
+                            } catch (e: Exception) {
+                                Log.e("InsertUnitError", "Failed to insert unit: ${e.message}")
+                            }
+                            sharedViewModel.unitsAdded = true
+                        }
+                    }
+                }
+
+
+                onNext()
+            },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )
@@ -579,7 +686,7 @@ fun OwnerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 // Unit selection with ChipGroup
-                ChipGroup(
+                ChipGroupUnits(
                     selectedUnits = selectedUnits,
                     onSelectionChange = { newSelection ->
                         selectedUnits.clear()
@@ -1082,7 +1189,7 @@ fun UnitPage(
                 .fillMaxWidth()
         ) {
             items(sharedViewModel.unitsList) { unit ->
-                UnitItem(unit = unit)
+                UnitItem(unit = unit, sharedViewModel = sharedViewModel, unitsViewModel = unitsViewModel)
             }
 
             // Add "Add New Unit" as the last item
@@ -1139,11 +1246,15 @@ fun UnitPage(
 }
 
 @Composable
-fun UnitItem(unit: Units) {
+fun UnitItem(unit: Units, sharedViewModel : SharedViewModel, unitsViewModel: UnitsViewModel) {
+    var showEditDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .clickable(onClick = { showEditDialog = true }),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1153,10 +1264,29 @@ fun UnitItem(unit: Units) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = LocalContext.current.getString(R.string.unit_name) + ": ${unit.unitNumber}",
+                text = context.getString(R.string.unit_name) + ": ${unit.unitNumber}",
                 style = MaterialTheme.typography.bodyLarge
             )
         }
+    }
+
+    if (showEditDialog) {
+        val lifecycleOwner = LocalLifecycleOwner.current
+        EditUnitDialog(
+            unit = unit,
+            onDismiss = { showEditDialog = false },
+            onUpdateUnit = { updatedUnit ->
+                lifecycleOwner.lifecycleScope.launch {
+                    val unitId = unitsViewModel.updateUnit(updatedUnit)
+                    Log.d("unitId", unitId.toString())
+                    val index = sharedViewModel.unitsList.indexOfFirst { it.unitId == updatedUnit.unitId }
+                    if (index != -1) {
+                        sharedViewModel.unitsList[index] = updatedUnit
+                    }
+                    Toast.makeText(context, context.getString(R.string.success_update), Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
     }
 }
 
@@ -1264,4 +1394,188 @@ fun UnitDialog(
         }
     )
 
+}
+
+@Composable
+fun EditUnitDialog(
+    unit: Units,
+    onDismiss: () -> Unit,
+    onUpdateUnit: (Units) -> Unit
+) {
+    var unitNumber by remember { mutableStateOf(unit.unitNumber) }
+    var area by remember { mutableStateOf(unit.area) }
+    var numberOfRooms by remember { mutableStateOf(unit.numberOfRooms) }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = context.getString(R.string.edit_unit),
+            style = MaterialTheme.typography.bodyLarge) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = unitNumber,
+                    onValueChange = { unitNumber = it },
+                    label = { Text(context.getString(R.string.unit_number)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = area,
+                    onValueChange = { area = it },
+                    label = { Text(context.getString(R.string.area)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = numberOfRooms,
+                    onValueChange = { numberOfRooms = it },
+                    label = { Text(context.getString(R.string.number_of_rooms)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val updatedUnit = Units(
+                    unitNumber = unitNumber,
+                    area = area,
+                    numberOfRooms = numberOfRooms,
+                    unitId = unit.unitId
+                )
+                onUpdateUnit(updatedUnit)
+                onDismiss()
+            },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)))) {
+                Text(text = context.getString(R.string.update) ,
+                    style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)))) {
+                Text(text = context.getString(R.string.cancel) ,
+                    style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    )
+}
+
+
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CostPage(
+    sharedViewModel: SharedViewModel,
+    onNext: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+
+
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Top App Bar with Back Button
+        CenterAlignedTopAppBar(
+            title = {
+                Text(
+                    text = context.getString(R.string.costs),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
+                }
+            }
+        )
+
+        // Editable Costs List
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            items(sharedViewModel.costsList.value) { cost ->
+                CostItem(
+                    cost = cost,
+                    onAmountChange = { newAmount ->
+                        sharedViewModel.updateCostAmount(cost, newAmount)
+                    }
+                )
+            }
+        }
+
+        // Navigation Buttons (Back/Next)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Button(onClick = onBack,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )
+            ) {
+                Text(context.getString(R.string.back),
+                    modifier = Modifier.padding(2.dp),
+                    style = MaterialTheme.typography.bodyLarge)
+            }
+
+            Button(onClick = onNext,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )
+            ) {
+                Text(context.getString(R.string.next),
+                    modifier = Modifier.padding(2.dp),
+                    style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+fun CostItem(cost: Costs, onAmountChange: (Double) -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = cost.costName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            var amount by remember { mutableStateOf(cost.amount.toString()) }
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { newAmount ->
+                    amount = newAmount
+                    onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
+                },
+                label = { Text(text = LocalContext.current.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
+                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+            )
+        }
+    }
 }

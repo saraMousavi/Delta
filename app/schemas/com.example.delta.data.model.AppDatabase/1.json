@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "dcfe77efad107acff52359a44fae62ef",
+    "identityHash": "95f4eac76233e4b2c4f44b9e912629ce",
     "entities": [
       {
         "tableName": "building_types",
@@ -54,7 +54,7 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
@@ -113,6 +113,12 @@
             "fieldPath": "buildingUsageId",
             "columnName": "buildingUsageId",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fund",
+            "columnName": "fund",
+            "affinity": "REAL",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -761,7 +767,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dcfe77efad107acff52359a44fae62ef')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '95f4eac76233e4b2c4f44b9e912629ce')"
     ]
   }
 }

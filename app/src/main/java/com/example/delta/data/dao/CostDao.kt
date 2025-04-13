@@ -2,6 +2,7 @@ package com.example.delta.data.dao
 
 import androidx.room.*
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Tenants
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -28,4 +29,7 @@ interface CostDao {
 
     @Query("SELECT MAX(id) FROM costs")
     fun getLastCostId(): Long
+
+    @Query("SELECT * FROM costs")
+    suspend fun getCosts(): List<Costs>
 }

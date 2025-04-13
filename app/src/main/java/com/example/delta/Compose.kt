@@ -3,7 +3,7 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
-import android.util.Log
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -39,14 +39,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ComposableTarget
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,6 +62,7 @@ import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import com.example.delta.viewmodel.BuildingsViewModel
 import androidx.compose.material3.InputChip
+import com.google.android.material.chip.Chip
 
 
 @Composable
@@ -424,9 +422,10 @@ fun ProvinceStateSelector(
     }
 }
 
+//@TODO merge this function with ChipgroupShared
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun ChipGroup(
+fun ChipGroupUnits(
     selectedUnits: List<Units>,
     onSelectionChange: (List<Units>) -> Unit,
     units: List<Units>
@@ -447,6 +446,44 @@ fun ChipGroup(
                 },
                 label = { Text(unit.unitNumber.toString()) }
             )
+        }
+    }
+}
+
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ChipGroupShared(
+    modifier: Modifier = Modifier,
+    selectedItems: List<String>,
+    onSelectionChange: (List<String>) -> Unit,
+    items: List<String>
+) {
+    Row(modifier = modifier) {
+        Text(
+            text = LocalContext.current.getString(R.string.shared_things),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items.forEach { item ->
+                val isSelected = selectedItems.contains(item)
+                InputChip(
+                    selected = isSelected,
+                    onClick = {
+                        val mutableSelectedItems = selectedItems.toMutableList()
+                        if (isSelected) {
+                            mutableSelectedItems.remove(item)
+                        } else {
+                            mutableSelectedItems.add(item)
+                        }
+                        onSelectionChange(mutableSelectedItems.toList())
+                    },
+                    label = { Text(text = item, style = MaterialTheme.typography.bodyLarge) }
+                )
+            }
         }
     }
 }

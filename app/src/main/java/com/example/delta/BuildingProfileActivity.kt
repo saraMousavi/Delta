@@ -85,6 +85,7 @@ import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.viewmodel.UnitsViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -105,6 +106,7 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
     val sharedViewModel: SharedViewModel by viewModels()
+    val unitsViewModel: UnitsViewModel by viewModels()
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -131,10 +133,14 @@ class BuildingProfileActivity : ComponentActivity() {
     @Composable
     fun BuildingProfileScreen(building: Buildings) {
         var context = LocalContext.current
-        val tabTitles = listOf(context.getString(R.string.overview),
-            context.getString(R.string.owners), context.getString(R.string.units),
+        val tabTitles = listOf(
+            context.getString(R.string.overview),
+            context.getString(R.string.owners),
+            context.getString(R.string.units),
+            context.getString(R.string.tenants),
             context.getString(R.string.funds),
-            context.getString(R.string.reports))
+            context.getString(R.string.reports)
+        )
         var selectedTab by remember { mutableIntStateOf(0) }
         Scaffold(
             topBar = {
@@ -163,19 +169,20 @@ class BuildingProfileActivity : ComponentActivity() {
                         )
                     }
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
                     0 -> OverviewTab(building)
                     1 -> OwnersTab(building, sharedViewModel)
-                    2 -> UnitsTab(building, sharedViewModel)
-                    3 -> FundsTab(building)
-                    4 -> ReportsTab()
+                    2 -> UnitsTab(building, sharedViewModel, unitsViewModel )
+                    3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
+                    4 -> FundsTab(building)
+                    5 -> ReportsTab()
                 }
             }
         }
     }
+
 
     @Composable
     fun OverviewTab(building: Buildings) {
@@ -235,14 +242,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Fund Number: building.fundNumber",
+                        text = "${context.getString(R.string.fund_lbl)}: ${building.fund}",
                         style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "Balance: building.currentBalance",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -333,19 +334,88 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
     @Composable
-    fun UnitsTab(building: Buildings, sharedViewModel: SharedViewModel) {
-        val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .padding(16.dp)
-        ) {
-            items(units) { unit ->
-                UnitItem(unit = unit)
+    fun TenantsTab(building: Buildings, sharedViewModel: SharedViewModel) {
+        var showTenantDialog by remember { mutableStateOf(false) }
+        val context = LocalContext.current
+        val tenants by sharedViewModel.tenantsList
+//            .collectAsState(initial = emptyList())  // Fetch tenants for the building
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                items(tenants) { tenant ->
+                    TenantItem(tenants = tenant)
+                }
+            }
+
+            FloatingActionButton(
+                onClick = { showTenantDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = Color(context.getColor(R.color.secondary_color)),
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Icon(Icons.Filled.Add, "Add")
+            }
+
+            if (showTenantDialog) {
+                TenantDialog(
+                    sharedViewModel = sharedViewModel,
+                    units = sharedViewModel.unitsList,
+                    onDismiss = { showTenantDialog = false },
+                    onAddTenant = { newTenant, selectedUnit ->
+                        sharedViewModel.saveTenantWithUnit(newTenant, selectedUnit)
+                        showTenantDialog = false
+                    }
+                )
             }
         }
     }
+
+
+    @Composable
+    fun UnitsTab(building: Buildings, sharedViewModel: SharedViewModel, unitsViewModel: UnitsViewModel) {
+        var showUnitDialog by remember { mutableStateOf(false) }
+        var context = LocalContext.current
+        val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                items(units) { unit ->
+                    UnitItem(unit = unit, sharedViewModel = sharedViewModel, unitsViewModel = unitsViewModel )
+                }
+            }
+
+            FloatingActionButton(
+                onClick = { showUnitDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = Color(context.getColor(R.color.secondary_color)),
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Icon(Icons.Filled.Add, "Add")
+            }
+
+            if (showUnitDialog) {
+                UnitDialog(
+                    onDismiss = { showUnitDialog = false },
+                    onAddUnit = { newUnit ->
+                        newUnit.buildingId = building.buildingId
+//                        sharedViewModel.addUnit(newUnit)
+                        showUnitDialog = false
+                    }
+                )
+            }
+        }
+    }
+
 
 
     @Composable
@@ -355,18 +425,47 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @Composable
     fun OwnersTab(building: Buildings, sharedViewModel: SharedViewModel) {
+        var showOwnerDialog by remember { mutableStateOf(false) }
+        val context = LocalContext.current
         val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .padding(16.dp)
-        ) {
-            items(owners) { owner ->
-                OwnerItem(owner = owner)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                items(owners) { owner ->
+                    OwnerItem(owner = owner)
+                }
+            }
+
+            FloatingActionButton(
+                onClick = { showOwnerDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = Color(context.getColor(R.color.secondary_color)),
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Icon(Icons.Filled.Add, "Add")
+            }
+
+            if (showOwnerDialog) {
+                OwnerDialog(
+                    units = sharedViewModel.unitsList,
+                    onDismiss = { showOwnerDialog = false },
+                    onAddOwner = { newOwner, selectedUnits ->
+                        Log.d("newOwner", newOwner.toString())
+                        Log.d("selectedUnits", selectedUnits.toString())
+                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
+                        showOwnerDialog = false
+                    },
+                    sharedViewModel = sharedViewModel
+                )
             }
         }
     }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
