@@ -226,6 +226,8 @@ fun BuildingInfoPage(
                         }
                     },
                     label = context.getString(R.string.building_type),
+                    modifier = Modifier
+                        .fillMaxWidth(1f),
                     itemLabel = { it.buildingTypeName }
                 )
             }
@@ -247,6 +249,7 @@ fun BuildingInfoPage(
                         }
                     },
                     label = context.getString(R.string.building_usage),
+                    modifier = Modifier.weight(1f),
                     itemLabel = { it.buildingUsageName }
                 )
             }
@@ -365,7 +368,8 @@ fun BuildingInfoPage(
                         context.getString(R.string.electricity)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 8.dp),
+                    label = context.getString(R.string.shared_things)
                 )
             }
 
@@ -1070,6 +1074,8 @@ fun TenantDialog(
                             selectedUnit = unit
                         },
                         label = context.getString(R.string.unit_number),
+                        modifier = Modifier
+                            .fillMaxWidth(1f),
                         itemLabel = { unit -> unit.unitNumber.toString() }
                     )
                 }
@@ -1471,6 +1477,114 @@ fun EditUnitDialog(
 
 
 
+//
+//@OptIn(ExperimentalMaterial3Api::class)
+//@Composable
+//fun CostPage(
+//    sharedViewModel: SharedViewModel,
+//    onNext: () -> Unit,
+//    onBack: () -> Unit
+//) {
+//    val context = LocalContext.current
+//
+//
+//
+//    Column(modifier = Modifier.fillMaxSize()) {
+//        // Top App Bar with Back Button
+//        CenterAlignedTopAppBar(
+//            title = {
+//                Text(
+//                    text = context.getString(R.string.costs),
+//                    style = MaterialTheme.typography.bodyLarge
+//                )
+//            },
+//            navigationIcon = {
+//                IconButton(onClick = onBack) {
+//                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
+//                }
+//            }
+//        )
+//
+//        // Editable Costs List
+//        LazyColumn(
+//            modifier = Modifier
+//                .weight(1f)
+//                .fillMaxWidth()
+//        ) {
+//            items(sharedViewModel.costsList.value) { cost ->
+//                CostItem(
+//                    cost = cost,
+//                    onAmountChange = { newAmount ->
+//                        sharedViewModel.updateCostAmount(cost, newAmount)
+//                    }
+//                )
+//            }
+//        }
+//
+//        // Navigation Buttons (Back/Next)
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(16.dp),
+//            horizontalArrangement = Arrangement.SpaceBetween
+//        ) {
+//            Button(onClick = onBack,
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
+//            ) {
+//                Text(context.getString(R.string.back),
+//                    modifier = Modifier.padding(2.dp),
+//                    style = MaterialTheme.typography.bodyLarge)
+//            }
+//
+//            Button(onClick = onNext,
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
+//            ) {
+//                Text(context.getString(R.string.next),
+//                    modifier = Modifier.padding(2.dp),
+//                    style = MaterialTheme.typography.bodyLarge)
+//            }
+//        }
+//        Spacer(Modifier.height(32.dp))
+//    }
+//}
+//
+//@Composable
+//fun CostItem(cost: Costs, onAmountChange: (Double) -> Unit) {
+//    Card(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .padding(8.dp),
+//        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+//        shape = RoundedCornerShape(16.dp),
+//        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+//    ) {
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(16.dp)
+//        ) {
+//            Text(
+//                text = cost.costName,
+//                style = MaterialTheme.typography.bodyLarge,
+//                color = MaterialTheme.colorScheme.onSurface
+//            )
+//            var amount by remember { mutableStateOf(cost.amount.toString()) }
+//            OutlinedTextField(
+//                value = amount,
+//                onValueChange = { newAmount ->
+//                    amount = newAmount
+//                    onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
+//                },
+//                label = { Text(text = LocalContext.current.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
+//                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+//            )
+//        }
+//    }
+//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1480,8 +1594,10 @@ fun CostPage(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-
-
+    var sameCosts by remember { mutableStateOf(true) }
+    var automaticCharge by remember { mutableStateOf(false) }
+    var selectedChargeType by remember { mutableStateOf("") }
+    var chargeAmount by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top App Bar with Back Button
@@ -1498,20 +1614,94 @@ fun CostPage(
                 }
             }
         )
-
-        // Editable Costs List
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            items(sharedViewModel.costsList.value) { cost ->
-                CostItem(
-                    cost = cost,
-                    onAmountChange = { newAmount ->
-                        sharedViewModel.updateCostAmount(cost, newAmount)
-                    }
-                )
+            Checkbox(
+                checked = automaticCharge,
+                onCheckedChange = { automaticCharge = it }
+            )
+            Text(
+                text = context.getString(R.string.automatic_charge),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        if (automaticCharge) {
+//            Row(
+//                modifier = Modifier.fillMaxWidth(),
+////                verticalAlignment = Alignment.CenterVertically
+//                horizontalArrangement = Arrangement.SpaceBetween
+//            ) {
+            ChipGroupShared(
+                selectedItems = listOf(selectedChargeType),
+                onSelectionChange = { newSelection ->
+                    selectedChargeType = newSelection.firstOrNull() ?: ""
+                },
+                items = listOf(context.getString(R.string.area), context.getString(R.string.nafari)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                label = context.getString(R.string.acount_base)
+            )
+            OutlinedTextField(
+                value = chargeAmount,
+                onValueChange = { chargeAmount = it },
+                label = { Text(context.getString(R.string.base_amount)) },
+                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+//            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = sameCosts,
+                onCheckedChange = { sameCosts = it }
+            )
+            Text(
+                text = context.getString(R.string.all_units_same_costs),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        if (sameCosts) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                items(sharedViewModel.costsList.value.drop(1)) { cost ->
+                    CostItem(
+                        cost = cost,
+                        onAmountChange = { newAmount ->
+                            sharedViewModel.updateCostAmount(cost, newAmount)
+                        },
+                        onPeriodChange = { newPeriod ->
+                            sharedViewModel.updateCostPeriod(cost, newPeriod)
+                        },
+                        onAmountMoneyChange = { newAmountMoney ->
+                            sharedViewModel.updateCostAmountMoney(cost, newAmountMoney)
+                        }
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                items(sharedViewModel.unitsList) { unit ->
+                    UnitCostItem(
+                        unit = unit,
+                        sharedViewModel = sharedViewModel
+                    )
+                }
             }
         }
 
@@ -1547,7 +1737,21 @@ fun CostPage(
 }
 
 @Composable
-fun CostItem(cost: Costs, onAmountChange: (Double) -> Unit) {
+fun CostItem(
+    cost: Costs,
+    onAmountChange: (Double) -> Unit,
+    onPeriodChange: (String) -> Unit,
+    onAmountMoneyChange: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val periods = listOf(context.getString(R.string.weekly),
+        context.getString(R.string.monthly), context.getString(R.string.yearly))
+    val amountUnitOptions = listOf(context.getString(R.string.hezar_toman),
+        context.getString(R.string.milion_toman))
+    var selectedPeriod by remember { mutableStateOf(cost.period) }
+    var selectedAmountMoney by remember { mutableStateOf(cost.amountUnit) }
+    var amount by remember { mutableStateOf(cost.amount.toString()) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1556,26 +1760,173 @@ fun CostItem(cost: Costs, onAmountChange: (Double) -> Unit) {
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = cost.costName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+//                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        ExposedDropdownMenuBoxExample(
+                            items = periods,
+                            selectedItem = selectedPeriod,
+                            onItemSelected = {
+                                selectedPeriod = it
+                                onPeriodChange(it)
+                            },
+                            label = context.getString(R.string.period),
+                            modifier = Modifier
+                                .fillMaxWidth(0.4f),
+                            itemLabel = { it }
+                        )
+                        OutlinedTextField(
+                            value = amount,
+                            onValueChange = { newAmount ->
+                                amount = newAmount
+                                onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
+                            },
+                            label = { Text(context.getString(R.string.amount)) },
+                            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(0.1f)
+                        )
+                        ExposedDropdownMenuBoxExample(
+                            items = amountUnitOptions,
+                            selectedItem = selectedAmountMoney,
+                            onItemSelected = {
+                                selectedAmountMoney = it
+                                onAmountMoneyChange(it)
+                            },
+                            label = context.getString(R.string.amount_unit),
+                            modifier = Modifier
+                                .fillMaxWidth(0.4f),
+                            itemLabel = { it }
+                        )
+                    }
+                }
+    }
+}
+
+@Composable
+fun UnitCostItem(
+    unit: Units,
+    sharedViewModel: SharedViewModel
+) {
+    var showCostDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable(onClick = { showCostDialog = true }),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = cost.costName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            var amount by remember { mutableStateOf(cost.amount.toString()) }
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { newAmount ->
-                    amount = newAmount
-                    onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
-                },
-                label = { Text(text = LocalContext.current.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
-                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                text = "${LocalContext.current.getString(R.string.unit_number)} : ${unit.unitNumber}",
+                style = MaterialTheme.typography.bodyLarge
             )
         }
     }
+
+    if (showCostDialog) {
+        UnitCostDialog(
+            unit = unit,
+            sharedViewModel = sharedViewModel,
+            onDismiss = { showCostDialog = false }
+        )
+    }
+}
+@Composable
+fun UnitCostDialog(
+    unit: Units,
+    sharedViewModel: SharedViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val periods = listOf(context.getString(R.string.weekly),
+        context.getString(R.string.monthly), context.getString(R.string.yearly))
+    val amountUnitOptions = listOf(context.getString(R.string.hezar_toman),
+        context.getString(R.string.milion_toman))
+    val costs = sharedViewModel.costsList.value.drop(1)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = context.getString(R.string.costs), style = MaterialTheme.typography.bodyLarge) },
+        text = {
+            Column {
+                costs.forEach { cost ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = cost.costName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+//                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ExposedDropdownMenuBoxExample(
+                                items = periods,
+                                selectedItem = cost.period,
+                                onItemSelected = {
+                                    sharedViewModel.updateCostPeriod(cost, it)
+                                },
+                                label = context.getString(R.string.period),
+                                modifier = Modifier
+                                    .fillMaxWidth(0.4f),
+                                itemLabel = { it }
+                            )
+                            OutlinedTextField(
+                                value = cost.amount.toString(),
+                                onValueChange = { newAmount ->
+                                    sharedViewModel.updateCostAmount(cost, newAmount.toDoubleOrNull() ?: 0.0)
+                                },
+                                label = { Text(context.getString(R.string.amount)) },
+                                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(0.2f)
+                            )
+                            ExposedDropdownMenuBoxExample(
+                                items = amountUnitOptions,
+                                selectedItem = cost.amountUnit,
+                                onItemSelected = {
+                                    sharedViewModel.updateCostAmountMoney(cost, it)
+                                },
+                                label = context.getString(R.string.amount_unit),
+                                modifier = Modifier
+                                    .fillMaxWidth(0.4f),
+                                itemLabel = { it }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )) {
+                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    )
 }

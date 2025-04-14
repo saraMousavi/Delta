@@ -17,5 +17,7 @@ data class Costs(
     @ColumnInfo(name = "cost_name") val costName: String,
     @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
     @ColumnInfo(name = "amount") val amount: Double,
-    @ColumnInfo(name = "currency") val currency: String
+    @ColumnInfo(name = "currency") val currency: String,
+    @ColumnInfo(name = "period") val period: String,
+    @ColumnInfo(name = "amount_unit") val amountUnit: String
 ) : Parcelable

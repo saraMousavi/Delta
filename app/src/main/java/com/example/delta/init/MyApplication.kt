@@ -85,9 +85,9 @@ class MyApplication : Application() {
             if (costs == null) {
                 Log.d("MyApplication", "Costs are empty, inserting defaults")
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.rent), buildingId = 0, amount = 0.0, currency = "USD"),
-                    Costs(costName = getString(R.string.utilities), buildingId = 0, amount = 0.0, currency = "USD"),
-                    Costs(costName = getString(R.string.maintenance), buildingId = 0, amount = 0.0, currency = "USD")
+                    Costs(costName = getString(R.string.charge), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
+                    Costs(costName = getString(R.string.mortgage), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
+                    Costs(costName = getString(R.string.rent), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD")
                 )
                 defaultCosts.forEach {
                     Log.d("MyApplication", "Inserting Cost: ${it.costName}")

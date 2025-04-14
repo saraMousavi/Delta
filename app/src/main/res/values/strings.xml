@@ -112,4 +112,18 @@
     <string name="update">ویرایش</string>
     <string name="edit_unit">ویرایش واحد</string>
     <string name="success_update">ویرایش با موفقیت انجام شد.</string>
+    <string name="charge">شارژ</string>
+    <string name="mortgage">رهن</string>
+    <string name="all_units_same_costs">هزینه های تمام واحد ها مشابه است</string>
+    <string name="weekly">هفتگی</string>
+    <string name="monthly">ماهانه</string>
+    <string name="yearly">سالیانه</string>
+    <string name="period">دوره</string>
+    <string name="amount_unit">واحد پول</string>
+    <string name="hezar_toman">هزار تومان</string>
+    <string name="milion_toman">میلیون تومان</string>
+    <string name="automatic_charge">محاسبه به صورت اتوماتیک انجام شود؟</string>
+    <string name="nafari">نفری</string>
+    <string name="acount_base">مبنای محاسبه</string>
+    <string name="base_amount">مبلغ واحد</string>
 </resources>

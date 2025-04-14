@@ -53,7 +53,7 @@ class CostActivity : ComponentActivity() {
                     CostForm(
                         viewModel = viewModel,
                         insertItem = { name ->
-                            viewModel.insertCost(Costs(buildingId = 0 , costName = name, amount = 0.0  , currency = name))
+                            viewModel.insertCost(Costs(buildingId = 0 , costName = name, amount = 0.0  , period = "0", amountUnit = "1", currency = name))
                         },
                         listContent = { vm ->
                             GenericList(

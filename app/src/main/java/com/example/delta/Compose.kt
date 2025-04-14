@@ -343,7 +343,8 @@ fun <T> ExposedDropdownMenuBoxExample(
     selectedItem: T?,
     onItemSelected: (T) -> Unit,
     label: String,
-    itemLabel: (T) -> String
+    itemLabel: (T) -> String,
+    modifier: Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     AppTheme {
@@ -352,7 +353,7 @@ fun <T> ExposedDropdownMenuBoxExample(
             onExpandedChange = { expanded = it }
         ) {
             OutlinedTextField(
-                modifier = Modifier.fillMaxWidth().menuAnchor(),
+                modifier = modifier.fillMaxWidth().menuAnchor(),
                 readOnly = true,
                 value = selectedItem?.let { itemLabel(it) } ?: "",
                 onValueChange = { },
@@ -403,6 +404,8 @@ fun ProvinceStateSelector(
                     viewModel.onProvinceSelected(province)
                 },
                 label = LocalContext.current.getString(R.string.province), // Persian for "Province"
+                modifier = Modifier
+                    .fillMaxWidth(1f),
                 itemLabel = { it }
             )
 
@@ -416,6 +419,8 @@ fun ProvinceStateSelector(
                     viewModel.onStateSelected(state)
                 },
                 label = LocalContext.current.getString(R.string.state), // Persian for "State"
+                modifier = Modifier
+                    .fillMaxWidth(1f),
                 itemLabel = { it }
             )
         }
@@ -457,11 +462,12 @@ fun ChipGroupShared(
     modifier: Modifier = Modifier,
     selectedItems: List<String>,
     onSelectionChange: (List<String>) -> Unit,
-    items: List<String>
+    items: List<String>,
+    label: String
 ) {
     Row(modifier = modifier) {
         Text(
-            text = LocalContext.current.getString(R.string.shared_things),
+            text = label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(bottom = 8.dp)
         )

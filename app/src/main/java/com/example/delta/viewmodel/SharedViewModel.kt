@@ -319,6 +319,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateCostPeriod(cost: Costs, newPeriod: String) {
+        // Update the cost period in your database or data structure
+    }
+
+    fun updateCostAmountMoney(cost: Costs, newAmountMoney: String) {
+        // Update the cost amount money in your database or data structure
+    }
+
 
 
     fun resetState() {

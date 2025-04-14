@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "95f4eac76233e4b2c4f44b9e912629ce",
+    "identityHash": "721469fa400697f2c3af300af960b207",
     "entities": [
       {
         "tableName": "building_types",
@@ -174,7 +174,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cost_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cost_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, `period` TEXT NOT NULL, `amount_unit` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -203,6 +203,18 @@
           {
             "fieldPath": "currency",
             "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "period",
+            "columnName": "period",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountUnit",
+            "columnName": "amount_unit",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -767,7 +779,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '95f4eac76233e4b2c4f44b9e912629ce')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '721469fa400697f2c3af300af960b207')"
     ]
   }
 }
