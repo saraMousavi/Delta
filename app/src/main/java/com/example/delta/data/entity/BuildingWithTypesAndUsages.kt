@@ -1,7 +1,9 @@
 package com.example.delta.data.entity
 
+import androidx.room.Embedded
+
 data class BuildingWithTypesAndUsages(
-    val building: Buildings,
+    @Embedded val building: Buildings,
     val buildingTypeName: String,
     val buildingUsageName: String
 )

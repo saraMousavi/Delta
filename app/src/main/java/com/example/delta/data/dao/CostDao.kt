@@ -32,4 +32,7 @@ interface CostDao {
 
     @Query("SELECT * FROM costs")
     suspend fun getCosts(): List<Costs>
+
+        @Query("DELETE FROM costs WHERE buildingId = :buildingId")
+        suspend fun deleteCostsForBuilding(buildingId: Long)
 }

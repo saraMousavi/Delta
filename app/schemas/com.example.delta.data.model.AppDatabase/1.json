@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "721469fa400697f2c3af300af960b207",
+    "identityHash": "993f8c144e2511588b011992d84d0501",
     "entities": [
       {
         "tableName": "building_types",
@@ -667,7 +667,7 @@
         ]
       },
       {
-        "tableName": "OwnersUnitsCrossRef",
+        "tableName": "owners_units_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` INTEGER NOT NULL, `unitId` INTEGER NOT NULL, PRIMARY KEY(`ownerId`, `unitId`), FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
@@ -690,6 +690,26 @@
             "unitId"
           ]
         },
+        "indices": [
+          {
+            "name": "index_owners_units_cross_ref_ownerId",
+            "unique": false,
+            "columnNames": [
+              "ownerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_owners_units_cross_ref_ownerId` ON `${TABLE_NAME}` (`ownerId`)"
+          },
+          {
+            "name": "index_owners_units_cross_ref_unitId",
+            "unique": false,
+            "columnNames": [
+              "unitId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_owners_units_cross_ref_unitId` ON `${TABLE_NAME}` (`unitId`)"
+          }
+        ],
         "foreignKeys": [
           {
             "table": "owners",
@@ -716,7 +736,7 @@
         ]
       },
       {
-        "tableName": "TenantsUnitsCrossRef",
+        "tableName": "tenants_units_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER NOT NULL, `unitId` INTEGER NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT NOT NULL, PRIMARY KEY(`tenantId`, `unitId`), FOREIGN KEY(`tenantId`) REFERENCES `tenants`(`tenantId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
@@ -751,6 +771,26 @@
             "unitId"
           ]
         },
+        "indices": [
+          {
+            "name": "index_tenants_units_cross_ref_tenantId",
+            "unique": false,
+            "columnNames": [
+              "tenantId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tenants_units_cross_ref_tenantId` ON `${TABLE_NAME}` (`tenantId`)"
+          },
+          {
+            "name": "index_tenants_units_cross_ref_unitId",
+            "unique": false,
+            "columnNames": [
+              "unitId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tenants_units_cross_ref_unitId` ON `${TABLE_NAME}` (`unitId`)"
+          }
+        ],
         "foreignKeys": [
           {
             "table": "tenants",
@@ -775,11 +815,47 @@
             ]
           }
         ]
+      },
+      {
+        "tableName": "user",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mobile_number` TEXT NOT NULL, `password` TEXT NOT NULL, `role` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mobileNumber",
+            "columnName": "mobile_number",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "password",
+            "columnName": "password",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "userId"
+          ]
+        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '721469fa400697f2c3af300af960b207')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '993f8c144e2511588b011992d84d0501')"
     ]
   }
 }

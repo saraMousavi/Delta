@@ -19,12 +19,12 @@ class AuthActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Column {
-                Greeting(
-                    name = getString(R.string.auth),
-                    modifier = Modifier.
-                    padding(top= 150.dp, start = 90.dp),
-                    fontSize = 48.sp,
-                )
+//                Greeting(
+//                    name = getString(R.string.auth),
+//                    modifier = Modifier.
+//                    padding(top= 150.dp, start = 90.dp),
+//                    fontSize = 48.sp,
+//                )
                 Row {
                     Spacer(Modifier.padding(start = 40.dp))
                     SimpleOutlinedTextFieldSample(name= "",
@@ -44,11 +44,11 @@ class AuthActivity : ComponentActivity() {
                             .fillMaxWidth(0.4f)
                             .padding(vertical = 16.dp, horizontal = 5.dp))
                 }
-                FilledButtonExample (name = getString(R.string.submit),
-                    modifier = Modifier
-                        .fillMaxWidth(1f)
-                        .padding(vertical = 16.dp, horizontal =  20.dp),
-                    onClick = {  })
+//                FilledButtonExample (name = getString(R.string.submit),
+//                    modifier = Modifier
+//                        .fillMaxWidth(1f)
+//                        .padding(vertical = 16.dp, horizontal =  20.dp),
+//                    onClick = {  })
             }
         }
     }

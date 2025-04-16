@@ -73,9 +73,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var tempCosts = mutableStateListOf<Costs>()
 
     init {
-        loadOwners()
-        loadTenants()
-        loadCosts()
+//        loadOwners()
+//        loadTenants()
+//        loadCosts()
         loadBuildingsWithTypesAndUsages()
         loadDefaultCosts()
     }
@@ -100,6 +100,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getOwnersForBuilding(buildingId: Long): Flow<List<Owners>> = flow {
         val owners = ownersDao.getOwnersForBuilding(buildingId)
         emit(owners)
+    }.flowOn(Dispatchers.IO)
+
+    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = flow {
+        val tenants = tenantsDao.getTenantsForBuilding(buildingId)
+        emit(tenants)
     }.flowOn(Dispatchers.IO)
 
     suspend fun getBuildingTypeAndUsage(building: Buildings): Pair<String, String> {
@@ -196,9 +201,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 savedUnits.forEach { unit ->
                     ownersDao.insertOwnerUnitCrossRef(OwnersUnitsCrossRef(ownerId, unit.unitId))
                 }
+                Log.d("ownersDao.getOwners().toString()", ownersDao.getOwners().toString())
 
                 // Load owners
-                loadOwners()
+//                loadOwners()
             } catch (e: Exception) {
                 Log.e("SaveError", "Failed to save owner with units: ${e.message}")
             }
@@ -262,6 +268,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     tenantsDao.insertTenantUnitCrossRef(TenantsUnitsCrossRef(tenantId, tenantUnit.unitId, tenant.startDate, tenant.endDate))
                 }
 
+                Log.d("BuildingInsert", "Inserted building with ID: $buildingId")
+                Log.d("BuildingInsert", "Province: $province, State: $state")
+
                 withContext(Dispatchers.Main) {
                     onSuccess()
                 }
@@ -272,6 +281,37 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    fun deleteBuildingWithRelations(
+        buildingId: Long,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Delete tenants linked to building's units
+                tenantsDao.deleteTenantsForBuilding(buildingId)
+
+// Delete owners linked to building's units
+                ownersDao.deleteOwnersForBuilding(buildingId)
+
+// Delete units
+                unitsDao.deleteUnitsForBuilding(buildingId)
+
+// Delete costs
+                costsDao.deleteCostsForBuilding(buildingId)
+
+// Delete the building itself
+                buildingDao.deleteBuildingById(buildingId)
+
+
+                withContext(Dispatchers.Main) { onSuccess() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.message ?: "Unknown error") }
+            }
+        }
+    }
+
 
     // Update these functions to add units to the maps
     fun addOwnerUnits(owner: Owners, units: List<Units>) {
@@ -340,7 +380,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         buildingTypeId = 0
         buildingUsageId = 0
         ownersList.clear()
-        tenantsList = mutableStateOf(emptyList())
+        ownersList = mutableStateListOf()
+        tenantsList.value = emptyList()
         selectedBuildingTypes = null
         selectedBuildingUsages = null
         unitsList.clear()

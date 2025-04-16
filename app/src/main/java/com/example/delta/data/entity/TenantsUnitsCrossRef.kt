@@ -2,9 +2,11 @@ package com.example.delta.data.entity
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 
 @Entity(
     primaryKeys = ["tenantId", "unitId"],
+    tableName = "tenants_units_cross_ref",
     foreignKeys = [
         ForeignKey(
             entity = Tenants::class,
@@ -18,6 +20,10 @@ import androidx.room.ForeignKey
             childColumns = ["unitId"],
             onDelete = ForeignKey.CASCADE
         )
+    ],
+    indices = [
+        Index("tenantId"),
+        Index("unitId")
     ]
 )
 data class TenantsUnitsCrossRef(

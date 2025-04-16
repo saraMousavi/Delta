@@ -3,6 +3,7 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -62,26 +64,14 @@ import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import com.example.delta.viewmodel.BuildingsViewModel
 import androidx.compose.material3.InputChip
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import com.example.delta.viewmodel.SharedViewModel
 import com.google.android.material.chip.Chip
 
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier, fontSize: TextUnit) {
-    Text(
-        text = "$name",
-        modifier = modifier,
-        fontFamily = firaSansFamily,
-        fontSize = fontSize
-    )
-}
 
-
-@Composable
-fun FilledButtonExample(name: String, modifier: Modifier =  Modifier, onClick: () -> Unit) {
-    Button(onClick = { onClick() }, modifier = modifier, colors = ButtonDefaults.buttonColors(containerColor = colorResource(R.color.btn))) {
-        Text( text = " $name", fontFamily = firaSansFamily)
-    }
-}
 
 @Composable
 fun CheckboxMinimalExample(modifier: Modifier = Modifier) {
@@ -186,7 +176,7 @@ fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismis
             modifier = Modifier.fillMaxWidth(),
             onValueChange = { itemName = it },
             keyboardOptions = KeyboardOptions.Default,
-            label = { Text(text = context.getString(R.string.type), style = MaterialTheme.typography.bodyMedium) }
+            label = { Text(text = context.getString(R.string.type), style = MaterialTheme.typography.bodyLarge) }
         )
         Box(
             modifier = Modifier
@@ -208,7 +198,7 @@ fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismis
                 Text(
                     text = context.getString(R.string.insert),
                     modifier = Modifier.padding(2.dp),
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
         }
@@ -384,46 +374,48 @@ fun <T> ExposedDropdownMenuBoxExample(
         }
     }
 }
-
 @Composable
 fun ProvinceStateSelector(
-    viewModel: BuildingsViewModel,
+    sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier
 ) {
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        val selectedProvince by viewModel.province.collectAsState()
-        val selectedState by viewModel.state.collectAsState()
-        val availableStates by viewModel.availableStates.collectAsState()
+    val context = LocalContext.current
 
-        Column(modifier = modifier) {
-            // Province Selector
-            ExposedDropdownMenuBoxExample(
-                items = IranianLocations.provinces.keys.toList(),
-                selectedItem = selectedProvince,
-                onItemSelected = { province ->
-                    viewModel.onProvinceSelected(province)
-                },
-                label = LocalContext.current.getString(R.string.province), // Persian for "Province"
-                modifier = Modifier
-                    .fillMaxWidth(1f),
-                itemLabel = { it }
-            )
+    // Get the list of all provinces
+    val provinces = IranianLocations.provinces.keys.toList()
 
-            Spacer(modifier = Modifier.height(16.dp))
+    // Get the list of states for the selected province, or empty if none
+    val availableStates = remember(sharedViewModel.province) {
+        IranianLocations.provinces[sharedViewModel.province] ?: emptyList()
+    }
 
-            // State Selector
-            ExposedDropdownMenuBoxExample(
-                items = availableStates,
-                selectedItem = selectedState,
-                onItemSelected = { state ->
-                    viewModel.onStateSelected(state)
-                },
-                label = LocalContext.current.getString(R.string.state), // Persian for "State"
-                modifier = Modifier
-                    .fillMaxWidth(1f),
-                itemLabel = { it }
-            )
-        }
+    Column(modifier = modifier) {
+        // Province Selector
+        ExposedDropdownMenuBoxExample(
+            items = provinces,
+            selectedItem = sharedViewModel.province,
+            onItemSelected = { selectedProvince ->
+                sharedViewModel.province = selectedProvince
+                sharedViewModel.state = "" // Reset state when province changes
+            },
+            label = context.getString(R.string.province),
+            modifier = Modifier.fillMaxWidth(),
+            itemLabel = { it }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // State Selector
+        ExposedDropdownMenuBoxExample(
+            items = availableStates,
+            selectedItem = sharedViewModel.state,
+            onItemSelected = { selectedState ->
+                sharedViewModel.state = selectedState
+            },
+            label = context.getString(R.string.state),
+            modifier = Modifier.fillMaxWidth(),
+            itemLabel = { it }
+        )
     }
 }
 
@@ -433,8 +425,14 @@ fun ProvinceStateSelector(
 fun ChipGroupUnits(
     selectedUnits: List<Units>,
     onSelectionChange: (List<Units>) -> Unit,
-    units: List<Units>
+    units: List<Units>,
+    label: String
 ) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
     FlowRow(
         modifier = Modifier.padding(8.dp)
     ) {
@@ -493,4 +491,65 @@ fun ChipGroupShared(
         }
     }
 }
+
+// Example of checking user role in an activity
+@Composable
+fun checkUserRole(role: String): Boolean {
+    when (role) {
+        "owner" -> return true // Owner has access to all features
+        "tenant" -> return false // Tenant has limited access
+        "manager" -> return true // Manager has specific access
+        "guest" -> return false // Guest has restricted access
+        else -> return false
+    }
+}
+
+// Example of displaying different UI based on user role
+@Composable
+fun Dashboard(role: String) {
+    Column {
+        if (role == "owner") {
+            // Display owner-specific UI
+            Text("Owner Dashboard")
+        } else if (role == "tenant") {
+            // Display tenant-specific UI
+            Text("Tenant Dashboard")
+        } else if (role == "manager") {
+            // Display manager-specific UI
+            Text("Manager Dashboard")
+        } else if (role == "guest") {
+            // Display guest-specific UI
+            Text("Guest Dashboard")
+        }
+    }
+}
+
+
+@Composable
+fun PasswordTextField(
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    context: Context
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    OutlinedTextField(
+        value = password,
+        onValueChange = onPasswordChange,
+        label = { Text(text = context.getString(R.string.prompt_password),
+            style = MaterialTheme.typography.bodyLarge) },
+        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
+        trailingIcon = {
+            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+//                Icon(
+//                    imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+//                    contentDescription = "Toggle Password Visibility"
+//                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
 

@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.dao.CostDao
+import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import kotlinx.coroutines.launch
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
@@ -40,7 +41,7 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
     private val _province = MutableStateFlow("تهران")
     val province: StateFlow<String> = _province.asStateFlow()
 
-    private val _state = MutableStateFlow("مرکزی")
+    private val _state = MutableStateFlow("تهران")
     val state: StateFlow<String> = _state.asStateFlow()
 
     val availableStates: StateFlow<List<String>> = _province
@@ -81,10 +82,12 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
         buildingsDao.deleteBuildings(buildings)
     }
 
-    fun getAllBuildings(): Flow<List<Buildings>> {
-        return buildingsDao.getAllBuildings()
+    fun getAllBuildingsWithTypeAndUsage(): Flow<List<BuildingWithTypesAndUsages>> {
+        return buildingsDao.getAllBuildingsWithTypesAndUsages()
     }
-
+    fun getAllBuildingsList(): List<Buildings> {
+        return buildingsDao.getAllBuildingsList()
+    }
     private val _selectedBuildingId = MutableStateFlow<Long?>(null)
 
     fun selectBuilding(buildingId: Long) {
@@ -129,6 +132,22 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
         showEarningsDialog.value = false
         showCostDialog.value = false
         showUnitsDialog.value = false
+    }
+
+    // Function to get building type name
+    fun getBuildingTypeName(buildingTypeId: Long?, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val typeName = buildingsDao.getBuildingTypeName(buildingTypeId)
+            onResult(typeName) // Pass the result back to the caller
+        }
+    }
+
+    // Function to get building usage name
+    fun getBuildingUsageName(buildingUsageId: Long?, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val usageName = buildingsDao.getBuildingUsageName(buildingUsageId)
+            onResult(usageName) // Pass the result back to the caller
+        }
     }
 
 

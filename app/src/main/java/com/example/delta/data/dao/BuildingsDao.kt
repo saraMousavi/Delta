@@ -7,6 +7,7 @@ import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithOwnersAndTenants
 import com.example.delta.data.entity.BuildingWithType
+import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
@@ -44,6 +45,12 @@ interface BuildingsDao {
     @Query("SELECT * FROM buildings")
     fun getAllBuildings(): Flow<List<Buildings>>
 
+    @Query("SELECT * FROM buildings")
+    fun getAllBuildingsList(): List<Buildings>
+
+    @Query("DELETE FROM buildings WHERE buildingId = :buildingId")
+    suspend fun deleteBuildingById(buildingId: Long)
+
 
     @Transaction
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
@@ -67,6 +74,17 @@ interface BuildingsDao {
 
     @Query("SELECT * FROM Buildings")
     suspend fun getBuildings(): List<Buildings>
+
+    @Query("""
+        SELECT 
+            b.*, 
+            bt.building_type_name AS buildingTypeName, 
+            bu.building_usage_name AS buildingUsageName
+        FROM buildings b
+        LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
+        LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
+    """)
+    fun getAllBuildingsWithTypesAndUsages(): Flow<List<BuildingWithTypesAndUsages>>
 
     @Query("SELECT bt.building_type_name FROM building_types bt WHERE bt.buildingTypeId = :buildingTypeId")
     suspend fun getBuildingTypeName(buildingTypeId: Long?): String

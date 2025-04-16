@@ -7,10 +7,12 @@ import com.example.delta.R
 import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.User
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,35 +28,33 @@ class MyApplication : Application() {
     private lateinit var buildingDao: BuildingsDao
     private lateinit var earningsDao: EarningsDao
     private lateinit var costsDao: CostDao
+    private lateinit var usersDao: UsersDao // Assuming you have a UsersDao
 
     override fun onCreate() {
         super.onCreate()
         appContext = this
-        Log.d("MyApplication", "Application started")
 
         // Initialize buildingDao here
         buildingDao = AppDatabase.getDatabase(this).buildingsDao()
         earningsDao = AppDatabase.getDatabase(this).earningsDao()
         costsDao = AppDatabase.getDatabase(this).costDao()
+        usersDao = AppDatabase.getDatabase(this).usersDao()
+
 
         // Insert Default Values
         insertDefaultValues()
     }
 
     private fun insertDefaultValues() {
-        Log.d("MyApplication", "Inserting default values")
         CoroutineScope(Dispatchers.IO).launch {
             // Insert Default Building Types
-            Log.d("MyApplication", "Checking Building Types")
             val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()
             if (buildingTypes == null) {
-                Log.d("MyApplication", "Building Types are empty, inserting defaults")
                 val defaultBuildingTypes = listOf(
                     BuildingTypes(buildingTypeName = getString(R.string.villa)),
                     BuildingTypes(buildingTypeName = getString(R.string.apartment))
                 )
                 defaultBuildingTypes.forEach {
-                    Log.d("MyApplication", "Inserting Building Type: ${it.buildingTypeName}")
                     buildingDao.insertBuildingType(it)
                 }
             } else {
@@ -62,17 +62,14 @@ class MyApplication : Application() {
             }
 
             // Insert Default Building Usages
-            Log.d("MyApplication", "Checking Building Usages")
             val buildingUsages = buildingDao.getAllBuildingUsages().firstOrNull()
             if (buildingUsages == null) {
-                Log.d("MyApplication", "Building Usages are empty, inserting defaults")
                 val defaultBuildingUsages = listOf(
                     BuildingUsages(buildingUsageName = getString(R.string.residential) ),
                     BuildingUsages(buildingUsageName = getString(R.string.commercial) ),
                     BuildingUsages(buildingUsageName = getString(R.string.industrial))
                 )
                 defaultBuildingUsages.forEach {
-                    Log.d("MyApplication", "Inserting Building Usage: ${it.buildingUsageName}")
                     buildingDao.insertBuildingUsage(it)
                 }
             } else {
@@ -80,28 +77,22 @@ class MyApplication : Application() {
             }
 
             // Insert Default Costs
-            Log.d("MyApplication", "Checking Costs")
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
-                Log.d("MyApplication", "Costs are empty, inserting defaults")
                 val defaultCosts = listOf(
                     Costs(costName = getString(R.string.charge), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
                     Costs(costName = getString(R.string.mortgage), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
                     Costs(costName = getString(R.string.rent), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD")
                 )
                 defaultCosts.forEach {
-                    Log.d("MyApplication", "Inserting Cost: ${it.costName}")
                     costsDao.insertCost(it)
                 }
             } else {
                 Log.d("MyApplication", "Costs already exist")
             }
 
-            // Insert Default Earnings
-            Log.d("MyApplication", "Checking Earnings")
             val earnings = earningsDao.getEarnings().firstOrNull()
             if (earnings == null) {
-                Log.d("MyApplication", "Earnings are empty, inserting defaults")
                 val defaultEarnings = listOf(
                     Earnings(earningsName = getString(R.string.parking), buildingId = 0, amount = 0.0, currency = "USD"),
                     Earnings(earningsName = getString(R.string.co_working_space), buildingId = 0, amount = 0.0, currency = "USD"),
@@ -114,7 +105,40 @@ class MyApplication : Application() {
             } else {
                 Log.d("MyApplication", "Earnings already exist")
             }
+
+            val users = usersDao.getUsers().firstOrNull()
+            if (users == null) {
+                val phoneNumber = "09103009458"
+                val persianPhoneNumber = convertToPersianDigits(phoneNumber)
+
+                val password = "1234"
+                val persianPassword = convertToPersianDigits(password)
+
+                val defaultUser = User(
+                    mobileNumber = persianPhoneNumber,
+                    password = persianPassword,
+                    role = "owner"
+                )
+                usersDao.insertUser(defaultUser)
+            } else {
+                Log.d("MyApplication", "Users already exist")
+            }
         }
     }
+
+    fun convertToPersianDigits(input: String): String {
+        val persianDigits = listOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+        val builder = StringBuilder()
+        for (char in input) {
+            if (char.isDigit()) {
+                val digit = char.toString().toInt()
+                builder.append(persianDigits[digit])
+            } else {
+                builder.append(char) // keep non-digit characters as is
+            }
+        }
+        return builder.toString()
+    }
+
 
 }

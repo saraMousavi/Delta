@@ -13,6 +13,7 @@ import com.example.delta.data.dao.EarningsDao
 import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.dao.TenantDao
 import com.example.delta.data.dao.UnitsDao
+import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.BuildingTenantCrossRef
 import com.example.delta.data.entity.BuildingTypes
@@ -26,6 +27,7 @@ import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
+import com.example.delta.data.entity.User
 import java.security.acl.Owner
 
 @Database(entities = [BuildingTypes::class,
@@ -33,7 +35,7 @@ import java.security.acl.Owner
     Costs::class, Earnings::class, Units::class,
     Debts::class, Owners::class, Tenants::class
     , BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
-    OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class]
+    OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class, User::class]
     , version = 1, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
@@ -45,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun debtsDao(): DebtsDao
     abstract fun ownersDao(): OwnersDao
     abstract fun tenantDao(): TenantDao
+    abstract fun usersDao(): UsersDao
 
 
 

@@ -1,6 +1,7 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.content.Intent
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
@@ -37,6 +38,7 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
+import com.example.delta.factory.SharedViewModelFactory
 import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.BuildingsViewModel
@@ -49,11 +51,14 @@ class BuildingFormActivity : ComponentActivity() {
     private val viewModel: BuildingsViewModel by viewModels()
     private val buildingTypeViewModel: BuildingTypeViewModel by viewModels()
     private val buildingUsageViewModel: BuildingUsageViewModel by viewModels()
-    val sharedViewModel: SharedViewModel by viewModels()
+    private val sharedViewModel: SharedViewModel by viewModels {
+        SharedViewModelFactory(application = this.application)
+    }
     private val unitsViewModel: UnitsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedViewModel.resetState()
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -75,6 +80,10 @@ class BuildingFormActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    override fun onResume() {
+        super.onResume()
+        sharedViewModel.resetState()
     }
 }
 
@@ -103,7 +112,8 @@ fun BuildingFormScreen(
                 onNext = { currentPage++ }
             )
         } else if (currentPage == 1) {
-            UnitPage(unitsViewModel = unitsViewModel, sharedViewModel = sharedViewModel,
+            UnitPage(unitsViewModel = unitsViewModel,
+                sharedViewModel = sharedViewModel,
                 onNext = { currentPage++ },
                 onBack = { currentPage = 0 })
 
@@ -122,7 +132,6 @@ fun BuildingFormScreen(
                     sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
                         onSuccess = {
                             sharedViewModel.resetState()
-
                             // Create an Intent to start HomePageActivity
                             val intent = Intent(context, HomePageActivity::class.java)
 
@@ -262,7 +271,7 @@ fun BuildingInfoPage(
 
 
             item {
-                ProvinceStateSelector(viewModel = viewModel)
+                ProvinceStateSelector(sharedViewModel = sharedViewModel)
             }
 
             item {
@@ -425,8 +434,10 @@ fun BuildingInfoPage(
         if (showBuildingTypeDialog) {
             AddItemDialog(
                 onDismiss = { showBuildingTypeDialog = false },
-                onInsert = { name ->
-                    buildingTypeViewModel.insertBuildingType(BuildingTypes(buildingTypeName = name))
+                onInsert = { newItem ->
+                    val newType = BuildingTypes(buildingTypeName = newItem)
+                    buildingTypeViewModel.insertBuildingType(newType) // Add the new item to the list
+                    sharedViewModel.selectedBuildingTypes = newType // Update selected item in dropdown
                 }
             )
         }
@@ -435,7 +446,9 @@ fun BuildingInfoPage(
             AddItemDialog(
                 onDismiss = { showBuildingUsageDialog = false },
                 onInsert = { name ->
-                    buildingUsageViewModel.insertBuildingUsage(BuildingUsages(buildingUsageName = name))
+                    val newUsage = BuildingUsages(buildingUsageName = name)
+                    buildingUsageViewModel.insertBuildingUsage(newUsage)
+                    sharedViewModel.selectedBuildingUsages = newUsage
                 }
             )
         }
@@ -587,27 +600,27 @@ fun OwnerItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "${context.getString(R.string.address)}: ${owner.address}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${context.getString(R.string.email)}: ${owner.email}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${context.getString(R.string.phone_number)}: ${owner.phoneNumber}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${context.getString(R.string.mobile_number)}: ${owner.mobileNumber}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -649,9 +662,12 @@ fun OwnerDialog(
             Column {
                 OutlinedTextField(
                     value = firstName,
-                    onValueChange = { firstName = it },
+                    onValueChange = { newValue -> // Update the ViewModel on change
+                        firstName = newValue
+                    },
                     label = { Text(text = context.getString(R.string.first_name) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -659,6 +675,7 @@ fun OwnerDialog(
                     onValueChange = { lastName = it },
                     label = { Text(text = context.getString(R.string.last_name) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -666,6 +683,7 @@ fun OwnerDialog(
                     onValueChange = { address = it },
                     label = { Text(text = context.getString(R.string.address) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -673,6 +691,7 @@ fun OwnerDialog(
                     onValueChange = { email = it },
                     label = { Text(text = context.getString(R.string.email) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -680,6 +699,7 @@ fun OwnerDialog(
                     onValueChange = { phoneNumber = it },
                     label = { Text(text = context.getString(R.string.phone_number) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -687,6 +707,7 @@ fun OwnerDialog(
                     onValueChange = { mobileNumber = it },
                     label = { Text(text = context.getString(R.string.mobile_number) ,
                         style = MaterialTheme.typography.bodyLarge) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
                 // Unit selection with ChipGroup
@@ -698,7 +719,8 @@ fun OwnerDialog(
                         sharedViewModel.selectedUnits.clear()
                         sharedViewModel.selectedUnits.addAll(newSelection)
                     },
-                    units = units
+                    units = units,
+                    label = context.getString(R.string.units)
                 )
             }
         },
@@ -709,6 +731,7 @@ fun OwnerDialog(
                 Log.d("selectedUnits confirm", selectedUnits.toString())
                 onAddOwner(newOwner, selectedUnits)
                 sharedViewModel.addOwner(newOwner)
+                Log.d("sharedViewModel.addOwner(newOwner)", sharedViewModel.ownersList.toString())
                 sharedViewModel.addOwnerUnits(newOwner, selectedUnits)
             },
                 colors = ButtonDefaults.buttonColors(
@@ -958,6 +981,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -970,6 +994,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -982,6 +1007,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -994,6 +1020,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1006,6 +1033,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1018,6 +1046,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1033,6 +1062,7 @@ fun TenantDialog(
                         value = numberOfTenants,
                         onValueChange = { numberOfTenants = it },
                         label = { Text(context.getString(R.string.number_of_tenants)) },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1045,6 +1075,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1057,6 +1088,7 @@ fun TenantDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1154,7 +1186,8 @@ fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
         ) {
             statuses.forEach { status ->
                 DropdownMenuItem(
-                    text = { Text(status) },
+                    text = { Text(text = status,
+                            style = MaterialTheme.typography.bodyLarge,) },
                     onClick = {
                         onStatusSelected(status)
                         expanded = false
@@ -1338,68 +1371,88 @@ fun UnitDialog(
 //    var selectedOwner by remember { mutableStateOf<Owners?>(null) }
     val context = LocalContext.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = context.getString(R.string.add_new_unit),
-            style = MaterialTheme.typography.bodyLarge) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = unitNumber,
-                    onValueChange = { unitNumber = it },
-                    label = { Text(context.getString(R.string.unit_number)) },
-                    modifier = Modifier.fillMaxWidth()
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    text = context.getString(R.string.add_new_unit),
+                    style = MaterialTheme.typography.bodyLarge
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    label = { Text(context.getString(R.string.area)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfRooms,
-                    onValueChange = { numberOfRooms = it },
-                    label = { Text(context.getString(R.string.number_of_rooms)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Owner Selection
-
-
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val newUnit = Units(unitNumber = unitNumber,
-                    area = area,
-                    numberOfRooms = numberOfRooms)
-                onAddUnit(newUnit)
-                Log.d("newUnit", newUnit.toString() )
             },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)))) {
-                Text(text = context.getString(R.string.insert) ,
-                    style = MaterialTheme.typography.bodyLarge)
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)))) {
-                Text(text = context.getString(R.string.cancel) ,
-                    style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    )
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = unitNumber,
+                        onValueChange = { unitNumber = it },
+                        label = { Text(text = context.getString(R.string.unit_number),
+                            style = MaterialTheme.typography.bodyLarge) },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
+                    OutlinedTextField(
+                        value = area,
+                        onValueChange = { area = it },
+                        label = { Text(text = context.getString(R.string.area),
+                            style = MaterialTheme.typography.bodyLarge) },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfRooms,
+                        onValueChange = { numberOfRooms = it },
+                        label = { Text(text = context.getString(R.string.number_of_rooms),
+                            style = MaterialTheme.typography.bodyLarge) },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Owner Selection
+
+
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newUnit = Units(
+                            unitNumber = unitNumber,
+                            area = area,
+                            numberOfRooms = numberOfRooms
+                        )
+                        onAddUnit(newUnit)
+                        Log.d("newUnit", newUnit.toString())
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(context.getColor(R.color.secondary_color))
+                    )
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(context.getColor(R.color.secondary_color))
+                    )
+                ) {
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
 }
 
 @Composable
@@ -1423,6 +1476,7 @@ fun EditUnitDialog(
                     value = unitNumber,
                     onValueChange = { unitNumber = it },
                     label = { Text(context.getString(R.string.unit_number)) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1432,6 +1486,7 @@ fun EditUnitDialog(
                     value = area,
                     onValueChange = { area = it },
                     label = { Text(context.getString(R.string.area)) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1441,6 +1496,7 @@ fun EditUnitDialog(
                     value = numberOfRooms,
                     onValueChange = { numberOfRooms = it },
                     label = { Text(context.getString(R.string.number_of_rooms)) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1902,6 +1958,7 @@ fun UnitCostDialog(
                                 },
                                 label = { Text(context.getString(R.string.amount)) },
                                 keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                                textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
                                 modifier = Modifier.weight(0.2f)
                             )
                             ExposedDropdownMenuBoxExample(

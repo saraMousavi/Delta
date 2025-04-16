@@ -9,11 +9,11 @@
     <string name="description">توضیحات</string>
     <string name="title_activity_create_building">CreateBuildingActivity</string>
     <string name="prompt_email">Email</string>
-    <string name="prompt_password">Password</string>
+    <string name="prompt_password">رمز</string>
     <string name="action_sign_in">Sign in or register</string>
     <string name="action_sign_in_short">Sign in</string>
     <string name="welcome">"Welcome !"</string>
-    <string name="invalid_username">Not a valid username</string>
+    <string name="invalid_username">نام کاربری نامعتبر</string>
     <string name="invalid_password">Password must be >5 characters</string>
     <string name="login_failed">"Login failed"</string>
     <string name="enter">ورود</string>
@@ -126,4 +126,14 @@
     <string name="nafari">نفری</string>
     <string name="acount_base">مبنای محاسبه</string>
     <string name="base_amount">مبلغ واحد</string>
+    <string name="not_account">شما حساب کاربری فعال ندارید؟</string>
+    <string name="guest_entrance">ورود به عنوان میهمان</string>
+    <string name="sign_in">ورود</string>
+    <string name="features">امکانات برنامه</string>
+    <string name="building_charge">شارژ ساختمان</string>
+    <string name="cost_managing">مدیریت هزینه ها</string>
+    <string name="reporting">گزارش گیری</string>
+    <string name="delete_building">حذف ساختمان</string>
+    <string name="are_you_sure">مطمئنی؟</string>
+    <string name="success_delete">با موفقیت حذف گردید.</string>
 </resources>

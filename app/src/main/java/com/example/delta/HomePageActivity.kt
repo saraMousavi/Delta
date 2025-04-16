@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,16 +27,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,14 +56,15 @@ import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import androidx.lifecycle.viewModelScope
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
+import com.example.delta.data.model.AppDatabase
+import com.example.delta.factory.BuildingsViewModelFactory
 
 
 class HomePageActivity : ComponentActivity() {
-    private val viewModel: BuildingsViewModel by viewModels()
+    private val buildingViewModel: BuildingsViewModel by viewModels {
+        BuildingsViewModelFactory(this.application)
+    }
     val sharedViewModel: SharedViewModel by viewModels()
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -72,7 +84,7 @@ class HomePageActivity : ComponentActivity() {
                             .padding(innerPadding)
                     ) {
                         // List of buildings
-                        BuildingList(viewModel = viewModel, sharedViewModel = sharedViewModel)
+                        BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel)
                         val context = LocalContext.current
                         // FAB (fixed alignment)
                         FloatingActionButton(
@@ -92,36 +104,65 @@ class HomePageActivity : ComponentActivity() {
 }
 
 @Composable
-fun BuildingList(viewModel: BuildingsViewModel, sharedViewModel: SharedViewModel) {
-    val buildings by viewModel.getAllBuildings().collectAsState(initial = emptyList())
-    val buildingsWithTypesAndUsages by sharedViewModel.buildingsWithTypesAndUsagesList
+fun BuildingList(
+    viewModel: BuildingsViewModel,
+    sharedViewModel: SharedViewModel
+) {
+    val buildingsWithTypesAndUsages by viewModel.getAllBuildingsWithTypeAndUsage().collectAsState(initial = emptyList())
     val context = LocalContext.current
+
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
             .padding(16.dp)
     ) {
-
         items(buildingsWithTypesAndUsages) { buildingWithTypesAndUsages ->
-            BuildingCard(buildingWithTypesAndUsages = buildingWithTypesAndUsages, onClick = {
-                val intent = Intent(context, BuildingProfileActivity::class.java).apply {
-                    putExtra("BUILDING_DATA", buildingWithTypesAndUsages.building as Parcelable)
+            BuildingCard(
+                buildingWithTypesAndUsages = buildingWithTypesAndUsages,
+                building = buildingWithTypesAndUsages.building,
+                sharedViewModel = sharedViewModel,
+                onClick = {
+                    val intent = Intent(context, BuildingProfileActivity::class.java).apply {
+                        putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
+                        putExtra("BUILDING_USAGE_NAME", buildingWithTypesAndUsages.buildingUsageName)
+                        // Only put Parcelable if your Buildings class implements Parcelable!
+                        putExtra("BUILDING_DATA", buildingWithTypesAndUsages.building as? Parcelable)
+                    }
+                    context.startActivity(intent)
+                },
+                onDelete = { building ->
+                    sharedViewModel.deleteBuildingWithRelations(
+                        buildingId = building.buildingId,
+                        onSuccess = {
+                            Toast.makeText(context, context.getString(R.string.success_delete), Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { error ->
+                            Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
-                context.startActivity(intent)
-            }, building = buildingWithTypesAndUsages.building, sharedViewModel = sharedViewModel)
+            )
         }
     }
 }
 
 
-
-
 @Composable
-fun BuildingCard(buildingWithTypesAndUsages: BuildingWithTypesAndUsages, building: Buildings, onClick: () -> Unit, sharedViewModel: SharedViewModel) {
+fun BuildingCard(
+    buildingWithTypesAndUsages: BuildingWithTypesAndUsages,
+    building: Buildings,
+    onClick: () -> Unit,
+    sharedViewModel: SharedViewModel,
+    onDelete: (Buildings) -> Unit // Pass a callback for deletion
+) {
     // Load units and owners for this building
     val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
     val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
+
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
 
     Card(
         modifier = Modifier
@@ -189,7 +230,56 @@ fun BuildingCard(buildingWithTypesAndUsages: BuildingWithTypesAndUsages, buildin
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            // Top-right action icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More Actions",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge) },
+                        onClick = {
+                            showMenu = false
+                            showDeleteDialog = true
+                        }
+                    )
+                }
+            }
+
+        }
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text(text = LocalContext.current.getString(R.string.delete_building), style = MaterialTheme.typography.bodyLarge) },
+                text = { Text(text = LocalContext.current.getString(R.string.are_you_sure), style = MaterialTheme.typography.bodyLarge) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            onDelete(building)
+                        }
+                    ) { Text(LocalContext.current.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge) }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteDialog = false }
+                    ) {
+                        Text(LocalContext.current.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge) }
+                }
+            )
         }
     }
 }
-

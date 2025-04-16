@@ -29,7 +29,7 @@ interface OwnersDao {
     @Query("SELECT * FROM Owners")
     suspend fun getOwners(): List<Owners>
 
-    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM OwnersUnitsCrossRef WHERE ownerId = :ownerId)")
+    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM owners_units_cross_ref WHERE ownerId = :ownerId)")
     suspend fun getUnitsForOwner(ownerId: Int): List<Units>
 
     // Helper function to get owner details
@@ -38,11 +38,19 @@ interface OwnersDao {
 
     @Query("""
     SELECT o.* FROM Owners o
-    JOIN OwnersUnitsCrossRef ouc ON o.ownerId = ouc.ownerId
+    JOIN owners_units_cross_ref ouc ON o.ownerId = ouc.ownerId
     JOIN Units u ON ouc.unitId = u.unitId
     WHERE u.buildingId = :buildingId
 """)
     suspend fun getOwnersForBuilding(buildingId: Long): List<Owners>
+
+    // Find owners linked to units
+    @Query("SELECT ownerId FROM owners_units_cross_ref WHERE unitId IN (SELECT unitId FROM units WHERE buildingId = :buildingId)")
+    suspend fun getOwnerIdsByBuilding(buildingId: Long): List<Long>
+
+    // Delete owners linked to building
+    @Query("DELETE FROM owners WHERE ownerId IN (SELECT ownerId FROM owners_units_cross_ref WHERE unitId IN (SELECT unitId FROM units WHERE buildingId = :buildingId))")
+    suspend fun deleteOwnersForBuilding(buildingId: Long)
 
 
 }

@@ -29,12 +29,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Divider
@@ -42,6 +44,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,6 +110,8 @@ class BuildingProfileActivity : ComponentActivity() {
 
     val sharedViewModel: SharedViewModel by viewModels()
     val unitsViewModel: UnitsViewModel by viewModels()
+    var buildingTypeName: String = ""
+    var buildingUsageName: String = ""
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +121,10 @@ class BuildingProfileActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         val building = intent.getParcelableExtra<Parcelable>("BUILDING_DATA") as? Buildings
+
+        buildingTypeName = intent.getStringExtra("BUILDING_TYPE_NAME") ?: "Unknown"
+        buildingUsageName = intent.getStringExtra("BUILDING_USAGE_NAME") ?: "Unknown"
+        Log.d("BuildingRetrieve", "Province: ${buildingUsageName}, State: $buildingTypeName")
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -186,30 +195,146 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @Composable
     fun OverviewTab(building: Buildings) {
-        var context = LocalContext.current
-        LazyColumn(modifier = Modifier.padding(16.dp)) {
-            item {
-                Text(
-                    "${context.getString(R.string.building_name)}: ${building.name}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("${context.getString(R.string.street)} ${building.street}", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-//                Text("Phone: ${building.phone}", style = MaterialTheme.typography.bodyMedium)
-//                Spacer(modifier = Modifier.height(8.dp))
-//                Text("Email: ${building.email}", style = MaterialTheme.typography.bodyMedium)
-//                Spacer(modifier = Modifier.height(8.dp))
-//                Text(
-//                    "Postal Code: ${building.postCode}",
-//                    style = MaterialTheme.typography.bodyMedium
-//                )
-//                Spacer(modifier = Modifier.height(8.dp))
+        val context = LocalContext.current
 
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "${context.getString(R.string.building_name)}: ${building.name}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "${context.getString(R.string.street)}: ${building.street}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "${context.getString(R.string.post_code)}: ${building.postCode}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "${context.getString(R.string.province)}: ${building.province}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "${context.getString(R.string.state)}: ${building.state}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "${context.getString(R.string.building_type)}: $buildingTypeName",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "${context.getString(R.string.building_usage)}: $buildingUsageName",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = context.getString(R.string.shared_things),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+//                        building.sharedUtilities.forEach { utility ->
+//                            Text(
+//                                text = utility,
+//                                style = MaterialTheme.typography.bodyMedium,
+//                                modifier = Modifier.padding(top = 4.dp)
+//                            )
+//                        }
+                    }
+                }
             }
         }
     }
-
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
@@ -256,7 +381,9 @@ class BuildingProfileActivity : ComponentActivity() {
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 contentColor = MaterialTheme.colorScheme.primary,
-                divider = { Divider(thickness = 2.dp) },
+                divider = { HorizontalDivider(
+                    thickness = 2.dp
+                ) },
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
@@ -297,12 +424,12 @@ class BuildingProfileActivity : ComponentActivity() {
             // Content Area
             when (selectedTab) {
                 0 -> EarningsSection(
-                    earnings = buildingWithEarnings?.value ?: emptyList(),
+                    earnings = buildingWithEarnings.value ?: emptyList(),
                     onAddEarnings = { buildingViewModel.showEarningsDialog(building.buildingId) }
                 )
 
                 1 -> CostSection(
-                    costs = buildingWithCosts?.value ?: emptyList(),
+                    costs = buildingWithCosts.value ?: emptyList(),
                     onAddCost = { buildingViewModel.showCostDialog(building.buildingId) }
                 )
             }
@@ -313,7 +440,6 @@ class BuildingProfileActivity : ComponentActivity() {
             EarningsDialog(
                 building = building,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                earningsFlow = earningsViewModel.getAllMenuEarnings(),
                 onConfirm = { earning ->
                     buildingViewModel.insertEarnings(earning)
                     buildingViewModel.hideDialogs()
@@ -337,8 +463,10 @@ class BuildingProfileActivity : ComponentActivity() {
     fun TenantsTab(building: Buildings, sharedViewModel: SharedViewModel) {
         var showTenantDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
-        val tenants by sharedViewModel.tenantsList
+//        val tenants by sharedViewModel.tenantsList
 //            .collectAsState(initial = emptyList())  // Fetch tenants for the building
+        val tenants by sharedViewModel.getTenantsForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        Log.d("tenants in tenant tab", tenants.toString())
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
@@ -428,6 +556,7 @@ class BuildingProfileActivity : ComponentActivity() {
         var showOwnerDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        Log.d("owners in ownerstab", owners.toString())
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
@@ -483,7 +612,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 itemsIndexed(earnings) { index, earning ->
                     EarningsItem(earnings = earning)
                     if (index < earnings.lastIndex) {
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
@@ -533,7 +662,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 itemsIndexed(costs) { index, cost ->
                     CostItem(costs = cost)
                     if (index < costs.lastIndex) {
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
@@ -621,14 +750,11 @@ class BuildingProfileActivity : ComponentActivity() {
     fun EarningsDialog(
         building: Buildings,
         onDismiss: () -> Unit,
-        earningsFlow: Flow<List<Earnings>>,
         onConfirm: (Earnings) -> Unit
     ) {
 
-        val earnings = earningsFlow.collectAsState(initial = emptyList())
         var title by remember { mutableStateOf("") }
         var amount by remember { mutableStateOf("") }
-        var selectedEarning by remember { mutableStateOf<Earnings?>(null) }
 
         Dialog(onDismissRequest = onDismiss) {
             Surface(
