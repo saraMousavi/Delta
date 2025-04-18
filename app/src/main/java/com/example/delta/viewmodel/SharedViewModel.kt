@@ -1,22 +1,29 @@
 package com.example.delta.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.delta.R
 import com.example.delta.data.entity.*
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.contracts.contract
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -72,10 +79,30 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     //Temporary costs list to store updated amounts
     var tempCosts = mutableStateListOf<Costs>()
 
+    // Options Lists
+    val periods = listOf("هفته", "ماه", "سال")
+    val amountUnitOptions = listOf("هزار تومان", "میلیون تومان")
+
+    // States - Using StateFlow
+    private val _selectedPeriod = MutableStateFlow("")
+    val selectedPeriod: StateFlow<String> = _selectedPeriod.asStateFlow()
+
+    private val _selectedAmountUnit = MutableStateFlow("هزار تومان")
+    val selectedAmountUnit: StateFlow<String> = _selectedAmountUnit.asStateFlow()
+
+    // State Updaters
+    fun updatePeriod(newValue: String) {
+        _selectedPeriod.value = newValue
+    }
+
+    fun updateAmountUnit(newValue: String) {
+        _selectedAmountUnit.value = newValue
+    }
+
     init {
 //        loadOwners()
 //        loadTenants()
-//        loadCosts()
+        loadCosts()
         loadBuildingsWithTypesAndUsages()
         loadDefaultCosts()
     }
@@ -229,15 +256,15 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("selectedBuildingUsages?.buildingUsageId", selectedBuildingUsages?.buildingUsageId.toString())
                 var fund = 0.0
                 tempCosts.forEach { cost ->
-                    Log.d("cost.amount", cost.amount.toString())
-                    fund += cost.amount * unitsList.size
+//                    Log.d("cost.amount", cost.amount.toString())
+//                    fund += cost.amount * unitsList.size
                 }
                 val buildingId = buildingDao.insertBuilding(
                     Buildings(
                         name = name, phone = phone, email = email, postCode = postCode,
                         buildingTypeId = selectedBuildingTypes?.buildingTypeId ?: 0,
                         buildingUsageId = selectedBuildingUsages?.buildingUsageId ?: 0,
-                        street = street, province = province, state = state, fund = fund
+                        street = street, province = province, state = state, fund = fund , utilities = sharedUtilities
                     )
                 )
 
@@ -343,7 +370,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             val costsFromDb = costsDao.getCosts()
             withContext(Dispatchers.Main) {
-                costsList.value = costsFromDb
+                val fixedCosts = costsFromDb.filter { cost ->
+                    cost.calculateMethod.any { method ->
+                        method.equals("ثابت", ignoreCase = true)
+                    }
+                }
+                costsList.value = fixedCosts
             }
         }
     }
@@ -351,11 +383,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun updateCostAmount(cost: Costs, newAmount: Double) {
         val index = tempCosts.indexOf(cost)
         if (index != -1) {
-            val updatedCost = cost.copy(amount = newAmount)
-            tempCosts[index] = updatedCost
+//            val updatedCost = cost.copy(amount = newAmount)
+//            tempCosts[index] = updatedCost
         } else {
-            val newCost = cost.copy(amount = newAmount)
-            tempCosts.add(newCost)
+//            val newCost = cost.copy(amount = newAmount)
+//            tempCosts.add(newCost)
         }
     }
 

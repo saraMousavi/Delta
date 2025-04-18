@@ -14,10 +14,10 @@ interface DebtsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDebt(debt: Debts)
 
-    @Query("SELECT * FROM debts WHERE unitId = :unitId and paymentFlag = 0")
+    @Query("SELECT * FROM debts WHERE unitId = :unitId and payment_flag = 0")
     fun getDebtsForUnit(unitId: Long): Flow<List<Debts>>
 
-    @Query("SELECT * FROM debts WHERE unitId = :unitId and paymentFlag = 1")
+    @Query("SELECT * FROM debts WHERE unitId = :unitId and payment_flag = 1")
     fun getPaysForUnit(unitId: Long): Flow<List<Debts>>
 
     @Query("SELECT * FROM debts")

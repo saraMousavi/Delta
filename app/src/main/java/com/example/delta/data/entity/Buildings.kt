@@ -40,5 +40,6 @@ data class Buildings(
     val state: String = "Central",     // Default state
     val buildingTypeId: Long? = null,
     val buildingUsageId: Long? = null,
-    val fund: Double
+    val fund: Double,
+    val utilities: List<String>
 ) : Parcelable

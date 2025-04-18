@@ -2,7 +2,6 @@ package com.example.delta.data.dao
 
 import androidx.room.*
 import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.Tenants
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -33,6 +32,7 @@ interface CostDao {
     @Query("SELECT * FROM costs")
     suspend fun getCosts(): List<Costs>
 
-        @Query("DELETE FROM costs WHERE buildingId = :buildingId")
-        suspend fun deleteCostsForBuilding(buildingId: Long)
+
+    @Query("DELETE FROM costs WHERE buildingId = :buildingId")
+    suspend fun deleteCostsForBuilding(buildingId: Long)
 }

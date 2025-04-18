@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "993f8c144e2511588b011992d84d0501",
+    "identityHash": "3162dfdf5441a680483e27ae41490cde",
     "entities": [
       {
         "tableName": "building_types",
@@ -54,7 +54,7 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, `utilities` TEXT NOT NULL, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
@@ -119,6 +119,12 @@
             "columnName": "fund",
             "affinity": "REAL",
             "notNull": true
+          },
+          {
+            "fieldPath": "utilities",
+            "columnName": "utilities",
+            "affinity": "TEXT",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -174,18 +180,12 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cost_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, `period` TEXT NOT NULL, `amount_unit` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `cost_name` TEXT NOT NULL, `period` TEXT NOT NULL, `amount_unit` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_flag` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "costName",
-            "columnName": "cost_name",
-            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -195,14 +195,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "amount",
-            "columnName": "amount",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "currency",
-            "columnName": "currency",
+            "fieldPath": "costName",
+            "columnName": "cost_name",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -216,6 +210,30 @@
             "fieldPath": "amountUnit",
             "columnName": "amount_unit",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calculateMethod",
+            "columnName": "calculate_method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paymentLevel",
+            "columnName": "payment_level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "responsible",
+            "columnName": "responsible",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fundFlag",
+            "columnName": "fund_flag",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
@@ -360,7 +378,7 @@
       },
       {
         "tableName": "debts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`debtId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `unitId` INTEGER NOT NULL, `costId` INTEGER NOT NULL, `description` TEXT NOT NULL, `dueDate` TEXT NOT NULL, `paymentFlag` INTEGER NOT NULL, FOREIGN KEY(`costId`) REFERENCES `costs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`debtId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `unitId` INTEGER NOT NULL, `costId` INTEGER NOT NULL, `description` TEXT NOT NULL, `due_date` TEXT NOT NULL, `amount` REAL NOT NULL, `payment_flag` INTEGER NOT NULL, FOREIGN KEY(`costId`) REFERENCES `costs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "debtId",
@@ -388,13 +406,19 @@
           },
           {
             "fieldPath": "dueDate",
-            "columnName": "dueDate",
+            "columnName": "due_date",
             "affinity": "TEXT",
             "notNull": true
           },
           {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "paymentFlag",
-            "columnName": "paymentFlag",
+            "columnName": "payment_flag",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -855,7 +879,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '993f8c144e2511588b011992d84d0501')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3162dfdf5441a680483e27ae41490cde')"
     ]
   }
 }

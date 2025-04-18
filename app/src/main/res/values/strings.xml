@@ -115,14 +115,14 @@
     <string name="charge">شارژ</string>
     <string name="mortgage">رهن</string>
     <string name="all_units_same_costs">هزینه های تمام واحد ها مشابه است</string>
-    <string name="weekly">هفتگی</string>
-    <string name="monthly">ماهانه</string>
-    <string name="yearly">سالیانه</string>
+    <string name="weekly">هفته</string>
+    <string name="monthly">ماه</string>
+    <string name="yearly">سال</string>
     <string name="period">دوره</string>
     <string name="amount_unit">واحد پول</string>
     <string name="hezar_toman">هزار تومان</string>
     <string name="milion_toman">میلیون تومان</string>
-    <string name="automatic_charge">محاسبه به صورت اتوماتیک انجام شود؟</string>
+    <string name="automatic_charge">محاسبه شارژ به صورت اتوماتیک انجام شود.</string>
     <string name="nafari">نفری</string>
     <string name="acount_base">مبنای محاسبه</string>
     <string name="base_amount">مبلغ واحد</string>
@@ -136,4 +136,13 @@
     <string name="delete_building">حذف ساختمان</string>
     <string name="are_you_sure">مطمئنی؟</string>
     <string name="success_delete">با موفقیت حذف گردید.</string>
+    <string name="today">امروز</string>
+    <string name="building">ساختمان</string>
+    <string name="unit">واحد</string>
+    <string name="fixed">ثابت</string>
+    <string name="tenant">مستأجر</string>
+    <string name="title_activity_main">MainActivity</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
 </resources>

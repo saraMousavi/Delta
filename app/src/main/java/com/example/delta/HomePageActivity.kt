@@ -37,6 +37,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +54,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
@@ -78,30 +82,56 @@ class HomePageActivity : ComponentActivity() {
                     title = getString(R.string.menu_title),
                     imageId = R.drawable.profilepic
                 ) { innerPadding ->
+                    val context = LocalContext.current
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        // List of buildings
-                        BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel)
-                        val context = LocalContext.current
-                        // FAB (fixed alignment)
-                        FloatingActionButton(
-                            onClick = { context.startActivity(Intent(context, BuildingFormActivity::class.java)) },
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .align(Alignment.BottomEnd),
-                            containerColor = Color(context.getColor(R.color.secondary_color))
-                        ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add Building")
+                        val navController = rememberNavController()
+
+                        Scaffold(
+                            bottomBar = {
+                                CurvedBottomNavigation(
+                                    navController = navController,
+                                    items = Screen.items
+                                )
+                            }
+                        ) { padding ->
+                            NavHost(
+                                navController = navController,
+                                startDestination = Screen.Home.route,
+                                modifier = Modifier.padding(padding)
+                            ) {
+                                composable(Screen.Home.route) {
+                                    // List of buildings
+                                    BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel)
+
+                                }
+
+                                composable(Screen.Settings.route) { SettingsScreen() }
+                            }
                         }
+
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+fun ActivityLauncher(
+    targetActivity: Class<*>,
+    onLaunchComplete: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        context.startActivity(Intent(context, targetActivity))
+        onLaunchComplete()
+    }
+}
+
 
 @Composable
 fun BuildingList(

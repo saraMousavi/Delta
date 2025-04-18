@@ -1,21 +1,18 @@
 package com.example.delta.init
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.room.TypeConverter
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Date
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class Converter {
     @TypeConverter
-    fun fromDate(date: Date?): Long? {
-        return date?.time // Converts Date to timestamp (Long)
+    fun fromString(value: String): List<String> {
+        return Gson().fromJson(value, object : TypeToken<List<String>>() {}.type)
     }
 
     @TypeConverter
-    fun toDate(timestamp: Long?): Date? {
-        return timestamp?.let { Date(it) } // Converts timestamp back to Date
+    fun fromList(list: List<String>): String {
+        return Gson().toJson(list)
     }
+
 }

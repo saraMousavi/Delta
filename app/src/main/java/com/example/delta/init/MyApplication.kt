@@ -16,7 +16,6 @@ import com.example.delta.data.entity.User
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 class MyApplication : Application() {
@@ -80,10 +79,10 @@ class MyApplication : Application() {
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
-                    Costs(costName = getString(R.string.mortgage), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD"),
-                    Costs(costName = getString(R.string.rent), buildingId = 0, amount = 0.0, period = "0", amountUnit = "1", currency = "USD")
-                )
+                    Costs(costName = getString(R.string.charge), buildingId = 0, period = listOf(getString(R.string.monthly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant))),
+                    Costs(costName = getString(R.string.mortgage), buildingId = 0, period = listOf(getString(R.string.yearly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant))),
+                    Costs(costName = getString(R.string.rent), buildingId = 0, period = listOf(getString(R.string.monthly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant))),
+                 )
                 defaultCosts.forEach {
                     costsDao.insertCost(it)
                 }

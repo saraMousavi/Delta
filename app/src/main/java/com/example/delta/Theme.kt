@@ -18,6 +18,11 @@ val AppTypography = Typography( // use Material3 typography
         fontSize = 16.sp,
         fontFamily = customFontFamily
     ),
+    bodyMedium = TextStyle( // instead of body1
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        fontFamily = customFontFamily
+    ),
     titleMedium = TextStyle( // instead of button
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,

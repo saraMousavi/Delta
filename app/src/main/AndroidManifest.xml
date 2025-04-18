@@ -22,27 +22,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".LoginPage"
-            android:exported="false">
-
-        </activity>
-
+            android:exported="false"></activity>
         <activity
             android:name=".AuthActivity"
-            android:exported="false"  />
+            android:exported="false" />
         <activity
             android:name=".UnitDetailsActivity"
-            android:exported="false"  />
+            android:exported="false" />
         <activity
             android:name=".BuildingFormActivity"
-            android:exported="false"  >
-
-        </activity>
+            android:exported="false"></activity>
         <activity
             android:name=".BuildingProfileActivity"
-            android:exported="false"  />
+            android:exported="false" />
         <activity
             android:name=".CostActivity"
             android:exported="false" />
@@ -51,7 +45,7 @@
             android:exported="false" />
         <activity
             android:name=".BuildingUsageActivity"
-            android:exported="false"  />
+            android:exported="false" />
         <activity
             android:name=".EarningsActivity"
             android:exported="false" />

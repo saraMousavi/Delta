@@ -3,7 +3,15 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +22,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -31,6 +42,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,8 +55,6 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,47 +63,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
-import com.example.delta.viewmodel.BuildingsViewModel
 import androidx.compose.material3.InputChip
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.navigation.NavHostController
 import com.example.delta.viewmodel.SharedViewModel
-import com.google.android.material.chip.Chip
+import ir.hamsaa.persiandatepicker.PersianDatePickerDialog
+import ir.hamsaa.persiandatepicker.api.PersianPickerDate
+import ir.hamsaa.persiandatepicker.api.PersianPickerListener
+import com.example.delta.init.CurvedBottomNavShape
+import com.example.delta.init.WaveIndicatorShape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlin.math.roundToInt
 
-
-
-
-@Composable
-fun CheckboxMinimalExample(modifier: Modifier = Modifier) {
-    var checked by remember { mutableStateOf(true) }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-    ) {
-        Text(
-            "Minimal checkbox"
-        )
-        Checkbox(
-            checked = checked,
-            onCheckedChange = { checked = it }
-        )
-    }
-
-    Text(
-        if (checked) "Checkbox is checked" else "Checkbox is unchecked"
-    )
-}
 
 @Composable
 fun SimpleOutlinedTextFieldSample(name: String, modifier: Modifier = Modifier) {
@@ -347,7 +345,8 @@ fun <T> ExposedDropdownMenuBoxExample(
                 readOnly = true,
                 value = selectedItem?.let { itemLabel(it) } ?: "",
                 onValueChange = { },
-                label = { Text(label) },
+                label = { Text(text = label, style = MaterialTheme.typography.bodyMedium) },
+                textStyle = MaterialTheme.typography.bodyMedium,
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = expanded
@@ -363,7 +362,7 @@ fun <T> ExposedDropdownMenuBoxExample(
                     DropdownMenuItem(
                         text = { Text(
                             text = itemLabel(item),
-                            style = MaterialTheme.typography.bodyLarge) },
+                            style = MaterialTheme.typography.bodyMedium) },
                         onClick = {
                             onItemSelected(item)
                             expanded = false
@@ -552,4 +551,244 @@ fun PasswordTextField(
     )
 }
 
+// Function for the date picker content to use
+@Composable
+fun PersianDatePickerDialogContent(
+    onDateSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+    context: Context
+) {
+    val activity = context as? Activity
+    AppTheme {
+        LaunchedEffect(key1 = Unit) {
+            activity?.let {
+                val picker = PersianDatePickerDialog(it)
+                    .setPositiveButtonString(context.getString(R.string.insert))
+                    .setNegativeButton(context.getString(R.string.cancel))
+                    .setTodayButton(context.getString(R.string.today))
+                    .setTodayButtonVisible(true)
+                    .setMinYear(1300)
+                    .setMaxYear(1450)
+                    .setInitDate(1404, 1, 1)
+                    .setActionTextColor(android.graphics.Color.GRAY)
+                    .setTitleType(PersianDatePickerDialog.WEEKDAY_DAY_MONTH_YEAR)
+                    .setShowInBottomSheet(true)
+                    .setListener(object : PersianPickerListener {
+                        override fun onDateSelected(persianPickerDate: PersianPickerDate) {
+                            val dateStr =
+                                "${persianPickerDate.persianYear}/${persianPickerDate.persianMonth}/${persianPickerDate.persianDay}"
+                            onDateSelected(dateStr)
+                        }
+
+                        override fun onDismissed() {
+                            onDismiss()
+                        }
+                    })
+                picker.show()
+            }
+
+
+        }
+    }
+}
+
+private fun currentRoute(navController: NavHostController): String? {
+    return navController.currentBackStackEntry?.destination?.route
+}
+
+
+// HomeScreen.kt
+@Composable
+fun HomeScreen(
+    onNavigateToForm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Building Management",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        FilledTonalButton(
+            onClick = onNavigateToForm,
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("Add New Building")
+        }
+    }
+}
+
+// SettingsScreen.kt
+@Composable
+fun SettingsScreen(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.headlineMedium
+        )
+    }
+}
+
+@Composable
+fun CurvedBottomNavigation(
+    navController: NavHostController,
+    items: List<Screen>,
+    modifier: Modifier = Modifier
+) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val context = LocalContext.current
+    val density = LocalDensity.current
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        // Wave indicator
+        if (currentRoute != null) {
+            val selectedIndex = items.indexOfFirst { it.route == currentRoute }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-4).dp)
+            ) {
+                val containerWidth = remember { mutableStateOf(0f) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { containerWidth.value = it.width.toFloat() }
+                ) {
+                    if (containerWidth.value > 0) {
+                        val animatedOffset by animateOffsetAsState(
+                            targetValue = density.run {
+                                val itemWidth = containerWidth.value / items.size
+                                Offset(
+                                    x = itemWidth * selectedIndex + itemWidth / 2 - 24.dp.toPx(),
+                                    y = 0f
+                                )
+                            },
+                            animationSpec = spring(dampingRatio = 0.6f)
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(8.dp)
+                                .offset { IntOffset(animatedOffset.x.roundToInt(), 0) }
+                                .clip(WaveIndicatorShape(waveHeight = 16f))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Navigation surface
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp),
+            shape = CurvedBottomNavShape(),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                    // In your Row items.forEach
+                    items.forEach { screen ->
+                        CurvedBottomNavItem(
+                            icon = screen.icon,
+                            label = "",//screen.title
+                            selected = currentRoute == screen.route,
+                            isAddButton = screen == Screen.Add, // Identify Add button
+                            onClick = {
+                                if (screen == Screen.Add) {
+                                    context.startActivity(Intent(context, BuildingFormActivity::class.java))
+                                } else {
+                                    navController.navigate(screen.route)
+                                }
+                            }
+                        )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CurvedBottomNavItem(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    isAddButton: Boolean = false // New parameter
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(8.dp)
+                .then(if(isAddButton) Modifier.offset(y = (-16).dp) else Modifier)
+                .background(
+                    color = when {
+                        isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        else -> Color.Transparent
+                    },
+                    shape = if (isAddButton) RoundedCornerShape(6.dp) else CircleShape
+                )
+                .border(
+                    width = if (isAddButton) 1.dp else 0.dp,
+                    color = if (isAddButton) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    shape = if (isAddButton) RoundedCornerShape(6.dp) else CircleShape
+                )
+                .padding(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isAddButton) MaterialTheme.colorScheme.primary
+                else if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (selected) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+fun Dp.toPx() = with(LocalDensity.current) { this@toPx.toPx() }
+@Composable
+fun Float.toDp() = with(LocalDensity.current) { this@toDp.toDp() }
+
+
+// For wave animation positioning
+fun lerp(start: Float, stop: Float, fraction: Float): Float {
+    return start + (stop - start) * fraction
+}
 

@@ -1,7 +1,6 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.Intent
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
@@ -26,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -124,33 +124,31 @@ fun BuildingFormScreen(
                 onBack = { currentPage = 1 }
             )
 
-        } else if (currentPage == 4){
+        } else if (currentPage == 3){
             TenantsPage(
                 sharedViewModel = sharedViewModel,
-                onBack = { currentPage = 3 },
-                onSave = {
-                    sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
-                        onSuccess = {
-                            sharedViewModel.resetState()
-                            // Create an Intent to start HomePageActivity
-                            val intent = Intent(context, HomePageActivity::class.java)
-
-                            // Start the activity
-                            context.startActivity(intent)
-                        },
-                        onError = { errorMessage ->
-                            // show a Toast, etc.
-                            Log.e("SaveError", "Error saving building: $errorMessage")
-                        }
-                    )
-                }
+                onBack = { currentPage = 2 },
+                onNext = { currentPage++ }
             )
 
-        } else if (currentPage == 3){
+        } else if (currentPage == 4){
             CostPage(
                 sharedViewModel = sharedViewModel,
-                onNext = { currentPage++ },
-                onBack = { currentPage = 2 }
+                onSave = { sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
+                    onSuccess = {
+                        sharedViewModel.resetState()
+                        // Create an Intent to start HomePageActivity
+                        val intent = Intent(context, HomePageActivity::class.java)
+
+                        // Start the activity
+                        context.startActivity(intent)
+                    },
+                    onError = { errorMessage ->
+                        // show a Toast, etc.
+                        Log.e("SaveError", "Error saving building: $errorMessage")
+                    }
+                ) },
+                onBack = { currentPage = 3 }
             )
         }
     }
@@ -757,7 +755,7 @@ fun OwnerDialog(
 fun TenantsPage(
     sharedViewModel: SharedViewModel,
     onBack: () -> Unit,
-    onSave: () -> Unit
+    onNext: () -> Unit
 ) {
     var showTenantDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -806,12 +804,12 @@ fun TenantsPage(
                     style = MaterialTheme.typography.bodyLarge)
             }
 
-            Button(onClick = onSave,
+            Button(onClick = onNext,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )
             ) {
-                Text(context.getString(R.string.insert),
+                Text(context.getString(R.string.next),
                     modifier = Modifier.padding(2.dp),
                     style = MaterialTheme.typography.bodyLarge)
             }
@@ -941,7 +939,7 @@ fun TenantDialog(
     onDismiss: () -> Unit,
     onAddTenant: (Tenants, Units) -> Unit
 ) {
-    var context = LocalContext.current
+    val context = LocalContext.current
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
@@ -951,17 +949,21 @@ fun TenantDialog(
     var startDate by remember { mutableStateOf("") }
     var numberOfTenants by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
-    var selectedStatus by remember { mutableStateOf(context.getString(R.string.active)) } // Default status
+    var selectedStatus by remember { mutableStateOf(context.getString(R.string.active)) }
     var selectedUnit by remember { mutableStateOf<Units?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
+    // Check if date pickers are shown and dismiss others
+    val dismissDatePicker: () -> Unit = {
+        showStartDatePicker = false
+        showEndDatePicker = false
+    }
+
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = context.getString(R.string.add_new_tenant),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        },
+        title = { Text(context.getString(R.string.add_new_tenant)) },
         text = {
             LazyColumn {
                 item {
@@ -1069,27 +1071,25 @@ fun TenantDialog(
                     OutlinedTextField(
                         value = startDate,
                         onValueChange = { startDate = it },
-                        label = {
-                            Text(
-                                text = context.getString(R.string.start_date),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text(context.getString(R.string.start_date)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showStartDatePicker = true
+                            },
+                        readOnly = true
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = endDate,
                         onValueChange = { endDate = it },
-                        label = {
-                            Text(
-                                text = context.getString(R.string.end_date),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text(context.getString(R.string.end_date)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showEndDatePicker = true
+                            },
+                        readOnly = true
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     StatusDropdown(
@@ -1112,6 +1112,27 @@ fun TenantDialog(
                     )
                 }
             }
+            if (showStartDatePicker) {
+                PersianDatePickerDialogContent(
+                    onDateSelected = { selected ->
+                        startDate = selected
+                        dismissDatePicker()
+                    },
+                    onDismiss = { dismissDatePicker() },
+                    context = context
+                )
+            }
+
+            if (showEndDatePicker) {
+                PersianDatePickerDialogContent(
+                    onDateSelected = { selected ->
+                        endDate = selected
+                        dismissDatePicker()
+                    },
+                    onDismiss = { dismissDatePicker() },
+                    context = context
+                )
+            }
         },
         confirmButton = {
             Button(onClick = {
@@ -1128,35 +1149,31 @@ fun TenantDialog(
                     birthday = "",
                     numberOfTenants = numberOfTenants
                 )
-                onAddTenant(newTenant, selectedUnit!!)
-                sharedViewModel.addTenant(newTenant)
-                sharedViewModel.addTenantUnits(newTenant, selectedUnit!!)
+                selectedUnit?.let {
+                    onAddTenant(newTenant, it)
+                    sharedViewModel.addTenant(newTenant)
+                    sharedViewModel.addTenantUnits(newTenant, it)
+                }
                 onDismiss()
             },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(context.getString(R.string.insert),
+                    style = MaterialTheme.typography.bodyLarge)
             }
-
         },
         dismissButton = {
             Button(onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge)
             }
         }
     )
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1360,6 +1377,7 @@ fun AddNewUnitItem(onClick: () -> Unit) {
     }
 }
 
+@SuppressLint("SuspiciousIndentation")
 @Composable
 fun UnitDialog(
     onDismiss: () -> Unit,
@@ -1531,122 +1549,11 @@ fun EditUnitDialog(
     )
 }
 
-
-
-//
-//@OptIn(ExperimentalMaterial3Api::class)
-//@Composable
-//fun CostPage(
-//    sharedViewModel: SharedViewModel,
-//    onNext: () -> Unit,
-//    onBack: () -> Unit
-//) {
-//    val context = LocalContext.current
-//
-//
-//
-//    Column(modifier = Modifier.fillMaxSize()) {
-//        // Top App Bar with Back Button
-//        CenterAlignedTopAppBar(
-//            title = {
-//                Text(
-//                    text = context.getString(R.string.costs),
-//                    style = MaterialTheme.typography.bodyLarge
-//                )
-//            },
-//            navigationIcon = {
-//                IconButton(onClick = onBack) {
-//                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
-//                }
-//            }
-//        )
-//
-//        // Editable Costs List
-//        LazyColumn(
-//            modifier = Modifier
-//                .weight(1f)
-//                .fillMaxWidth()
-//        ) {
-//            items(sharedViewModel.costsList.value) { cost ->
-//                CostItem(
-//                    cost = cost,
-//                    onAmountChange = { newAmount ->
-//                        sharedViewModel.updateCostAmount(cost, newAmount)
-//                    }
-//                )
-//            }
-//        }
-//
-//        // Navigation Buttons (Back/Next)
-//        Row(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .padding(16.dp),
-//            horizontalArrangement = Arrangement.SpaceBetween
-//        ) {
-//            Button(onClick = onBack,
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-//                )
-//            ) {
-//                Text(context.getString(R.string.back),
-//                    modifier = Modifier.padding(2.dp),
-//                    style = MaterialTheme.typography.bodyLarge)
-//            }
-//
-//            Button(onClick = onNext,
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-//                )
-//            ) {
-//                Text(context.getString(R.string.next),
-//                    modifier = Modifier.padding(2.dp),
-//                    style = MaterialTheme.typography.bodyLarge)
-//            }
-//        }
-//        Spacer(Modifier.height(32.dp))
-//    }
-//}
-//
-//@Composable
-//fun CostItem(cost: Costs, onAmountChange: (Double) -> Unit) {
-//    Card(
-//        modifier = Modifier
-//            .fillMaxWidth()
-//            .padding(8.dp),
-//        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-//        shape = RoundedCornerShape(16.dp),
-//        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-//    ) {
-//        Row(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .padding(16.dp)
-//        ) {
-//            Text(
-//                text = cost.costName,
-//                style = MaterialTheme.typography.bodyLarge,
-//                color = MaterialTheme.colorScheme.onSurface
-//            )
-//            var amount by remember { mutableStateOf(cost.amount.toString()) }
-//            OutlinedTextField(
-//                value = amount,
-//                onValueChange = { newAmount ->
-//                    amount = newAmount
-//                    onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
-//                },
-//                label = { Text(text = LocalContext.current.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
-//                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
-//            )
-//        }
-//    }
-//}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CostPage(
     sharedViewModel: SharedViewModel,
-    onNext: () -> Unit,
+    onSave: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1654,6 +1561,7 @@ fun CostPage(
     var automaticCharge by remember { mutableStateOf(false) }
     var selectedChargeType by remember { mutableStateOf("") }
     var chargeAmount by remember { mutableStateOf("") }
+    var showUnitCostDialog by remember { mutableStateOf<Units?>(null) } // Track which unit dialog to show
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top App Bar with Back Button
@@ -1671,7 +1579,7 @@ fun CostPage(
             }
         )
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -1683,33 +1591,40 @@ fun CostPage(
                 style = MaterialTheme.typography.bodyLarge
             )
         }
-
         if (automaticCharge) {
-//            Row(
-//                modifier = Modifier.fillMaxWidth(),
-////                verticalAlignment = Alignment.CenterVertically
-//                horizontalArrangement = Arrangement.SpaceBetween
-//            ) {
-            ChipGroupShared(
-                selectedItems = listOf(selectedChargeType),
-                onSelectionChange = { newSelection ->
-                    selectedChargeType = newSelection.firstOrNull() ?: ""
-                },
-                items = listOf(context.getString(R.string.area), context.getString(R.string.nafari)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                label = context.getString(R.string.acount_base)
-            )
-            OutlinedTextField(
-                value = chargeAmount,
-                onValueChange = { chargeAmount = it },
-                label = { Text(context.getString(R.string.base_amount)) },
-                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-//            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ChipGroupShared(
+                    selectedItems = listOf(selectedChargeType),
+                    onSelectionChange = { newSelection ->
+                        selectedChargeType = newSelection.firstOrNull() ?: ""
+                    },
+                    items = listOf(
+                        context.getString(R.string.area),
+                        context.getString(R.string.nafari)
+                    ),
+                    modifier = Modifier
+                        .padding(vertical = 8.dp),
+                    label = context.getString(R.string.acount_base)
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = chargeAmount,
+                    onValueChange = { chargeAmount = it },
+                    label = { Text(context.getString(R.string.base_amount)) },
+                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+//                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
+
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1731,7 +1646,7 @@ fun CostPage(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                items(sharedViewModel.costsList.value.drop(1)) { cost ->
+                items(sharedViewModel.costsList.value) { cost ->
                     CostItem(
                         cost = cost,
                         onAmountChange = { newAmount ->
@@ -1740,6 +1655,7 @@ fun CostPage(
                         onPeriodChange = { newPeriod ->
                             sharedViewModel.updateCostPeriod(cost, newPeriod)
                         },
+                        sharedViewModel = sharedViewModel,
                         onAmountMoneyChange = { newAmountMoney ->
                             sharedViewModel.updateCostAmountMoney(cost, newAmountMoney)
                         }
@@ -1755,7 +1671,10 @@ fun CostPage(
                 items(sharedViewModel.unitsList) { unit ->
                     UnitCostItem(
                         unit = unit,
-                        sharedViewModel = sharedViewModel
+                        sharedViewModel = sharedViewModel,
+                        onUnitClick = { clickedUnit -> // Callback when a unit is clicked
+                            showUnitCostDialog = clickedUnit
+                        }
                     )
                 }
             }
@@ -1778,35 +1697,57 @@ fun CostPage(
                     style = MaterialTheme.typography.bodyLarge)
             }
 
-            Button(onClick = onNext,
+            Button(onClick = onSave,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )
             ) {
-                Text(context.getString(R.string.next),
+                Text(context.getString(R.string.insert),
                     modifier = Modifier.padding(2.dp),
                     style = MaterialTheme.typography.bodyLarge)
             }
         }
         Spacer(Modifier.height(32.dp))
+
+        //Conditionally display unit cost dialog, UnitCostDialo will display and get value of each unit if it clicked
+        showUnitCostDialog?.let{selectedUnit ->
+            UnitCostDialog(unit = selectedUnit, sharedViewModel = sharedViewModel,
+                onAmountChange = { newAmount ->
+//                    sharedViewModel.updateCostAmount(null, newAmount)
+                },
+                onPeriodChange = { newPeriod ->
+//                    sharedViewModel.updateCostPeriod(cost, newPeriod)
+                },
+                onAmountMoneyChange = { newAmountMoney ->
+//                    sharedViewModel.updateCostAmountMoney(cost, newAmountMoney)
+                },
+                onDismiss = { showUnitCostDialog = null })
+        }
     }
 }
 
 @Composable
 fun CostItem(
     cost: Costs,
+    sharedViewModel: SharedViewModel,
     onAmountChange: (Double) -> Unit,
     onPeriodChange: (String) -> Unit,
     onAmountMoneyChange: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val periods = listOf(context.getString(R.string.weekly),
-        context.getString(R.string.monthly), context.getString(R.string.yearly))
-    val amountUnitOptions = listOf(context.getString(R.string.hezar_toman),
-        context.getString(R.string.milion_toman))
-    var selectedPeriod by remember { mutableStateOf(cost.period) }
-    var selectedAmountMoney by remember { mutableStateOf(cost.amountUnit) }
-    var amount by remember { mutableStateOf(cost.amount.toString()) }
+
+    // 1. Observe ViewModel states
+    val selectedPeriod by sharedViewModel.selectedPeriod.collectAsState()
+    val selectedAmountUnit by sharedViewModel.selectedAmountUnit.collectAsState()
+
+    // 2. Initialize from cost object
+    LaunchedEffect(cost) {
+        sharedViewModel.updatePeriod(cost.period.firstOrNull() ?: "")
+        sharedViewModel.updateAmountUnit(cost.amountUnit.firstOrNull() ?: "")
+    }
+
+    // 3. Local amount state
+    var amount by remember { mutableStateOf("") }
 
     Card(
         modifier = Modifier
@@ -1816,78 +1757,90 @@ fun CostItem(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-                Column(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Text(
+                text = cost.costName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Period Dropdown (40% width)
+                ExposedDropdownMenuBoxExample(
+                    items = sharedViewModel.periods,
+                    selectedItem = selectedPeriod,
+                    onItemSelected = {
+                        sharedViewModel.updatePeriod(it)
+                        onPeriodChange(it)
+                    },
+                    label = context.getString(R.string.period),
+                    modifier = Modifier.fillMaxWidth(1f/3f),
+                    itemLabel = { it }
+                )
+
+                // Amount Input (50% width with inner padding)
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { newAmount ->
+                        amount = newAmount
+                        onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
+                    },
+                    label = { Text(context.getString(R.string.amount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Text(
-                        text = cost.costName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-//                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        ExposedDropdownMenuBoxExample(
-                            items = periods,
-                            selectedItem = selectedPeriod,
-                            onItemSelected = {
-                                selectedPeriod = it
-                                onPeriodChange(it)
-                            },
-                            label = context.getString(R.string.period),
-                            modifier = Modifier
-                                .fillMaxWidth(0.4f),
-                            itemLabel = { it }
-                        )
-                        OutlinedTextField(
-                            value = amount,
-                            onValueChange = { newAmount ->
-                                amount = newAmount
-                                onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
-                            },
-                            label = { Text(context.getString(R.string.amount)) },
-                            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(0.1f)
-                        )
-                        ExposedDropdownMenuBoxExample(
-                            items = amountUnitOptions,
-                            selectedItem = selectedAmountMoney,
-                            onItemSelected = {
-                                selectedAmountMoney = it
-                                onAmountMoneyChange(it)
-                            },
-                            label = context.getString(R.string.amount_unit),
-                            modifier = Modifier
-                                .fillMaxWidth(0.4f),
-                            itemLabel = { it }
-                        )
-                    }
-                }
+                        .fillMaxWidth(1f/3f),
+                    singleLine = true
+                )
+
+                // Amount Unit Dropdown (40% width)
+                ExposedDropdownMenuBoxExample(
+                    items = sharedViewModel.amountUnitOptions,
+                    selectedItem = selectedAmountUnit,
+                    onItemSelected = {
+                        sharedViewModel.updateAmountUnit(it)
+                        onAmountMoneyChange(it)
+                    },
+                    label = context.getString(R.string.amount_unit),
+                    modifier = Modifier.fillMaxWidth(1f),
+                    itemLabel = { it }
+                )
+            }
+        }
     }
+
 }
 
 @Composable
 fun UnitCostItem(
     unit: Units,
-    sharedViewModel: SharedViewModel
+    sharedViewModel: SharedViewModel,
+    onUnitClick: (Units) -> Unit // Callback when the unit is clicked
 ) {
-    var showCostDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
-            .clickable(onClick = { showCostDialog = true }),
+            .clickable(onClick = { onUnitClick(unit) }), // Call the callback
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1897,92 +1850,114 @@ fun UnitCostItem(
             )
         }
     }
-
-    if (showCostDialog) {
-        UnitCostDialog(
-            unit = unit,
-            sharedViewModel = sharedViewModel,
-            onDismiss = { showCostDialog = false }
-        )
-    }
 }
+
 @Composable
 fun UnitCostDialog(
     unit: Units,
     sharedViewModel: SharedViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onAmountChange: (Double) -> Unit,
+    onPeriodChange: (String) -> Unit,
+    onAmountMoneyChange: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val periods = listOf(context.getString(R.string.weekly),
-        context.getString(R.string.monthly), context.getString(R.string.yearly))
-    val amountUnitOptions = listOf(context.getString(R.string.hezar_toman),
-        context.getString(R.string.milion_toman))
-    val costs = sharedViewModel.costsList.value.drop(1)
+
+    // 1. Observe ViewModel states
+    val selectedPeriod by sharedViewModel.selectedPeriod.collectAsState()
+    val selectedAmountUnit by sharedViewModel.selectedAmountUnit.collectAsState()
+
+
+    // 3. Local amount state
+    var amount by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = context.getString(R.string.costs), style = MaterialTheme.typography.bodyLarge) },
+        title = {
+            Text(
+                text = context.getString(R.string.costs),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
         text = {
-            Column {
-                costs.forEach { cost ->
-                    Column(
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                items(sharedViewModel.costsList.value) { cost ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = cost.costName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Period Dropdown (40% width)
+                    ExposedDropdownMenuBoxExample(
+                        items = sharedViewModel.periods,
+                        selectedItem = selectedPeriod,
+                        onItemSelected = {
+                            sharedViewModel.updatePeriod(it)
+                            onPeriodChange(it)
+                        },
+                        label = context.getString(R.string.period),
+                        modifier = Modifier.fillMaxWidth(1f/3f),
+                        itemLabel = { it }
+                    )
+
+                    // Amount Input (50% width with inner padding)
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = { newAmount ->
+                            amount = newAmount
+                            onAmountChange(newAmount.toDoubleOrNull() ?: 0.0)
+                        },
+                        label = { Text(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = cost.costName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-//                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExposedDropdownMenuBoxExample(
-                                items = periods,
-                                selectedItem = cost.period,
-                                onItemSelected = {
-                                    sharedViewModel.updateCostPeriod(cost, it)
-                                },
-                                label = context.getString(R.string.period),
-                                modifier = Modifier
-                                    .fillMaxWidth(0.4f),
-                                itemLabel = { it }
-                            )
-                            OutlinedTextField(
-                                value = cost.amount.toString(),
-                                onValueChange = { newAmount ->
-                                    sharedViewModel.updateCostAmount(cost, newAmount.toDoubleOrNull() ?: 0.0)
-                                },
-                                label = { Text(context.getString(R.string.amount)) },
-                                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                                textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
-                                modifier = Modifier.weight(0.2f)
-                            )
-                            ExposedDropdownMenuBoxExample(
-                                items = amountUnitOptions,
-                                selectedItem = cost.amountUnit,
-                                onItemSelected = {
-                                    sharedViewModel.updateCostAmountMoney(cost, it)
-                                },
-                                label = context.getString(R.string.amount_unit),
-                                modifier = Modifier
-                                    .fillMaxWidth(0.4f),
-                                itemLabel = { it }
-                            )
-                        }
-                    }
+                            .fillMaxWidth(1f/3f),
+                        singleLine = true
+                    )
+
+                    // Amount Unit Dropdown (40% width)
+                    ExposedDropdownMenuBoxExample(
+                        items = sharedViewModel.amountUnitOptions,
+                        selectedItem = selectedAmountUnit,
+                        onItemSelected = {
+                            sharedViewModel.updateAmountUnit(it)
+                            onAmountMoneyChange(it)
+                        },
+                        label = context.getString(R.string.amount_unit),
+                        modifier = Modifier.fillMaxWidth(1f),
+                        itemLabel = { it }
+                    )
                 }
             }
+            }
+                }
         },
         confirmButton = {
-            Button(onClick = onDismiss,
+            Button(
+                onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )) {
-                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                )
+            ) {
+                Text(
+                    text = context.getString(R.string.insert),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
     )

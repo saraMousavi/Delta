@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.example.delta.data.dao.BuildingTypeDao
 import com.example.delta.data.dao.BuildingUsageDao
 import com.example.delta.data.dao.BuildingsDao
@@ -28,6 +29,7 @@ import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.User
+import com.example.delta.init.Converter
 import java.security.acl.Owner
 
 @Database(entities = [BuildingTypes::class,
@@ -37,6 +39,7 @@ import java.security.acl.Owner
     , BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
     OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class, User::class]
     , version = 1, exportSchema = true)
+@TypeConverters(Converter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun buildingTypeDao(): BuildingTypeDao
     abstract fun buildingUsageDao(): BuildingUsageDao

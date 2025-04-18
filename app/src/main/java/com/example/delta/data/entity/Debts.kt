@@ -1,5 +1,6 @@
 package com.example.delta.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -30,13 +31,16 @@ data class Debts(
     @PrimaryKey(autoGenerate = true)
     val debtId: Long = 0,
 
-    val unitId: Long,
+    @ColumnInfo(name = "unitId") val unitId: Long,
 
-    val costId: Long, // Foreign key referencing Costs
+    @ColumnInfo(name = "costId") val costId: Long, // Foreign key referencing Costs
 
-    val description: String, // Description of the debt
+    @ColumnInfo(name = "description") val description: String, // Description of the debt
 
-    val dueDate: String, // Due date of the debt
+    @ColumnInfo(name = "due_date") val dueDate: String, // Due date of the debt
 
-    var paymentFlag: Boolean = false // Indicates whether the debt has been paid
+    @ColumnInfo(name = "amount") val amount: Double,
+
+    @ColumnInfo(name = "payment_flag") var paymentFlag: Boolean = false // Indicates whether the debt has been paid
+
 )

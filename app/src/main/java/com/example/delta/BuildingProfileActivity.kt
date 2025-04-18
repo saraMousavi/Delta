@@ -323,13 +323,13 @@ class BuildingProfileActivity : ComponentActivity() {
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-//                        building.sharedUtilities.forEach { utility ->
-//                            Text(
-//                                text = utility,
-//                                style = MaterialTheme.typography.bodyMedium,
-//                                modifier = Modifier.padding(top = 4.dp)
-//                            )
-//                        }
+                        building.utilities.forEach { utility ->
+                            Text(
+                                text = utility,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -737,10 +737,10 @@ class BuildingProfileActivity : ComponentActivity() {
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Amount: ${costs.amount}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+//                Text(
+////                    text = "Amount: ${costs.amount}",
+////                    style = MaterialTheme.typography.bodyMedium
+//                )
 
             }
         }
