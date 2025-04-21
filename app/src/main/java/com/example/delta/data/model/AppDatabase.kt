@@ -23,6 +23,7 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.OwnerWithBuildings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
@@ -37,6 +38,7 @@ import java.security.acl.Owner
     Costs::class, Earnings::class, Units::class,
     Debts::class, Owners::class, Tenants::class
     , BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
+    OwnerWithBuildings::class,
     OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class, User::class]
     , version = 1, exportSchema = true)
 @TypeConverters(Converter::class)

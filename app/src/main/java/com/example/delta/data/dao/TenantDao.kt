@@ -22,6 +22,9 @@ interface TenantDao {
     @Query("SELECT * FROM Tenants")
     suspend fun getTenants(): List<Tenants>
 
+    @Query("SELECT * FROM Tenants where tenantId = :tenantId")
+    fun getTenant(tenantId: Long): Tenants
+
 
     @Query("SELECT * FROM tenants")
     fun getAllMenuTenants(): Flow<List<Tenants>>
@@ -49,4 +52,26 @@ interface TenantDao {
     @Query("DELETE FROM tenants WHERE tenantId IN (SELECT tenantId FROM tenants_units_cross_ref WHERE unitId IN (SELECT unitId FROM units WHERE buildingId = :buildingId))")
     suspend fun deleteTenantsForBuilding(buildingId: Long)
 
+    @Transaction
+    @Query("SELECT * FROM Tenants WHERE tenantId IN " +
+            "(SELECT tenantId FROM tenants_units_cross_ref WHERE unitId = :unitId)")
+    suspend fun getTenantsForUnit(unitId: Long): List<Tenants>
+
+    // Get cross-reference entries for a unit
+    @Query("SELECT * FROM tenants_units_cross_ref WHERE unitId = :unitId")
+    suspend fun getTenantUnitRelationships(unitId: Long): List<TenantsUnitsCrossRef>
+
+    @Query("SELECT * FROM tenants_units_cross_ref")
+    suspend fun getAllTenantUnitRelationships(): List<TenantsUnitsCrossRef>
+
+
+    @Query("""
+    SELECT * FROM tenants_units_cross_ref 
+    WHERE unitId = :unitId 
+    AND status = :status
+""")
+    fun getActiveTenantUnitRelationships(unitId: Long, status: String): TenantsUnitsCrossRef
+
 }
+
+//      , active: String  AND status = :active

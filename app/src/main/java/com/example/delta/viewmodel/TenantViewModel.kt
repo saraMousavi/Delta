@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Tenants
+import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +32,10 @@ class TenantViewModel (application: Application) : AndroidViewModel(application)
     }
     fun getAllMenuTenants(): Flow<List<Tenants>> {
         return tenantsDao.getAllMenuTenants()
+    }
+
+    suspend fun getAllTenantUnitRelations(): List<TenantsUnitsCrossRef> {
+        return tenantsDao.getAllTenantUnitRelationships()
     }
 
 }

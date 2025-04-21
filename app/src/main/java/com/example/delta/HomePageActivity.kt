@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -82,7 +83,6 @@ class HomePageActivity : ComponentActivity() {
                     title = getString(R.string.menu_title),
                     imageId = R.drawable.profilepic
                 ) { innerPadding ->
-                    val context = LocalContext.current
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -100,8 +100,8 @@ class HomePageActivity : ComponentActivity() {
                         ) { padding ->
                             NavHost(
                                 navController = navController,
-                                startDestination = Screen.Home.route,
-                                modifier = Modifier.padding(padding)
+                                startDestination = Screen.Home.route
+//                                modifier = Modifier.padding(padding)
                             ) {
                                 composable(Screen.Home.route) {
                                     // List of buildings
@@ -109,7 +109,7 @@ class HomePageActivity : ComponentActivity() {
 
                                 }
 
-                                composable(Screen.Settings.route) { SettingsScreen() }
+                                composable(Screen.Settings.route) { SettingsScreen(LocalContext.current) }
                             }
                         }
 
@@ -196,8 +196,8 @@ fun BuildingCard(
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp) // Add padding around the card
+            .fillMaxWidth().
+                padding(16.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp), // Rounded corners
@@ -206,57 +206,59 @@ fun BuildingCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
         ) {
             // Image with matching corner radius
             Image(
                 painter = painterResource(id = R.drawable.building_image),
                 contentDescription = "Building Image",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth() // Match card width
                     .height(200.dp)
-                    .clip(RoundedCornerShape(16.dp)) // Top corners only
+                    .clip(RoundedCornerShape(topStart = 16.dp,  // Match card's top corners
+                        topEnd = 16.dp)) // Top corners only
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "${LocalContext.current.getString(R.string.building_name)} : ${building.name}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(bottom = 4.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
                 color = MaterialTheme.colorScheme.onSurface
             )
 
+            Spacer(Modifier.height(16.dp))
             // Display building type and usage
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "${LocalContext.current.getString(R.string.building_type)}: ${buildingWithTypesAndUsages.buildingTypeName}",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${LocalContext.current.getString(R.string.building_usage)}: ${buildingWithTypesAndUsages.buildingUsageName}",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
+            Spacer(Modifier.height(16.dp))
             // Number of units and owners
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "${LocalContext.current.getString(R.string.number_of_units)}: ${units.size}", // Replace with actual unit count
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${LocalContext.current.getString(R.string.number_of_owners)}: ${owners.size}", // Replace with actual owner count
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -264,7 +266,7 @@ fun BuildingCard(
             // Top-right action icon
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.Start
             ) {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(

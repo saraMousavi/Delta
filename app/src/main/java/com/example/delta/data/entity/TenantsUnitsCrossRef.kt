@@ -30,6 +30,7 @@ data class TenantsUnitsCrossRef(
     val tenantId: Long,
     val unitId: Long,
     val startDate: String,  // Add relationship-specific fields
-    val endDate: String
+    val endDate: String,
+    val status: String
 )
 

@@ -133,12 +133,7 @@ fun DetailDrawer(
                         selected = false,
                         onClick = {}
                     )
-                    Spacer(Modifier.height(12.dp))
-                    NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.supporting)) },
-                        selected = false,
-                        onClick = {}
-                    )
+
                     Spacer(Modifier.height(12.dp))
                     NavigationDrawerItem(
                         label = { Text(context.getString(R.string.app_version)) },
@@ -147,45 +142,14 @@ fun DetailDrawer(
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    HorizontalDivider()
-                    Text(
-                        text = context.getString(R.string.second_sect),
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.cost_list)) },
-                        selected = false,
-                        onClick = {
-                            context.startActivity(Intent(context, CostActivity::class.java))
-                        }
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.income_list)) },
-                        selected = false,
-                        onClick = {
-                            context.startActivity(Intent(context, EarningsActivity::class.java))
-                        }
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.building_type_list)) },
-                        selected = false,
-                        onClick = {
-                            context.startActivity(Intent(context, BuildingTypeActivity::class.java))
-                        }
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.building_usage_list)) },
-                        selected = false,
-                        onClick = {
-                            context.startActivity(Intent(context, BuildingUsageActivity::class.java))
-                        }
-                    )
-                }
+//                    HorizontalDivider()
+//                    Text(
+//                        text = context.getString(R.string.second_sect),
+//                        modifier = Modifier.padding(16.dp),
+//                        style = MaterialTheme.typography.titleMedium
+//                    )
+//                    Spacer(Modifier.height(12.dp))
+                    }
             }
         },
         drawerState = drawerState

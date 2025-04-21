@@ -174,7 +174,12 @@ class BuildingProfileActivity : ComponentActivity() {
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            text = { Text(text = title, style = MaterialTheme.typography.bodyLarge) }
+                            text = {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         )
                     }
                 }
@@ -183,7 +188,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 when (selectedTab) {
                     0 -> OverviewTab(building)
                     1 -> OwnersTab(building, sharedViewModel)
-                    2 -> UnitsTab(building, sharedViewModel, unitsViewModel )
+                    2 -> UnitsTab(building, sharedViewModel, unitsViewModel)
                     3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
                     4 -> FundsTab(building)
                     5 -> ReportsTab()
@@ -335,6 +340,7 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         }
     }
+
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
@@ -375,15 +381,18 @@ class BuildingProfileActivity : ComponentActivity() {
 
             // Tab Row
             var selectedTab by remember { mutableIntStateOf(0) }
-            val tabTitles = listOf(context.getString(R.string.incomes), context.getString(R.string.costs))
+            val tabTitles =
+                listOf(context.getString(R.string.incomes), context.getString(R.string.costs))
 
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 contentColor = MaterialTheme.colorScheme.primary,
-                divider = { HorizontalDivider(
-                    thickness = 2.dp
-                ) },
+                divider = {
+                    HorizontalDivider(
+                        thickness = 2.dp
+                    )
+                },
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
@@ -465,7 +474,8 @@ class BuildingProfileActivity : ComponentActivity() {
         val context = LocalContext.current
 //        val tenants by sharedViewModel.tenantsList
 //            .collectAsState(initial = emptyList())  // Fetch tenants for the building
-        val tenants by sharedViewModel.getTenantsForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        val tenants by sharedViewModel.getTenantsForBuilding(building.buildingId)
+            .collectAsState(initial = emptyList())
         Log.d("tenants in tenant tab", tenants.toString())
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -505,10 +515,15 @@ class BuildingProfileActivity : ComponentActivity() {
 
 
     @Composable
-    fun UnitsTab(building: Buildings, sharedViewModel: SharedViewModel, unitsViewModel: UnitsViewModel) {
+    fun UnitsTab(
+        building: Buildings,
+        sharedViewModel: SharedViewModel,
+        unitsViewModel: UnitsViewModel
+    ) {
         var showUnitDialog by remember { mutableStateOf(false) }
         var context = LocalContext.current
-        val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+            .collectAsState(initial = emptyList())
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
@@ -516,7 +531,11 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(16.dp)
             ) {
                 items(units) { unit ->
-                    UnitItem(unit = unit, sharedViewModel = sharedViewModel, unitsViewModel = unitsViewModel )
+                    UnitItem(
+                        unit = unit,
+                        sharedViewModel = sharedViewModel,
+                        unitsViewModel = unitsViewModel
+                    )
                 }
             }
 
@@ -545,7 +564,6 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
 
-
     @Composable
     fun ReportsTab() {
         Text(text = "Reports Tab Content")
@@ -555,7 +573,8 @@ class BuildingProfileActivity : ComponentActivity() {
     fun OwnersTab(building: Buildings, sharedViewModel: SharedViewModel) {
         var showOwnerDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
-        val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
+        val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
+            .collectAsState(initial = emptyList())
         Log.d("owners in ownerstab", owners.toString())
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(

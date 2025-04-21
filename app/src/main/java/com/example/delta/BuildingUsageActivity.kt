@@ -15,8 +15,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.data.entity.BuildingUsages
 
@@ -33,42 +36,51 @@ class BuildingUsageActivity : ComponentActivity() {
             val buildingUsages by viewModel.getAllBuildingUsage()
                 .collectAsState(initial = emptyList())
             AppTheme {
-                Scaffold(
-                    topBar = {
-                        CenterAlignedTopAppBar(
-                            title = { Text( text = getString(R.string.building_usage_list) , style = MaterialTheme.typography.bodyLarge) },
-                            navigationIcon = {
-                                IconButton(onClick = { finish() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                            }
-                        )
-                    }
-                ) { innerPadding ->
-                    CostForm(
-                        viewModel = viewModel,
-                        insertItem = { name ->
-                            viewModel.insertBuildingUsage(BuildingUsages(buildingUsageName = name))
-                        },
-                        listContent = { vm ->
-                            GenericList(
-                                viewModel = vm,
-                                items = buildingUsages,
-                                itemContent = { item ->
-                                    GenericItem(
-                                        item = item,
-                                        itemName = { (it as BuildingUsages).buildingUsageName })
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    Scaffold(
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = getString(R.string.building_usage_list),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
                                 },
-                                onDeleteItem = { item ->
-                                    vm.deleteBuildingUsage(item)
+                                navigationIcon = {
+                                    IconButton(onClick = { finish() }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
                                 }
                             )
-                        },
-                        contextString = R.string.building_usage_list,
-                        onFabClick = {}
-                    )
+                        }
+                    ) { innerPadding ->
+                        CostForm(
+                            viewModel = viewModel,
+                            insertItem = { name ->
+                                viewModel.insertBuildingUsage(BuildingUsages(buildingUsageName = name))
+                            },
+                            listContent = { vm ->
+                                GenericList(
+                                    viewModel = vm,
+                                    items = buildingUsages,
+                                    itemContent = { item ->
+                                        GenericItem(
+                                            item = item,
+                                            itemName = { (it).buildingUsageName })
+                                    },
+                                    onDeleteItem = { item ->
+                                        vm.deleteBuildingUsage(item)
+                                    }
+                                )
+                            },
+                            contextString = R.string.building_usage_list,
+                            onFabClick = {}
+                        )
+                    }
                 }
-
             }
         }
     }

@@ -21,11 +21,15 @@ interface DebtsDao {
     fun getPaysForUnit(unitId: Long): Flow<List<Debts>>
 
     @Query("SELECT * FROM debts")
-    fun getAllDebts(): Flow<List<Debts>>
+    fun getAllDebts(): List<Debts>
 
     @Update
     suspend fun updateDebt(debt: Debts)
 
+
     @Delete()
     suspend fun deleteDebt(debt: Debts)
+
+    @Query("DELETE FROM debts WHERE costId IN (SELECT id FROM costs WHERE buildingId = :buildingId)")
+    suspend fun deleteDebtsForBuilding(buildingId: Long)
 }

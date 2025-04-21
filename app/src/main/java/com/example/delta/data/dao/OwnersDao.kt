@@ -1,6 +1,7 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
+import com.example.delta.data.entity.OwnerWithBuildings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Units
@@ -25,6 +26,9 @@ interface OwnersDao {
     @Insert
     suspend fun insertOwnerUnitCrossRef(crossRef: OwnersUnitsCrossRef)
 
+    @Insert
+    suspend fun insertOwnerWithBuild(ownersWithBuildings: OwnerWithBuildings)
+
 
     @Query("SELECT * FROM Owners")
     suspend fun getOwners(): List<Owners>
@@ -38,9 +42,8 @@ interface OwnersDao {
 
     @Query("""
     SELECT o.* FROM Owners o
-    JOIN owners_units_cross_ref ouc ON o.ownerId = ouc.ownerId
-    JOIN Units u ON ouc.unitId = u.unitId
-    WHERE u.buildingId = :buildingId
+    JOIN owners_with_building owb ON o.ownerId = owb.ownerId
+    WHERE owb.buildingId = :buildingId
 """)
     suspend fun getOwnersForBuilding(buildingId: Long): List<Owners>
 

@@ -17,8 +17,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.data.entity.Earnings
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.viewmodel.EarningsViewModel
@@ -38,14 +41,22 @@ class EarningsActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 val incomes by viewModel.getAllEarnings().collectAsState(initial = emptyList())
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
                     topBar = {
                         CenterAlignedTopAppBar(
-                            title = { Text( text = getString(R.string.income_list) ,
-                                style = MaterialTheme.typography.bodyLarge) },
+                            title = {
+                                Text(
+                                    text = getString(R.string.income_list),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
                             navigationIcon = {
                                 IconButton(onClick = { finish() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back"
+                                    )
                                 }
                             }
                         )
@@ -54,7 +65,14 @@ class EarningsActivity : ComponentActivity() {
                     CostForm(
                         viewModel = viewModel,
                         insertItem = { name ->
-                            viewModel.insertEarnings(Earnings(buildingId = 0 , earningsName = name, amount = 0.0, currency = name))
+                            viewModel.insertEarnings(
+                                Earnings(
+                                    buildingId = 0,
+                                    earningsName = name,
+                                    amount = 0.0,
+                                    currency = name
+                                )
+                            )
                         },
                         listContent = { vm ->
                             GenericList(
@@ -74,6 +92,7 @@ class EarningsActivity : ComponentActivity() {
                         onFabClick = {}
                     )
                 }
+            }
             }
 
         }

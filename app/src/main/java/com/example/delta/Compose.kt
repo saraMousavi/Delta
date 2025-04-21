@@ -6,7 +6,10 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -28,21 +31,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Apartment
+import androidx.compose.material.icons.outlined.AttachMoney
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.MoneyOff
+import androidx.compose.material.icons.outlined.Support
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,6 +78,7 @@ import androidx.lifecycle.ViewModel
 import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -86,10 +96,14 @@ import ir.hamsaa.persiandatepicker.api.PersianPickerListener
 import com.example.delta.init.CurvedBottomNavShape
 import com.example.delta.init.WaveIndicatorShape
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.delta.init.NavItem
+import com.uploadcare.android.library.api.UploadcareClient
+import com.uploadcare.android.library.api.UploadcareFile
+import com.uploadcare.android.library.callbacks.UploadFileCallback
+import com.uploadcare.android.library.exceptions.UploadcareApiException
+import com.uploadcare.android.library.upload.FileUploader
 import kotlin.math.roundToInt
 
 
@@ -452,7 +466,6 @@ fun ChipGroupUnits(
     }
 }
 
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChipGroupShared(
@@ -460,9 +473,10 @@ fun ChipGroupShared(
     selectedItems: List<String>,
     onSelectionChange: (List<String>) -> Unit,
     items: List<String>,
-    label: String
+    label: String,
+    singleSelection: Boolean = false // Add this flag
 ) {
-    Row(modifier = modifier) {
+    Column(modifier = modifier) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
@@ -476,20 +490,20 @@ fun ChipGroupShared(
                 InputChip(
                     selected = isSelected,
                     onClick = {
-                        val mutableSelectedItems = selectedItems.toMutableList()
-                        if (isSelected) {
-                            mutableSelectedItems.remove(item)
-                        } else {
-                            mutableSelectedItems.add(item)
+                        val newSelection = when {
+                            singleSelection -> listOf(item) // Single selection
+                            isSelected -> selectedItems - item // Toggle off
+                            else -> selectedItems + item // Toggle on
                         }
-                        onSelectionChange(mutableSelectedItems.toList())
+                        onSelectionChange(newSelection)
                     },
-                    label = { Text(text = item, style = MaterialTheme.typography.bodyLarge) }
+                    label = { Text(item) }
                 )
             }
         }
     }
 }
+
 
 // Example of checking user role in an activity
 @Composable
@@ -597,48 +611,111 @@ private fun currentRoute(navController: NavHostController): String? {
 }
 
 
-// HomeScreen.kt
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    onNavigateToForm: () -> Unit,
+fun SettingsScreen(
+    context: Context,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Building Management",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
+    val items = listOf(
+        NavItem(
+            title = R.string.supporting,
+            icon = Icons.Outlined.Support,
+            onClick = { /* Handle support */ }
+        ),
+        NavItem(
+            title = R.string.cost_list,
+            icon = Icons.Outlined.MoneyOff,
+            onClick = { context.startActivity(Intent(context, CostActivity::class.java)) }
+        ),
+        NavItem(
+            title = R.string.income_list,
+            icon = Icons.Outlined.AttachMoney,
+            onClick = { context.startActivity(Intent(context, EarningsActivity::class.java)) }
+        ),
+        NavItem(
+            title = R.string.building_type_list,
+            icon = Icons.Outlined.Apartment,
+            onClick = { context.startActivity(Intent(context, BuildingTypeActivity::class.java)) }
+        ),
+        NavItem(
+            title = R.string.building_usage_list,
+            icon = Icons.Outlined.Business,
+            onClick = { context.startActivity(Intent(context, BuildingUsageActivity::class.java)) }
         )
+    )
 
-        Spacer(Modifier.height(32.dp))
-
-        FilledTonalButton(
-            onClick = onNavigateToForm,
-            shape = MaterialTheme.shapes.medium
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = context.getString(R.string.setting),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
-            Text("Add New Building")
+            items.forEach { item ->
+                ClickableSettingItem(
+                    title = context.getString(item.title),
+                    icon = item.icon,
+                    onClick = item.onClick
+                )
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 }
 
-// SettingsScreen.kt
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+fun ClickableSettingItem(
+    title: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp)
+            )
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
+
+
+
 
 @Composable
 fun CurvedBottomNavigation(
@@ -791,4 +868,92 @@ fun Float.toDp() = with(LocalDensity.current) { this@toDp.toDp() }
 fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
 }
+
+@Composable
+fun UploadFile(
+    context: Context,
+    modifier: Modifier = Modifier
+) {
+    // State for tracking upload progress and result
+    var isUploading by remember { mutableStateOf(false) }
+    var fileUrl by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Image picker launcher
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            isUploading = true
+            val client = UploadcareClient("YOUR_PUBLIC_KEY", "YOUR_SECRET_KEY")
+            val fileUploader = FileUploader(client, uri, context).store(true)
+
+            fileUploader.uploadAsync(object : UploadFileCallback {
+                override fun onSuccess(result: UploadcareFile) {
+                    fileUrl = result.originalFileUrl.toString()
+                    errorMessage = null
+                    isUploading = false
+                }
+
+                override fun onFailure(e: UploadcareApiException) {
+                    errorMessage = "Upload failed: ${e.message}"
+                    isUploading = false
+                    Log.e("Upload", errorMessage!!)
+                }
+
+                override fun onProgressUpdate(bytesWritten: Long, contentLength: Long, progress: Double) {
+                    // Handle progress updates if needed
+                }
+            })
+        }
+    }
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+//        Text(
+//            text = context.getString(R.string.upload),
+//            style = MaterialTheme.typography.bodyLarge
+//        )
+
+        Box {
+            // Upload button
+            Button(
+                onClick = { imagePicker.launch("image/*") },
+                enabled = !isUploading
+            ) {
+                if (isUploading) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Text(context.getString(R.string.upload))
+                }
+            }
+
+            // Show error message if exists
+            errorMessage?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
+            }
+        }
+
+        // Display uploaded image thumbnail
+//        fileUrl?.let { url ->
+//            Image(
+//                painter = rememberAsyncImagePainter(url),
+//                contentDescription = "Uploaded building image",
+//                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+//                contentScale = ContentScale.Crop
+//            )
+//        }
+    }
+}
+
 

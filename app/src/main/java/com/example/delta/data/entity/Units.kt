@@ -36,6 +36,7 @@ data class Units(
     @ColumnInfo(name = "ownerId") val ownerId: Long? = null,
     @ColumnInfo(name = "unit_number") val unitNumber: String,
     @ColumnInfo(name = "area") val area: String,
-    @ColumnInfo(name = "number_of_room") val numberOfRooms: String
+    @ColumnInfo(name = "number_of_room") val numberOfRooms: String,
+    @ColumnInfo(name = "number_of_parking") val numberOfParking: String
 
 ) : Parcelable

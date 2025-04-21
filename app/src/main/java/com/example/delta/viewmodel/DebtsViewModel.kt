@@ -25,7 +25,7 @@ class DebtsViewModel (application: Application) : AndroidViewModel(application) 
         debtsDao.updateDebt(debts)
     }
 
-    fun getAllDebt(): Flow<List<Debts>> {
+    fun getAllDebt(): List<Debts> {
         return debtsDao.getAllDebts()
     }
 

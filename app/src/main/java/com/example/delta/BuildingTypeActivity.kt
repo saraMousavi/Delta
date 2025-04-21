@@ -15,8 +15,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.viewmodel.BuildingTypeViewModel
 
@@ -34,13 +37,22 @@ class BuildingTypeActivity : ComponentActivity() {
             val buildingTypes by viewModel.getAllBuildingType()
                 .collectAsState(initial = emptyList())
             AppTheme {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
                     topBar = {
                         CenterAlignedTopAppBar(
-                            title = { Text( text = getString(R.string.building_type_list) , style = MaterialTheme.typography.bodyLarge) },
+                            title = {
+                                Text(
+                                    text = getString(R.string.building_type_list),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
                             navigationIcon = {
                                 IconButton(onClick = { finish() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back"
+                                    )
                                 }
                             }
                         )
@@ -58,7 +70,7 @@ class BuildingTypeActivity : ComponentActivity() {
                                 itemContent = { item ->
                                     GenericItem(
                                         item = item,
-                                        itemName = { (it as BuildingTypes).buildingTypeName })
+                                        itemName = { (it).buildingTypeName })
                                 },
                                 onDeleteItem = { item ->
                                     vm.deleteBuildingType(item)
@@ -69,6 +81,7 @@ class BuildingTypeActivity : ComponentActivity() {
                         onFabClick = {}
                     )
                 }
+            }
 
             }
         }

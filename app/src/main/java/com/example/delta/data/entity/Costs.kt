@@ -18,7 +18,7 @@ data class Costs(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign key reference
     @ColumnInfo(name = "cost_name") val costName: String,
-
+    @ColumnInfo(name = "temp_amount") val tempAmount: Double,
     @ColumnInfo(name = "period") val period: List<String>,//weekly , monthly , yearly
     @ColumnInfo(name = "amount_unit") val amountUnit: List<String>, // hezar tooman, million tooman
     @ColumnInfo(name = "calculate_method") val calculateMethod: List<String>, //fixed, automatic, area, people

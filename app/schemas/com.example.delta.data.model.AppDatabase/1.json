@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3162dfdf5441a680483e27ae41490cde",
+    "identityHash": "62919a0ad0f4362133be6b06673e8a5d",
     "entities": [
       {
         "tableName": "building_types",
@@ -180,7 +180,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `cost_name` TEXT NOT NULL, `period` TEXT NOT NULL, `amount_unit` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_flag` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `amount_unit` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_flag` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -198,6 +198,12 @@
             "fieldPath": "costName",
             "columnName": "cost_name",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tempAmount",
+            "columnName": "temp_amount",
+            "affinity": "REAL",
             "notNull": true
           },
           {
@@ -288,7 +294,7 @@
       },
       {
         "tableName": "units",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, `number_of_parking` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "unitId",
@@ -321,6 +327,12 @@
           {
             "fieldPath": "numberOfRooms",
             "columnName": "number_of_room",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numberOfParking",
+            "columnName": "number_of_parking",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -536,7 +548,7 @@
       },
       {
         "tableName": "tenants",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `address` TEXT NOT NULL, `email` TEXT NOT NULL, `birthday` TEXT NOT NULL, `number_of_tenants` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL, `status` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `email` TEXT NOT NULL, `birthday` TEXT NOT NULL, `number_of_tenants` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL, `status` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "tenantId",
@@ -565,12 +577,6 @@
           {
             "fieldPath": "mobileNumber",
             "columnName": "mobile_number",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "address",
-            "columnName": "address",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -691,6 +697,75 @@
         ]
       },
       {
+        "tableName": "owners_with_building",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, PRIMARY KEY(`ownerId`, `buildingId`), FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "ownerId",
+            "columnName": "ownerId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerId",
+            "buildingId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_owners_with_building_ownerId",
+            "unique": false,
+            "columnNames": [
+              "ownerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_owners_with_building_ownerId` ON `${TABLE_NAME}` (`ownerId`)"
+          },
+          {
+            "name": "index_owners_with_building_buildingId",
+            "unique": false,
+            "columnNames": [
+              "buildingId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_owners_with_building_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "owners",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "ownerId"
+            ],
+            "referencedColumns": [
+              "ownerId"
+            ]
+          },
+          {
+            "table": "buildings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "buildingId"
+            ],
+            "referencedColumns": [
+              "buildingId"
+            ]
+          }
+        ]
+      },
+      {
         "tableName": "owners_units_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` INTEGER NOT NULL, `unitId` INTEGER NOT NULL, PRIMARY KEY(`ownerId`, `unitId`), FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -761,7 +836,7 @@
       },
       {
         "tableName": "tenants_units_cross_ref",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER NOT NULL, `unitId` INTEGER NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT NOT NULL, PRIMARY KEY(`tenantId`, `unitId`), FOREIGN KEY(`tenantId`) REFERENCES `tenants`(`tenantId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER NOT NULL, `unitId` INTEGER NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT NOT NULL, `status` TEXT NOT NULL, PRIMARY KEY(`tenantId`, `unitId`), FOREIGN KEY(`tenantId`) REFERENCES `tenants`(`tenantId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`unitId`) REFERENCES `units`(`unitId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "tenantId",
@@ -784,6 +859,12 @@
           {
             "fieldPath": "endDate",
             "columnName": "endDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -879,7 +960,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3162dfdf5441a680483e27ae41490cde')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '62919a0ad0f4362133be6b06673e8a5d')"
     ]
   }
 }

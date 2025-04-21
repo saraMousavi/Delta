@@ -16,7 +16,6 @@ data class Tenants(
     @ColumnInfo(name = "last_name") val lastName: String,
     @ColumnInfo(name = "phone_number") val phoneNumber: String,
     @ColumnInfo(name = "mobile_number") val mobileNumber: String,
-    @ColumnInfo(name = "address") val address: String,
     @ColumnInfo(name = "email") val email: String,
     @ColumnInfo(name = "birthday") val birthday: String,
     @ColumnInfo(name = "number_of_tenants") val numberOfTenants: String,

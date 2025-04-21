@@ -82,6 +82,8 @@ dependencies {
     implementation(libs.foundation)
     implementation(libs.androidx.room.runtime)
     implementation(libs.gson)
+    implementation(libs.androidx.material.icons)
+    implementation(libs.upload.care)
     implementation libs.androidx.navigation.fragment.ktx
     implementation libs.androidx.navigation.ui.ktx
     ksp(libs.androidx.room.compiler)
