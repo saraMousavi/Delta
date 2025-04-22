@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -499,8 +500,10 @@ fun OwnersPage(
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
-    var showOwnerDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val ownersList = sharedViewModel.ownersList.toList()
+    var showOwnerDialog by remember { mutableStateOf(false) }
+    var selectedOwner by remember { mutableStateOf<Owners?>(null) } // Track selected owner
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Add Top App Bar with Back Button
@@ -518,8 +521,26 @@ fun OwnersPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
+            Log.d("sharedViewModel.ownersList", sharedViewModel.ownersList.toString())
             items(sharedViewModel.ownersList) { owner ->
-                OwnerItem(owner = owner)
+                OwnerItem(
+                    owner = owner,
+                    sharedViewModel = sharedViewModel,
+                    onDelete = {
+                        sharedViewModel.deleteOwner(
+                            owner = owner,
+                            onSuccess = {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.success_delete),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            onError = { error ->
+                                Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    })
             }
 
             // Add "Add New Owner" as the last item
@@ -614,12 +635,18 @@ fun AddNewOwnerItem(onClick: () -> Unit) {
 @Composable
 fun OwnerItem(
     owner: Owners,
-    modifier: Modifier = Modifier
+    sharedViewModel: SharedViewModel,
+    modifier: Modifier = Modifier,
+    onDelete: (Owners) -> Unit // Pass a callback for deletion
 ) {
     var context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .clickable(onClick = { showEditDialog = true })
             .padding(8.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -640,11 +667,22 @@ fun OwnerItem(
 
             // Owner Details
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        text = "${context.getString(R.string.last_name)}: ${owner.lastName}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Text(
                     text = "${context.getString(R.string.address)}: ${owner.address}",
                     style = MaterialTheme.typography.bodyLarge,
@@ -668,13 +706,83 @@ fun OwnerItem(
             }
 
             // Action Icon (Optional)
-            IconButton(onClick = { /* Handle click */ }) {
+
+            IconButton(onClick = { showMenu = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More Actions",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        showDeleteDialog = true
+                    }
+                )
+            }
+        }
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.delete_owner),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                text = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.are_you_sure),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            onDelete(owner)
+                        }
+                    ) {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteDialog = false }
+                    ) {
+                        Text(
+                            LocalContext.current.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            )
+        }
+        if (showEditDialog) {
+            EditOwnerDialog(
+                units = sharedViewModel.unitsList,
+                owner = owner,
+                onDismiss = { showEditDialog = false },
+                onSave = { updatedOwner, selectedUnits ->
+                    sharedViewModel.updateOwnerWithUnits(updatedOwner, selectedUnits)
+                    showEditDialog = false
+                },
+                sharedViewModel = sharedViewModel
+            )
         }
     }
 }
@@ -866,8 +974,26 @@ fun TenantsPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
+            Log.d("sharedViewModel.tenantsList.value", sharedViewModel.tenantsList.value.toString())
             items(sharedViewModel.tenantsList.value) { tenant ->
-                TenantItem(tenants = tenant)
+                TenantItem(
+                    tenants = tenant,
+                    sharedViewModel = sharedViewModel,
+                    onDelete = {
+                        sharedViewModel.deleteTenant(
+                            tenant = tenant,
+                            onSuccess = {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.success_delete),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            onError = { error ->
+                                Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    })
             }
 
             // Add "Add New Tenant" as the last item
@@ -966,13 +1092,19 @@ fun AddNewTenantItem(onClick: () -> Unit) {
 @Composable
 fun TenantItem(
     tenants: Tenants,
-    modifier: Modifier = Modifier
+    sharedViewModel: SharedViewModel,
+    modifier: Modifier = Modifier,
+    onDelete: (Tenants) -> Unit
 ) {
     var context = LocalContext.current
+    var showEditDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .clickable(onClick = { showEditDialog = true }),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1026,11 +1158,84 @@ fun TenantItem(
             }
 
             // Action Icon (Optional)
-            IconButton(onClick = { /* Handle click */ }) {
+            IconButton(onClick = { showMenu = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More Actions",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        showDeleteDialog = true
+                    }
+                )
+            }
+        }
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.delete_owner),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                text = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.are_you_sure),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            onDelete(tenants)
+                        }
+                    ) {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteDialog = false }
+                    ) {
+                        Text(
+                            LocalContext.current.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            )
+        }
+        if (showEditDialog) {
+            tenants.let { tenant ->
+                Log.d("tenant in dialog", tenant.toString())
+                EditTenantDialog(
+                    tenant = tenant,
+                    units = sharedViewModel.unitsList,
+                    sharedViewModel = sharedViewModel,
+                    onDismiss = { showEditDialog = false },
+                    onSave = { updatedTenant, selectedUnit ->
+                        // Call ViewModel to update both tenant and association
+                        sharedViewModel.updateTenantWithUnit(updatedTenant, selectedUnit)
+                        showEditDialog = false
+                    }
                 )
             }
         }
@@ -2058,65 +2263,6 @@ fun UnitCostDialog(
                     )
 
                 }
-//                items(sharedViewModel.costsList.value) { cost ->
-//                    Column(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                    ) {
-//                        Text(
-//                            text = cost.costName,
-//                            style = MaterialTheme.typography.bodyLarge,
-//                            color = MaterialTheme.colorScheme.onSurface,
-//                            modifier = Modifier.padding(horizontal = 16.dp)
-//                        )
-//
-//                        Spacer(modifier = Modifier.height(8.dp))
-//
-//                        Row(
-//                            modifier = Modifier
-//                                .fillMaxWidth(),
-//                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-//                        ) {
-//                            // Period Dropdown (40% width)
-//                            ExposedDropdownMenuBoxExample(
-//                                items = sharedViewModel.periods,
-//                                selectedItem = cost.period.firstOrNull() ?: "",
-//                                onItemSelected = {
-//                                    onPeriodChange(cost, it)
-//                                },
-//                                label = context.getString(R.string.period),
-//                                modifier = Modifier.fillMaxWidth(1f / 3f),
-//                                itemLabel = { it }
-//                            )
-//
-//                            // Amount Input (50% width with inner padding)
-//                            OutlinedTextField(
-//                                value = amount,
-//                                onValueChange = {
-//                                    amount = it
-//                                    onAmountMoneyChange(cost, it)
-//                                },
-//                                label = { Text(context.getString(R.string.amount)) },
-//                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-//                                modifier = Modifier
-//                                    .fillMaxWidth(1f / 3f),
-//                                singleLine = true
-//                            )
-//
-//                            // Amount Unit Dropdown (40% width)
-//                            ExposedDropdownMenuBoxExample(
-//                                items = sharedViewModel.amountUnitOptions,
-//                                selectedItem = cost.amountUnit.firstOrNull() ?: "",
-//                                onItemSelected = {
-//                                    onAmountMoneyChange(cost, it)
-//                                },
-//                                label = context.getString(R.string.amount_unit),
-//                                modifier = Modifier.fillMaxWidth(1f),
-//                                itemLabel = { it }
-//                            )
-//                        }
-//                    }
-//                }
             }
         },
         confirmButton = {
@@ -2184,3 +2330,409 @@ fun String.persianToEnglishDigits(): String {
         }
     }.joinToString("")
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditOwnerDialog(
+    owner: Owners,
+    units: List<Units>,
+    sharedViewModel: SharedViewModel,
+    onDismiss: () -> Unit,
+    onSave: (Owners, List<Units>) -> Unit // Modified onSave
+) {
+    val context = LocalContext.current
+    var firstName by remember { mutableStateOf(owner.firstName) }
+    var phone by remember { mutableStateOf(owner.phoneNumber) }
+    var lastName by remember { mutableStateOf(owner.lastName) }
+    var address by remember { mutableStateOf(owner.address) }
+    var email by remember { mutableStateOf(owner.email) }
+    var mobileNumber by remember { mutableStateOf(owner.mobileNumber) }
+
+    val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner.ownerId).collectAsState(initial = emptyList())
+
+    // Local selection state
+    val selectedUnits = remember { mutableStateListOf<Units>() }
+
+    // Initialize selection when units load
+    LaunchedEffect(unitsForOwner) {
+        selectedUnits.clear()
+        selectedUnits.addAll(unitsForOwner)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = context.getString(R.string.edit_owner),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = firstName,
+                    onValueChange = { newValue -> // Update the ViewModel on change
+                        firstName = newValue
+                    },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.first_name),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = lastName,
+                    onValueChange = { lastName = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.last_name),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.address),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.email),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.phone_number),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = mobileNumber,
+                    onValueChange = { mobileNumber = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.mobile_number),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+                ChipGroupUnits(
+                    selectedUnits = selectedUnits,
+                    onSelectionChange = { newSelection ->
+                        selectedUnits.clear()
+                        selectedUnits.addAll(newSelection)
+                    },
+                    units = units,
+                    label = context.getString(R.string.units)
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                Log.d(" owner in onclick",  owner.toString())
+                val updatedOwner = owner.copy(
+                    firstName = firstName,
+                    lastName = lastName,
+                    address = address,
+                    email = email,
+                    phoneNumber = phone,
+                    mobileNumber = mobileNumber,
+                    birthday = ""
+                )
+                Log.d("selectedUnits.toList()", selectedUnits.toList().toString())
+                onSave(updatedOwner, selectedUnits.toList())
+            }, colors = ButtonDefaults.buttonColors(
+                containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+            )) {
+                Text(
+                    text = context.getString(R.string.edit),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color))
+                )
+            ) {
+                Text(
+                    text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditTenantDialog(
+    tenant: Tenants,
+    units: List<Units>,
+    sharedViewModel: SharedViewModel,
+    onDismiss: () -> Unit,
+    onSave: (Tenants, Units?) -> Unit
+) {
+    val context = LocalContext.current
+    var firstName by remember { mutableStateOf(tenant.firstName) }
+    var lastName by remember { mutableStateOf(tenant.lastName) }
+    var phone by remember { mutableStateOf(tenant.phoneNumber) }
+    var email by remember { mutableStateOf(tenant.email) }
+    var mobileNumber by remember { mutableStateOf(tenant.mobileNumber) }
+    var startDate by remember { mutableStateOf(tenant.startDate) }
+    var numberOfTenants by remember { mutableStateOf(tenant.numberOfTenants) }
+    var endDate by remember { mutableStateOf(tenant.endDate) }
+    var selectedStatus by remember { mutableStateOf(tenant.status) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    var selectedUnit by remember {
+        mutableStateOf(sharedViewModel.getUnitForTenant(tenant))
+    }
+    Log.d("selectedUnit", selectedUnit.toString())
+    Log.d("tenant", tenant.toString())
+
+    val dismissDatePicker: () -> Unit = {
+        showStartDatePicker = false
+        showEndDatePicker = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = context.getString(R.string.edit_tenant),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            LazyColumn {
+                item {
+                    Text(
+                        text = context.getString(R.string.personal_information),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = firstName,
+                        onValueChange = { firstName = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.first_name),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = lastName,
+                        onValueChange = { lastName = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.last_name),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.email),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.phone_number),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = mobileNumber,
+                        onValueChange = { mobileNumber = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.mobile_number),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                item {
+                    Text(
+                        text = context.getString(R.string.lease_information),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = numberOfTenants,
+                        onValueChange = { numberOfTenants = it },
+                        label = { Text(context.getString(R.string.number_of_tenants)) },
+                        textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = startDate,
+                        onValueChange = { startDate = it },
+                        label = { Text(context.getString(R.string.start_date)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showStartDatePicker = true
+                            },
+                        readOnly = true
+                    )
+
+                    OutlinedTextField(
+                        value = endDate,
+                        onValueChange = { endDate = it },
+                        label = { Text(context.getString(R.string.end_date)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showEndDatePicker = true
+                            },
+                        readOnly = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    StatusDropdown(
+                        selectedStatus = selectedStatus,
+                        onStatusSelected = { selectedStatus = it }
+                    )
+
+                }
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExposedDropdownMenuBoxExample(
+                        items = units,
+                        selectedItem = selectedUnit,
+                        onItemSelected = { unit ->
+                            selectedUnit = unit
+                        },
+                        label = context.getString(R.string.unit_number),
+                        modifier = Modifier
+                            .fillMaxWidth(1f),
+                        itemLabel = { unit -> unit.unitNumber.toString() }
+                    )
+                }
+
+            }
+            if (showStartDatePicker) {
+                PersianDatePickerDialogContent(
+                    onDateSelected = { selected ->
+                        startDate = selected
+                        dismissDatePicker()
+                    },
+                    onDismiss = { dismissDatePicker() },
+                    context = context
+                )
+            }
+
+            if (showEndDatePicker) {
+                PersianDatePickerDialogContent(
+                    onDateSelected = { selected ->
+                        endDate = selected
+                        dismissDatePicker()
+                    },
+                    onDismiss = { dismissDatePicker() },
+                    context = context
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedTenant =
+                        tenant.copy(
+                            firstName = firstName,
+                            lastName = lastName,
+                            email = email,
+                            phoneNumber = phone,
+                            mobileNumber = mobileNumber,
+                            startDate = startDate,
+                            endDate = endDate,
+                            status = selectedStatus,
+                            birthday = "",
+                            numberOfTenants = numberOfTenants
+                        )
+                    onSave(updatedTenant, selectedUnit)
+                    onDismiss()
+                }, colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )
+            ) {
+                Text(
+                    context.getString(R.string.edit),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+                )
+            ) {
+                Text(
+                    text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    )
+}
+

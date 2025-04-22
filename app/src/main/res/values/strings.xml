@@ -149,4 +149,8 @@
     <string name="setting">تنظیمات</string>
     <string name="upload">آپلود مدارک</string>
     <string name="number_of_parking">پارکینگ</string>
+    <string name="delete_owner">حذف مالک</string>
+    <string name="edit">ویرایش</string>
+    <string name="edit_tenant">ویرایش ساکن</string>
+    <string name="edit_owner">ویرایش ساکن</string>
 </resources>

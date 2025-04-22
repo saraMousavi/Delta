@@ -16,6 +16,13 @@ interface OwnersDao {
     @Delete()
     suspend fun deleteOwners(owners: Owners)
 
+    // Delete tenants linked to building
+    @Query("DELETE FROM owners_units_cross_ref WHERE ownerId IN (SELECT ownerId FROM owners WHERE ownerId = :ownerId)")
+    suspend fun deleteOwnersWithUnits(ownerId: Long)
+
+    @Update
+    suspend fun updateOwner(owners: Owners)
+
     @Query("SELECT * FROM owners")
     fun getAllOwners(): Flow<List<Owners>>
 
@@ -33,12 +40,12 @@ interface OwnersDao {
     @Query("SELECT * FROM Owners")
     suspend fun getOwners(): List<Owners>
 
-    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM owners_units_cross_ref WHERE ownerId = :ownerId)")
-    suspend fun getUnitsForOwner(ownerId: Int): List<Units>
-
     // Helper function to get owner details
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
     suspend fun getOwnerById(ownerId: Int): Owners
+
+    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM owners_units_cross_ref WHERE ownerId = :ownerId)")
+    suspend fun getUnitsForOwner(ownerId: Long): List<Units>
 
     @Query("""
     SELECT o.* FROM Owners o
@@ -54,6 +61,9 @@ interface OwnersDao {
     // Delete owners linked to building
     @Query("DELETE FROM owners WHERE ownerId IN (SELECT ownerId FROM owners_units_cross_ref WHERE unitId IN (SELECT unitId FROM units WHERE buildingId = :buildingId))")
     suspend fun deleteOwnersForBuilding(buildingId: Long)
+
+    @Query("SELECT * FROM owners_units_cross_ref WHERE ownerId = :ownerId")
+    suspend fun getOwnersWithUnits(ownerId: Long): List<OwnersUnitsCrossRef>
 
 
 }

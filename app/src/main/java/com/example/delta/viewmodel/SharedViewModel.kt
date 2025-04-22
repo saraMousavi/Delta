@@ -5,11 +5,15 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.AndroidViewModel
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import kotlin.contracts.contract
@@ -68,7 +73,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var costsList = mutableStateOf(listOf<Costs>())
     var charge = mutableStateOf(listOf<Costs>())
     var unitsList = mutableStateListOf<Units>()
-
+    var newOwnerId: Long by mutableLongStateOf(0L)
+    var newTenantId: Long by mutableLongStateOf(0L)
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
 
     // These represent the selected items from your dropdowns
@@ -131,6 +137,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(tenants)
     }.flowOn(Dispatchers.IO)
 
+    fun getUnitsForOwners(ownerId: Long): Flow<List<Units>> = flow {
+        val owners = ownersDao.getUnitsForOwner(ownerId)
+        emit(owners)
+    }.flowOn(Dispatchers.IO)
+
 
     fun loadBuildingsWithTypesAndUsages() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -174,7 +185,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Save owner
-                val ownerId = ownersDao.insertOwners(owner)
+                 newOwnerId = ownersDao.insertOwners(owner)
 
                 // Save units and get their IDs
                 val savedUnits = units.map { unit ->
@@ -184,7 +195,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
                 // Create cross-references
                 savedUnits.forEach { unit ->
-                    ownersDao.insertOwnerUnitCrossRef(OwnersUnitsCrossRef(ownerId, unit.unitId))
+                    ownersDao.insertOwnerUnitCrossRef(OwnersUnitsCrossRef(newOwnerId, unit.unitId))
                 }
 
                 // Load owners
@@ -198,10 +209,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun saveTenantWithUnit(tenant: Tenants, unit: Units) {
         viewModelScope.launch(Dispatchers.IO) {
             try { // Ensure in IO thread
-                val tenantId = tenantsDao.insertTenants(tenant)
-
+//                newTenantId = tenantsDao.insertTenants(tenant)
                 val tenantCrossRef = TenantsUnitsCrossRef(
-                    tenantId,
+                    newTenantId,
                     unit.unitId,
                     tenant.startDate,
                     tenant.endDate,
@@ -212,6 +222,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Retrieve active relationship immediately
                 val relationship =
                     tenantsDao.getActiveTenantUnitRelationships(unit.unitId, "فعال")
+                Log.d("relation", relationship.toString())
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { Log.d("Unknown error", e.message.toString()) }
@@ -251,8 +262,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     unit.buildingId = buildingId
                     val insertedUnit = unitsDao.insertUnit(unit)
                     //create deep copy
-                    Log.d("sameCosts", sameCosts.toString())
-                    if(sameCosts) {
+                    if (sameCosts) {
                         val costCopies = costsList.value.map { it.copy(buildingId = buildingId) }
                         costCopies.forEach { cost ->
                             costsDao.insertCost(cost).also { costId ->
@@ -264,7 +274,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     val chargeCopies = charge.value.map { it.copy(buildingId = buildingId) }
                     chargeCopies.forEach { cost ->
                         costsDao.insertCost(cost.copy(buildingId = buildingId)).also { costId ->
-                            insertDebtPerChargeForUnit(insertedUnit, cost, tenantsUnitsCrossRef, costId)
+                            insertDebtPerChargeForUnit(
+                                insertedUnit,
+                                cost,
+                                tenantsUnitsCrossRef,
+                                costId
+                            )
                         }
                     }
                 }
@@ -333,6 +348,139 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun deleteOwner(
+        owner: Owners,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                ownersDao.deleteOwners(owner)
+                ownersDao.deleteOwnersWithUnits(owner.ownerId)
+                withContext(Dispatchers.Main) {
+                    ownersList.remove(owner)
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.message ?: "Unknown error") }
+            }
+        }
+    }
+
+
+    fun updateOwnerWithUnits(owner: Owners, units: List<Units>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Update Owner
+                ownersDao.updateOwner(owner)
+
+                // Delete Existing Relationships
+                ownersDao.deleteOwnersWithUnits(owner.ownerId)
+
+                // Insert New Relationships
+                Log.d("units for rel", units.toString())
+                units.forEach { unit ->
+                    ownersDao.insertOwnerUnitCrossRef(
+                        OwnersUnitsCrossRef(
+                            ownerId = owner.ownerId,
+                            unitId = unit.unitId
+                        )
+                    )
+                }
+
+                // Update StateFlow
+                withContext(Dispatchers.Main) {
+                    ownersList.replaceAll { if (it.ownerId == owner.ownerId) owner else it }
+                    Log.d("new ownersList", ownersList.toString())
+                }
+
+            } catch (e: Exception) {
+                Log.e("UpdateError", "Failed to update owner with units: ${e.message}")
+            }
+        }
+    }
+
+
+
+    fun getUnitForTenant(tenant: Tenants): Units? {
+        return tenantUnitMap[tenant]
+    }
+    fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
+        val tenant = tenantsDao.getUnitForTenant(tenantId)
+        emit(tenant)
+    }.flowOn(Dispatchers.IO)
+
+    fun updateTenantWithUnit(tenant: Tenants, unit: Units?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            Log.d("tenant for update", tenant.toString())
+            tenantsDao.updateTenant(tenant)
+
+            if (unit != null) {
+                updateTenantUnitCrossRef(tenant, unit)
+            } else {
+                // Handle case where tenant is disassociated from unit
+                tenantsDao.deleteTenantUnitCrossRef(tenant.tenantId)
+            }
+
+            // Update StateFlows
+            withContext(Dispatchers.Main) {
+                tenantsList.value.map {
+                    if (it.tenantId == tenant.tenantId) tenant else it
+                }
+                // Update tenantUnitMap as well
+                if (unit != null) {
+                    tenantUnitMap[tenant] = unit
+                } else {
+                    tenantUnitMap.remove(tenant)
+                }
+            }
+        }
+    }
+
+    private suspend fun updateTenantUnitCrossRef(tenant: Tenants, unit: Units) {
+        // Check if relationship exists
+        val existingCrossRef = tenantsDao.getTenantUnitCrossRef(tenant.tenantId)
+
+        if (existingCrossRef != null) {
+            // Update relationship
+            val updatedCrossRef = existingCrossRef.copy(unitId = unit.unitId)
+            tenantsDao.updateTenantUnitCrossRef(updatedCrossRef)
+        } else {
+            // Create relationship
+            tenantsDao.insertTenantUnitCrossRef(
+                TenantsUnitsCrossRef(
+                    tenantId = tenant.tenantId,
+                    unitId = unit.unitId,
+                    startDate = tenant.startDate,
+                    endDate = tenant.endDate,
+                    status = tenant.status
+                )
+            )
+        }
+    }
+
+    fun deleteTenant(
+        tenant: Tenants,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                tenantsDao.deleteTenants(tenant)
+                withContext(Dispatchers.Main) {
+                    tenantsList.value = tenantsList.value.filter { it.tenantId != tenant.tenantId }
+                    onSuccess()
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.message ?: "Unknown error") }
+            }
+        }
+
+    }
+
+
     fun deleteBuildingWithRelations(
         buildingId: Long,
         onSuccess: () -> Unit,
@@ -376,19 +524,34 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addTenant(tenant: Tenants) {
         viewModelScope.launch(Dispatchers.IO) {
-//            tenantsDao.insertTenants(tenant)
-            tenantsList.value = tenantsList.value + tenant
+            newTenantId = tenantsDao.insertTenants(tenant)
+            Log.d("newTenantId", newTenantId.toString())
+            val updatedTenant = tenant.copy(tenantId = newTenantId)
+            tenantsList.value = tenantsList.value + updatedTenant
+            Log.d("tenantsList adtenant", tenantsList.value.toString())
         }
     }
 
+    // In SharedViewModel
     fun addOwner(owner: Owners) {
         viewModelScope.launch(Dispatchers.IO) {
-            ownersDao.insertOwners(owner)
+             ownersDao.insertOwners(owner) // Get the generated ID
+
+            // Update the owner with the new ID
+            val updatedOwner = owner.copy(ownerId = newOwnerId)
+            Log.d("updatedOwner", updatedOwner.toString())
+
             withContext(Dispatchers.Main) {
-                ownersList.add(owner)
+                Log.d("owner save", updatedOwner.toString())
+                ownersList.add(updatedOwner)
+                // Log all owners in the list for debugging
+                ownersList.forEach { existingOwner ->
+                    Log.d("owners in list", existingOwner.toString())
+                }
             }
         }
     }
+
 
     fun loadCosts() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -426,7 +589,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun insertDebtPerChargeForUnit(insertedUnit: Long, cost: Costs, tenantsUnitsCrossRef: List<TenantsUnitsCrossRef>, costId: Long) {
+    private fun insertDebtPerChargeForUnit(
+        insertedUnit: Long,
+        cost: Costs,
+        tenantsUnitsCrossRef: List<TenantsUnitsCrossRef>,
+        costId: Long
+    ) {
         try {
             // Determine amount
             val amount = when {
@@ -452,7 +620,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                     val tenant = tenantsDao.getTenant(relationship.tenantId)
 
                                     val result = tenant.numberOfTenants.toInt() *
-                                            (chargeAmount.persianToEnglishDigits().toDoubleOrNull() ?: 0.0)
+                                            (chargeAmount.persianToEnglishDigits().toDoubleOrNull()
+                                                ?: 0.0)
                                     result
                                 } else {
                                     0.0

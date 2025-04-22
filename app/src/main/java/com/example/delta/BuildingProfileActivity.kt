@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -484,7 +485,19 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(16.dp)
             ) {
                 items(tenants) { tenant ->
-                    TenantItem(tenants = tenant)
+                    TenantItem(tenants = tenant,
+                        sharedViewModel = sharedViewModel,
+                        onDelete = {
+                            sharedViewModel.deleteTenant(
+                                tenant = tenant,
+                                onSuccess = {
+                                    Toast.makeText(context, context.getString(R.string.success_delete), Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { error ->
+                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        })
                 }
             }
 
@@ -583,7 +596,19 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(16.dp)
             ) {
                 items(owners) { owner ->
-                    OwnerItem(owner = owner)
+                    OwnerItem(owner = owner,
+                        sharedViewModel = sharedViewModel,
+                        onDelete = {
+                            sharedViewModel.deleteOwner(
+                                owner = owner,
+                                onSuccess = {
+                                    Toast.makeText(context, context.getString(R.string.success_delete), Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { error ->
+                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        })
                 }
             }
 
