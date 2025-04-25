@@ -145,7 +145,8 @@ fun BuildingList(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .padding(16.dp)
+            .padding(16.dp, bottom = 32.dp)
+
     ) {
         items(buildingsWithTypesAndUsages) { buildingWithTypesAndUsages ->
             BuildingCard(

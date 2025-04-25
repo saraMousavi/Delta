@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CostDao {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCost(costs: Costs): Long
 
     @Delete()
@@ -31,6 +31,10 @@ interface CostDao {
 
     @Query("SELECT * FROM costs")
     suspend fun getCosts(): List<Costs>
+
+    @Query("SELECT * FROM costs WHERE buildingId IS NULL")
+    suspend fun getCostsWithNullBuildingId(): List<Costs>
+
 
 
     @Query("DELETE FROM costs WHERE buildingId = :buildingId")

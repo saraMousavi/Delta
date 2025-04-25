@@ -79,13 +79,14 @@ class MyApplication : Application() {
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), buildingId = 0, period = listOf(getString(R.string.monthly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.mortgage), buildingId = 0, period = listOf(getString(R.string.yearly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.rent), buildingId = 0, period = listOf(getString(R.string.monthly)), amountUnit = listOf(getString(R.string.milion_toman)), paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.charge), period = listOf(getString(R.string.monthly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.mortgage), period = listOf(getString(R.string.yearly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.rent), period = listOf(getString(R.string.monthly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
                  )
                 defaultCosts.forEach {
                     Log.d("MyApplication", "Inserting Costs: $it")
                     costsDao.insertCost(it)
+                    Log.d("Fix Cost", costsDao.getCosts().toString())
                 }
             } else {
                 Log.d("MyApplication", "Costs already exist")

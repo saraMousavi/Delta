@@ -351,11 +351,12 @@ fun <T> ExposedDropdownMenuBoxExample(
     var expanded by remember { mutableStateOf(false) }
     AppTheme {
         ExposedDropdownMenuBox(
+            modifier = modifier,
             expanded = expanded,
             onExpandedChange = { expanded = it }
         ) {
             OutlinedTextField(
-                modifier = modifier.fillMaxWidth().menuAnchor(),
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
                 readOnly = true,
                 value = selectedItem?.let { itemLabel(it) } ?: "",
                 onValueChange = { },

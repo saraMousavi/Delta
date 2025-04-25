@@ -12,8 +12,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +37,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.example.delta.data.entity.Costs
@@ -42,6 +45,7 @@ import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
 import com.example.delta.factory.SharedViewModelFactory
+import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.SharedViewModel
@@ -51,6 +55,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.text.NumberFormat
+import java.util.Locale
 
 
 class BuildingFormActivity : ComponentActivity() {
@@ -284,7 +290,8 @@ fun BuildingInfoPage(
                         }
                     },
                     label = context.getString(R.string.building_usage),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth(1f),
                     itemLabel = { it.buildingUsageName }
                 )
             }
@@ -521,7 +528,6 @@ fun OwnersPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            Log.d("sharedViewModel.ownersList", sharedViewModel.ownersList.toString())
             items(sharedViewModel.ownersList) { owner ->
                 OwnerItem(
                     owner = owner,
@@ -974,7 +980,6 @@ fun TenantsPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            Log.d("sharedViewModel.tenantsList.value", sharedViewModel.tenantsList.value.toString())
             items(sharedViewModel.tenantsList.value) { tenant ->
                 TenantItem(
                     tenants = tenant,
@@ -1047,7 +1052,6 @@ fun TenantsPage(
                 onDismiss = { showTenantDialog = false },
                 onAddTenant = { newTenant, selectedUnit ->
                     lifecycleOwner.lifecycleScope.launch {
-                        sharedViewModel.addTenant(newTenant)
                         sharedViewModel.saveTenantWithUnit(newTenant, selectedUnit)
                         showTenantDialog = false
                     }
@@ -1225,7 +1229,6 @@ fun TenantItem(
         }
         if (showEditDialog) {
             tenants.let { tenant ->
-                Log.d("tenant in dialog", tenant.toString())
                 EditTenantDialog(
                     tenant = tenant,
                     units = sharedViewModel.unitsList,
@@ -1453,7 +1456,6 @@ fun TenantDialog(
                     )
                     selectedUnit?.let {
                         onAddTenant(newTenant, it)
-                        sharedViewModel.addTenantUnits(newTenant, it)
                     }
                     onDismiss()
                 },
@@ -1624,7 +1626,6 @@ fun UnitPage(
             onAddUnit = { newUnit ->
                 lifecycleOwner.lifecycleScope.launch {
                     val unitId = unitsViewModel.insertUnit(newUnit)
-                    Log.d("unitId", unitId.toString())
                     sharedViewModel.unitsList.add(newUnit.copy(unitId = unitId)) // Update the unitId
                     showUnitDialog = false
                 }
@@ -1668,7 +1669,6 @@ fun UnitItem(unit: Units, sharedViewModel: SharedViewModel, unitsViewModel: Unit
             onUpdateUnit = { updatedUnit ->
                 lifecycleOwner.lifecycleScope.launch {
                     val unitId = unitsViewModel.updateUnit(updatedUnit)
-                    Log.d("unitId", unitId.toString())
                     val index =
                         sharedViewModel.unitsList.indexOfFirst { it.unitId == updatedUnit.unitId }
                     if (index != -1) {
@@ -1811,7 +1811,6 @@ fun UnitDialog(
                         numberOfParking = numberOfParking
                     )
                     onAddUnit(newUnit)
-                    Log.d("newUnit", newUnit.toString())
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color))
@@ -1951,6 +1950,11 @@ fun CostPage(
 ) {
     val context = LocalContext.current
     var showUnitCostDialog by remember { mutableStateOf<Units?>(null) } // Track which unit dialog to show
+    val amount = sharedViewModel.fixedAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
+    val amountInWords = NumberCommaTransformation().numberToWords(context, amount)
+
+    val chargeAmount = sharedViewModel.chargeAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
+    val chargeAmountInWords = NumberCommaTransformation().numberToWords(context, chargeAmount)
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top App Bar with Back Button
@@ -1960,14 +1964,6 @@ fun CostPage(
                     text = context.getString(R.string.costs),
                     style = MaterialTheme.typography.bodyLarge
                 )
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = context.getString(R.string.back)
-                    )
-                }
             }
         )
         Row(
@@ -1986,19 +1982,39 @@ fun CostPage(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f)
             )
-
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
             // Only show when automaticCharge is FALSE
             if (!sharedViewModel.automaticCharge) {
-                OutlinedTextField(
-                    value = sharedViewModel.fixedAmount,
-                    onValueChange = { sharedViewModel.updateFixedAmount(it) },
-                    label = { Text(context.getString(R.string.fixed_amount)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                Column(
                     modifier = Modifier
-                        .weight(2f)
-                        .padding(start = 8.dp),
-                    singleLine = true
-                )
+                        .padding(bottom = 4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = sharedViewModel.fixedAmount,
+                        onValueChange = { sharedViewModel.updateFixedAmountFormat(it) },
+                        visualTransformation = NumberCommaTransformation(),
+                        label = { Text(context.getString(R.string.fixed_amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    if (amount > 0) {
+                        Text(
+                            text = "$amountInWords  ${context.getString(R.string.toman)}",
+                            modifier = Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(context.getColor(R.color.grey))
+                        )
+
+                    }
+                }
+
             }
         }
 
@@ -2025,13 +2041,30 @@ fun CostPage(
                     singleSelection = true
                 )
                 Spacer(Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = sharedViewModel.chargeAmount,
-                    onValueChange = { sharedViewModel.chargeAmount = it },
-                    label = { Text(context.getString(R.string.base_amount)) },
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = sharedViewModel.chargeAmount,
+                        onValueChange = { sharedViewModel.updateChargeAmountFormat(it) },
+                        visualTransformation = NumberCommaTransformation(),
+                        label = { Text(context.getString(R.string.base_amount)) },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
 //                    modifier = Modifier.fillMaxWidth()
-                )
+                    )
+                    if (chargeAmount > 0) {
+                        Text(
+                            text = "$chargeAmountInWords  ${context.getString(R.string.toman)}",
+                            modifier = Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(context.getColor(R.color.grey))
+                        )
+
+                    }
+                }
+
             }
         }
 
@@ -2046,7 +2079,11 @@ fun CostPage(
         ) {
             Checkbox(
                 checked = sharedViewModel.sameCosts,
-                onCheckedChange = { sharedViewModel.sameCosts = it }
+                onCheckedChange = {
+                    sharedViewModel.sameCosts = it
+                    sharedViewModel.clearAllCostAmount()
+                    sharedViewModel.clearDebtList()
+                }
             )
             Text(
                 text = context.getString(R.string.all_units_same_costs),
@@ -2063,8 +2100,7 @@ fun CostPage(
                 items(sharedViewModel.costsList.value) { cost ->
                     CostItem(
                         cost = cost,
-                        sharedViewModel = sharedViewModel,
-                        dialogFlag = false
+                        sharedViewModel = sharedViewModel
                     )
 
                 }
@@ -2125,12 +2161,8 @@ fun CostPage(
         showUnitCostDialog?.let { selectedUnit ->
             UnitCostDialog(
                 unit = selectedUnit, sharedViewModel = sharedViewModel,
-                onAddDebt = { selectedUnits, costs ->
-                    costs.forEach { cost ->
-                        sharedViewModel.insertDebtPerCostForUnit(selectedUnits, cost, cost.id)
-                    }
+                onSave = {
                     showUnitCostDialog = null
-
                 },
                 onDismiss = { showUnitCostDialog = null })
         }
@@ -2140,28 +2172,47 @@ fun CostPage(
 @Composable
 fun CostItem(
     cost: Costs,
-    sharedViewModel: SharedViewModel,
-    dialogFlag: Boolean
+    sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
-    // Local amount state
+    val transformation = remember { NumberCommaTransformation() }
+
+    // State for raw input (digits only)
     var amount by remember { mutableStateOf(cost.tempAmount.toString()) }
+
+
+    // State for formatted display
+    val displayAmount = remember(amount) {
+        derivedStateOf {
+            amount.toLongOrNull()?.let {
+                NumberFormat.getNumberInstance(Locale.US).format(it)
+            } ?: ""
+        }
+    }
+
+    // Convert to words
+    val amountInWords = remember(amount) {
+        derivedStateOf {
+            transformation.numberToWords(
+                context,
+                amount.toLongOrNull() ?: 0L
+            )
+        }
+    }
+
+
     val coroutineScope = rememberCoroutineScope()
+
     Card(
-        modifier = if (dialogFlag) Modifier
-            .fillMaxWidth()
-            .padding(0.dp) else Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
-        elevation = if (dialogFlag) CardDefaults.cardElevation(defaultElevation = 0.dp)
-        else CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = if (dialogFlag) RoundedCornerShape(0.dp) else RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = if (dialogFlag) Modifier
-                .fillMaxWidth()
-                .padding(0.dp) else Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
         ) {
@@ -2177,89 +2228,89 @@ fun CostItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(start = 4.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Period Dropdown (40% width)
+                // Period Dropdown (30%)
                 ExposedDropdownMenuBoxExample(
                     items = sharedViewModel.periods,
                     selectedItem = cost.period.firstOrNull() ?: "",
-                    onItemSelected = {
-                        sharedViewModel.updateCostPeriod(cost, it) //call it
-                    },
+                    onItemSelected = { sharedViewModel.updateCostPeriod(cost, it) },
                     label = context.getString(R.string.period),
-                    modifier = Modifier.fillMaxWidth(1f / 3f),
+                    modifier = Modifier.weight(0.4f),
                     itemLabel = { it }
                 )
 
-                // Amount Input (50% width with inner padding)
+                Spacer(Modifier.width(4.dp))
 
-                OutlinedTextField(
-                    value = amount, // Bind to cost.amount
-                    onValueChange = { newValue ->
-                        val filteredValue = newValue.filter { it.isDigit() || it == '.' }
-                        amount = filteredValue
-
-                        // Debounce Function Call
-                        coroutineScope.launch {
-                            delay(500L) // Debounce for 500ms
-                            // Convert amount to double and Update the data in DB
-                            val newAmount =
-                                filteredValue.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
-                            sharedViewModel.updateCostAmount(cost, newAmount) // Call to update
-                        }
-                    },
-                    label = { Text(context.getString(R.string.amount)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier
-                        .fillMaxWidth(1f / 3f),
-                    singleLine = true
-                )
-
-                // Amount Unit Dropdown (40% width)
-                ExposedDropdownMenuBoxExample(
-                    items = sharedViewModel.amountUnitOptions,
-                    selectedItem = cost.amountUnit.firstOrNull() ?: "",
-                    onItemSelected = {
-//                        onAmountMoneyChange(cost, it) // Modified
-                        sharedViewModel.updateCostAmountMoney(cost, it) //call it
-                    },
-                    label = context.getString(R.string.amount_unit),
-                    modifier = Modifier.fillMaxWidth(1f),
-                    itemLabel = { it }
-                )
+                // Amount Section (70%)
+                Column(
+                    modifier = Modifier.weight(0.6f)
+                ) {
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = { newValue ->
+                            val filtered = newValue.filter { it.isDigit() }
+                            amount = newValue.filter { it.isDigit() }
+                            coroutineScope.launch {
+                                delay(500L)
+                                sharedViewModel.updateCostAmount(
+                                    cost,
+                                    filtered.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
+                                )
+                            }
+                        },
+                        label = { Text(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        visualTransformation = transformation,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = " ${amountInWords.value} ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(context.getColor(R.color.grey)),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
     }
 }
+
 
 @Composable
 fun UnitCostDialog(
     unit: Units,
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
-    onAddDebt: (Long, List<Costs>) -> Unit
+    onSave: () -> Unit
+//    onAddDebt: (Long, List<Costs>) -> Unit
 ) {
     val context = LocalContext.current
     // Local amount state
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false), // Critical for padding control
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(2.dp), // Remove outer padding
         title = {
             Text(
                 text = context.getString(R.string.costs),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(0.dp)
             )
         },
         text = {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(0.dp)
             ) {
                 items(sharedViewModel.costsList.value) { cost ->
                     CostItem(
                         cost = cost,
-                        sharedViewModel = sharedViewModel,
-                        dialogFlag = true
+                        sharedViewModel = sharedViewModel
                     )
 
                 }
@@ -2268,7 +2319,9 @@ fun UnitCostDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onAddDebt(unit.unitId, sharedViewModel.costsList.value)
+                    sharedViewModel.addTempDebt(unit.unitId)
+                    onSave()
+//                    onAddDebt(unit.unitId, sharedViewModel.costsList.value)
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
@@ -2348,7 +2401,8 @@ fun EditOwnerDialog(
     var email by remember { mutableStateOf(owner.email) }
     var mobileNumber by remember { mutableStateOf(owner.mobileNumber) }
 
-    val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner.ownerId).collectAsState(initial = emptyList())
+    val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner.ownerId)
+        .collectAsState(initial = emptyList())
 
     // Local selection state
     val selectedUnits = remember { mutableStateListOf<Units>() }
@@ -2454,22 +2508,22 @@ fun EditOwnerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                Log.d(" owner in onclick",  owner.toString())
-                val updatedOwner = owner.copy(
-                    firstName = firstName,
-                    lastName = lastName,
-                    address = address,
-                    email = email,
-                    phoneNumber = phone,
-                    mobileNumber = mobileNumber,
-                    birthday = ""
+            Button(
+                onClick = {
+                    val updatedOwner = owner.copy(
+                        firstName = firstName,
+                        lastName = lastName,
+                        address = address,
+                        email = email,
+                        phoneNumber = phone,
+                        mobileNumber = mobileNumber,
+                        birthday = ""
+                    )
+                    onSave(updatedOwner, selectedUnits.toList())
+                }, colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )
-                Log.d("selectedUnits.toList()", selectedUnits.toList().toString())
-                onSave(updatedOwner, selectedUnits.toList())
-            }, colors = ButtonDefaults.buttonColors(
-                containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-            )) {
+            ) {
                 Text(
                     text = context.getString(R.string.edit),
                     style = MaterialTheme.typography.bodyLarge
@@ -2516,8 +2570,6 @@ fun EditTenantDialog(
     var selectedUnit by remember {
         mutableStateOf(sharedViewModel.getUnitForTenant(tenant))
     }
-    Log.d("selectedUnit", selectedUnit.toString())
-    Log.d("tenant", tenant.toString())
 
     val dismissDatePicker: () -> Unit = {
         showStartDatePicker = false
@@ -2735,4 +2787,7 @@ fun EditTenantDialog(
         }
     )
 }
+
+// Helper extension
+
 

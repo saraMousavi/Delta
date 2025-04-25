@@ -3,6 +3,7 @@ package com.example.delta.data.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.ForeignKey.Companion.CASCADE
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -20,6 +21,12 @@ import androidx.room.PrimaryKey
             parentColumns = ["unitId"],
             childColumns = ["unitId"],
             onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = Buildings::class,
+            parentColumns = ["buildingId"],
+            childColumns = ["buildingId"],
+            onDelete = CASCADE
         )
     ],
     indices = [
@@ -34,6 +41,8 @@ data class Debts(
     @ColumnInfo(name = "unitId") val unitId: Long,
 
     @ColumnInfo(name = "costId") val costId: Long, // Foreign key referencing Costs
+
+    @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign Key referencing Buildings
 
     @ColumnInfo(name = "description") val description: String, // Description of the debt
 

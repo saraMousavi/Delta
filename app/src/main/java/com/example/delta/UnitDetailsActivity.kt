@@ -126,20 +126,20 @@ class UnitDetailsActivity : ComponentActivity() {
 
     @Composable
     fun DebtSection(unitId: Long) {
-        val debts by debtsViewModel.fetchAndProcessDebts(unitId).collectAsState(initial = emptyList())
-
-        Column {
-            if (debts.isEmpty()) {
-                Text("No debts found.")
-            } else {
-                debts.forEach { debt ->
-                    DebtItem(debt = debt, onPayment = {
-                        debt.paymentFlag = true
-                        debtsViewModel.updateDebt(debt)
-                    })
-                }
-            }
-        }
+//        val debts by debtsViewModel.fetchAndProcessDebts(unitId).collectAsState(initial = emptyList())
+//
+//        Column {
+//            if (debts.isEmpty()) {
+//                Text("No debts found.")
+//            } else {
+//                debts.forEach { debt ->
+//                    DebtItem(debt = debt, onPayment = {
+//                        debt.paymentFlag = true
+//                        debtsViewModel.updateDebt(debt)
+//                    })
+//                }
+//            }
+//        }
     }
 
     @Composable

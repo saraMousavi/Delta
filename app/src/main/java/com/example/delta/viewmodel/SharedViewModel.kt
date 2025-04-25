@@ -1,39 +1,28 @@
 package com.example.delta.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.delta.R
+import com.example.delta.data.CostType
 import com.example.delta.data.entity.*
 import com.example.delta.data.model.AppDatabase
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import kotlin.contracts.contract
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -73,6 +62,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var costsList = mutableStateOf(listOf<Costs>())
     var charge = mutableStateOf(listOf<Costs>())
     var unitsList = mutableStateListOf<Units>()
+    var debtsList = mutableStateListOf<Debts>()
     var newOwnerId: Long by mutableLongStateOf(0L)
     var newTenantId: Long by mutableLongStateOf(0L)
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
@@ -88,12 +78,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     val ownerUnitMap = mutableMapOf<Owners, List<Units>>()
     val tenantUnitMap = mutableMapOf<Tenants, Units>()
 
-    //        private set
-    var defaultCosts = mutableStateListOf<Costs>()
-        private set
-
-    //Temporary costs list to store updated amounts
-    var tempCosts = mutableStateListOf<Costs>()
 
     var automaticCharge by mutableStateOf(false)
     var sameCosts by mutableStateOf(true)
@@ -103,10 +87,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     var chargeAmount by mutableStateOf("")
 
-    fun updateFixedAmount(newValue: String) {
-        Log.d("newValue fixedAmount", newValue)
-        fixedAmount = newValue
-    }
 
     // Options Lists
     val periods = listOf("هفته", "ماه", "سال")
@@ -122,6 +102,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
+    fun getDebtsForUnit(unitId: Long, costId: Long): Flow<Debts?> = flow {
+        val costs = debtsDao.getDebtsForUnit(unitId, costId)
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun getDebtsOneUnit(unitId: Long): Flow<List<Debts>> = flow {
+        val debts = debtsDao.getDebtsOneUnit(unitId)
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getAllDebts(): Flow<List<Debts>> = flow {
+        val debts = debtsDao.getAllDebts()
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
     fun getUnitsForBuilding(buildingId: Long): Flow<List<Units>> = flow {
         val units = unitsDao.getUnitsByBuildingId(buildingId)
         emit(units)
@@ -135,6 +131,17 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = flow {
         val tenants = tenantsDao.getTenantsForBuilding(buildingId)
         emit(tenants)
+    }.flowOn(Dispatchers.IO)
+
+    fun getAllTenantUnitRelationships(): Flow<List<TenantsUnitsCrossRef>> = flow {
+        val tenantsUnitsCrossRef = tenantsDao.getAllTenantUnitRelationships()
+        emit(tenantsUnitsCrossRef)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getAllUnits(): Flow<List<Units>> = flow {
+        val units = unitsDao.getUnits()
+        emit(units)
     }.flowOn(Dispatchers.IO)
 
     fun getUnitsForOwners(ownerId: Long): Flow<List<Units>> = flow {
@@ -185,7 +192,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Save owner
-                 newOwnerId = ownersDao.insertOwners(owner)
+                newOwnerId = ownersDao.insertOwners(owner)
 
                 // Save units and get their IDs
                 val savedUnits = units.map { unit ->
@@ -210,6 +217,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try { // Ensure in IO thread
 //                newTenantId = tenantsDao.insertTenants(tenant)
+                newTenantId = tenantsDao.insertTenants(tenant)
+                val updatedTenant = tenant.copy(tenantId = newTenantId)
+                tenantUnitMap[updatedTenant] = unit // Use tenantId as the key
+                withContext(Dispatchers.Main) {
+                    tenantsList.value = tenantsList.value + updatedTenant
+                }
                 val tenantCrossRef = TenantsUnitsCrossRef(
                     newTenantId,
                     unit.unitId,
@@ -222,7 +235,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Retrieve active relationship immediately
                 val relationship =
                     tenantsDao.getActiveTenantUnitRelationships(unit.unitId, "فعال")
-                Log.d("relation", relationship.toString())
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { Log.d("Unknown error", e.message.toString()) }
@@ -257,34 +269,31 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 )
 
-                // Save units
                 unitsList.forEach { unit ->
-                    unit.buildingId = buildingId
-                    val insertedUnit = unitsDao.insertUnit(unit)
-                    //create deep copy
+                    val unitWithBuildingId = unit.copy(buildingId = buildingId)
+                    val insertedUnit = unitsDao.insertUnit(unitWithBuildingId)
+
+                    // Insert regular costs
                     if (sameCosts) {
-                        val costCopies = costsList.value.map { it.copy(buildingId = buildingId) }
-                        costCopies.forEach { cost ->
-                            costsDao.insertCost(cost).also { costId ->
-                                insertDebtPerCostForUnit(insertedUnit, cost, costId)
-                            }
-                        }
+                        insertCostsToDebtsForUnit(
+                            buildingId = buildingId,
+                            unitId = insertedUnit,
+                            costType = CostType.REGULAR,
+                            tenantsUnitsCrossRef = emptyList()
+                        )
                     }
 
-                    val chargeCopies = charge.value.map { it.copy(buildingId = buildingId) }
-                    chargeCopies.forEach { cost ->
-                        costsDao.insertCost(cost.copy(buildingId = buildingId)).also { costId ->
-                            insertDebtPerChargeForUnit(
-                                insertedUnit,
-                                cost,
-                                tenantsUnitsCrossRef,
-                                costId
-                            )
-                        }
-                    }
+                    // Insert charges
+                    insertCostsToDebtsForUnit(
+                        buildingId = buildingId,
+                        unitId = insertedUnit,
+                        costType = CostType.CHARGE,
+                        tenantsUnitsCrossRef = tenantsUnitsCrossRef
+                    )
                 }
-
-
+                if (!sameCosts) {
+                    insertTempDebtsForEachUnit(buildingId)
+                }
                 // Save owners and their unit relationships
                 ownersList.forEach { owner ->
                     val ownerId = ownersDao.insertOwners(owner)
@@ -299,7 +308,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Save tenants and their unit relationships
                 tenantsList.value.forEach { tenant ->
                     val tenantId = tenantsDao.insertTenants(tenant)
-                    val tenantUnit = tenantUnitMap[tenant] ?: return@forEach
+                    val tenantUnit: Units? = tenantUnitMap[tenant]
+                    if (tenantUnit == null) {
+                        // handle missing unit, e.g. skip or log
+                        return@forEach
+                    }
                     tenantsDao.insertTenantUnitCrossRef(
                         TenantsUnitsCrossRef(
                             tenantId,
@@ -322,24 +335,180 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun insertTempDebtsForEachUnit(
+        buildingId: Long,
+    ) {
+        val nextMonthDate = getNextMonthSameDaySafe().persianShortDate
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                debtsList.forEach { eachDebt ->
+                    val debt = Debts(
+                        unitId = eachDebt.unitId,
+                        costId = eachDebt.costId, // Foreign key referencing Costs
+                        buildingId = buildingId,
+                        description = eachDebt.description, // Description of the debt
+                        dueDate = nextMonthDate.toString(), // Due date of the debt
+                        amount = eachDebt.amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0,
+                        paymentFlag = false // Indicates whether the debt has been paid
+                    )
+                    debtsDao.insertDebt(debt)
+                }
+            } catch (e: Exception){
+                Log.e("Insert Debt Error", e.message.toString())
+            }
+        }
+
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun insertCostsToDebtsForUnit(
+        buildingId: Long,
+        unitId: Long,
+        costType: CostType,
+        tenantsUnitsCrossRef: List<TenantsUnitsCrossRef>
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                when (costType) {
+                    CostType.REGULAR -> {
+                        costsList.value.map {
+                            it.copy(
+                                id = 0, // Reset for new building
+                                buildingId = buildingId
+                            )
+                        }.forEach { cost ->
+                            val costId = costsDao.insertCost(cost)
+                            insertDebtPerCostForUnit(buildingId, unitId, cost, costId)
+                            delay(500)
+                        }
+                    }
+
+                    CostType.CHARGE -> {
+                        charge.value.map {
+                            it.copy(
+                                id = 0, // Reset for new building
+                                buildingId = buildingId
+                            )
+                        }.forEach { charge ->
+                            val costId = costsDao.insertCost(charge)
+                            insertDebtPerChargeForUnit(
+                                buildingId = buildingId,
+                                insertedUnit = unitId,
+                                charge = charge,
+                                costId = costId,
+                                tenantsUnitsCrossRef = tenantsUnitsCrossRef
+                            )
+                            delay(500)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("INSERT_ERROR", "Failed for unit $unitId: ${e.message}")
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun insertDebtPerChargeForUnit(
+        buildingId: Long,
+        insertedUnit: Long,
+        charge: Costs,
+        tenantsUnitsCrossRef: List<TenantsUnitsCrossRef>,
+        costId: Long
+    ) {
+        try {
+
+            viewModelScope.launch(Dispatchers.IO) {
+                val amount = when {
+                    automaticCharge -> {
+                        when {
+                            selectedChargeType.contains("متراژ") -> {
+                                val area = unitsDao.getUnit(insertedUnit).area
+                                val result = area.toInt() * (chargeAmount.persianToEnglishDigits()
+                                    .toDoubleOrNull() ?: 0.0)
+                                Log.d("AREA_CALC", "Result: $result")
+                                result // Explicit return
+                            }
+
+                            selectedChargeType.contains("نفرات") -> {
+                                try {
+
+                                    // Find the relationship for the current unit
+                                    val relationship = tenantsUnitsCrossRef.firstOrNull {
+                                        it.unitId == insertedUnit && it.status == "فعال"
+                                    }
+
+                                    if (relationship != null) {
+                                        val tenant = tenantsDao.getTenant(relationship.tenantId)
+                                        val result = tenant.numberOfTenants.toInt() *
+                                                (chargeAmount.persianToEnglishDigits()
+                                                    .toDoubleOrNull()
+                                                    ?: 0.0)
+                                        result
+                                    } else {
+                                        0.0
+                                    }
+                                } catch (e: Exception) {
+                                    0.0
+                                }
+                            }
+
+
+                            else -> 0.0
+                        }
+                    }
+
+                    else -> fixedAmount.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
+                }
+                val englishAmount = amount
+
+                val debt = Debts(
+                    unitId = insertedUnit,
+                    costId = costId,
+                    buildingId = buildingId,
+                    description = charge.costName,
+                    dueDate = getNextMonthSameDaySafe().persianShortDate,
+                    amount = englishAmount,
+                    paymentFlag = false
+                )
+                debtsDao.insertDebt(debt)
+            }
+        } catch (e: Exception) {
+            Log.e("CHARGE_DEBT", "Insert failed: ${e.message}")
+        }
+    }
+
+
     //function to insert and adding try and catch to get log if there are error
     @RequiresApi(Build.VERSION_CODES.O)
-    fun insertDebtPerCostForUnit(insertedUnit: Long, cost: Costs, costId: Long) {
+    fun insertDebtPerCostForUnit(
+        buildingId: Long,
+        insertedUnit: Long,
+        cost: Costs, costId: Long
+    ) {
         try {
-            val nextMonthDate = getNextMonthSameDaySafe().persianShortDate
-            // Usage
-            val amount = cost.tempAmount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0
-            val debt = Debts(
-                unitId = insertedUnit,
-                costId = costId, // Foreign key referencing Costs
-                description = cost.costName, // Description of the debt
-                dueDate = nextMonthDate.toString(), // Due date of the debt
-                amount = amount,
-                paymentFlag = false // Indicates whether the debt has been paid
-            )
-            Log.d("debt", debt.toString())
+
             viewModelScope.launch(Dispatchers.IO) {
+                val nextMonthDate = getNextMonthSameDaySafe().persianShortDate
+                // Usage
+                Log.d("buildingId", buildingId.toString())
+                val amount =
+                    cost.tempAmount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0
+                //@TODO for !samecost instead of inserting to debt insert to a temp list
+
+                val debt = Debts(
+                    unitId = insertedUnit,
+                    costId = costId, // Foreign key referencing Costs
+                    buildingId = buildingId,
+                    description = cost.costName, // Description of the debt
+                    dueDate = nextMonthDate.toString(), // Due date of the debt
+                    amount = amount,
+                    paymentFlag = false // Indicates whether the debt has been paid
+                )
                 debtsDao.insertDebt(debt)
+
             }
 
         } catch (e: Exception) {
@@ -378,7 +547,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 ownersDao.deleteOwnersWithUnits(owner.ownerId)
 
                 // Insert New Relationships
-                Log.d("units for rel", units.toString())
                 units.forEach { unit ->
                     ownersDao.insertOwnerUnitCrossRef(
                         OwnersUnitsCrossRef(
@@ -391,7 +559,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Update StateFlow
                 withContext(Dispatchers.Main) {
                     ownersList.replaceAll { if (it.ownerId == owner.ownerId) owner else it }
-                    Log.d("new ownersList", ownersList.toString())
                 }
 
             } catch (e: Exception) {
@@ -401,10 +568,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-
     fun getUnitForTenant(tenant: Tenants): Units? {
         return tenantUnitMap[tenant]
     }
+
     fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
         val tenant = tenantsDao.getUnitForTenant(tenantId)
         emit(tenant)
@@ -412,7 +579,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateTenantWithUnit(tenant: Tenants, unit: Units?) {
         viewModelScope.launch(Dispatchers.IO) {
-            Log.d("tenant for update", tenant.toString())
             tenantsDao.updateTenant(tenant)
 
             if (unit != null) {
@@ -518,44 +684,35 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         ownerUnitMap[owner] = units
     }
 
-    fun addTenantUnits(tenant: Tenants, unit: Units) {
-        tenantUnitMap[tenant] = unit
-    }
-
-    fun addTenant(tenant: Tenants) {
-        viewModelScope.launch(Dispatchers.IO) {
-            newTenantId = tenantsDao.insertTenants(tenant)
-            Log.d("newTenantId", newTenantId.toString())
-            val updatedTenant = tenant.copy(tenantId = newTenantId)
-            tenantsList.value = tenantsList.value + updatedTenant
-            Log.d("tenantsList adtenant", tenantsList.value.toString())
-        }
-    }
 
     // In SharedViewModel
     fun addOwner(owner: Owners) {
         viewModelScope.launch(Dispatchers.IO) {
-             ownersDao.insertOwners(owner) // Get the generated ID
+            ownersDao.insertOwners(owner) // Get the generated ID
 
             // Update the owner with the new ID
             val updatedOwner = owner.copy(ownerId = newOwnerId)
-            Log.d("updatedOwner", updatedOwner.toString())
 
             withContext(Dispatchers.Main) {
-                Log.d("owner save", updatedOwner.toString())
                 ownersList.add(updatedOwner)
-                // Log all owners in the list for debugging
-                ownersList.forEach { existingOwner ->
-                    Log.d("owners in list", existingOwner.toString())
-                }
             }
         }
+    }
+
+    fun addTempDebt(unitId: Long) {
+        costsList.value.forEach { cost ->
+            val debt = Debts(unitId = unitId, costId = cost.id,
+                description = cost.costName, amount = cost.tempAmount,
+                buildingId = 0, dueDate = "", paymentFlag = false)
+            debtsList.add(debt)
+        }
+
     }
 
 
     fun loadCosts() {
         viewModelScope.launch(Dispatchers.IO) {
-            val costsFromDb = costsDao.getCosts()
+            val costsFromDb = costsDao.getCostsWithNullBuildingId()
             withContext(Dispatchers.Main) {
                 val fixedCosts = costsFromDb.filter { cost ->
                     cost.calculateMethod.any { method ->
@@ -565,7 +722,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(
                         tempAmount = 0.0,
                         period = mutableListOf("سال"),
-                        amountUnit = mutableListOf("میلیون تومان"),
                         responsible = mutableListOf("")
                     )
                 }
@@ -578,7 +734,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(
                         tempAmount = 0.0,
                         period = mutableListOf("ماه"),
-                        amountUnit = mutableListOf("میلیون تومان"),
                         responsible = mutableListOf("")
                     )
                 }
@@ -588,83 +743,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun insertDebtPerChargeForUnit(
-        insertedUnit: Long,
-        cost: Costs,
-        tenantsUnitsCrossRef: List<TenantsUnitsCrossRef>,
-        costId: Long
-    ) {
-        try {
-            // Determine amount
-            val amount = when {
-                automaticCharge -> {
-                    when {
-                        selectedChargeType.contains("متراژ") -> {
-                            val area = unitsDao.getUnit(insertedUnit).area
-                            val result = area.toInt() * (chargeAmount.persianToEnglishDigits()
-                                .toDoubleOrNull() ?: 0.0)
-                            Log.d("AREA_CALC", "Result: $result")
-                            result // Explicit return
-                        }
-
-                        selectedChargeType.contains("نفرات") -> {
-                            try {
-
-                                // Find the relationship for the current unit
-                                val relationship = tenantsUnitsCrossRef.firstOrNull {
-                                    it.unitId == insertedUnit && it.status == "فعال"
-                                }
-
-                                if (relationship != null) {
-                                    val tenant = tenantsDao.getTenant(relationship.tenantId)
-
-                                    val result = tenant.numberOfTenants.toInt() *
-                                            (chargeAmount.persianToEnglishDigits().toDoubleOrNull()
-                                                ?: 0.0)
-                                    result
-                                } else {
-                                    0.0
-                                }
-                            } catch (e: Exception) {
-                                Log.e("insertdebt", "error insert ${e.message}")
-                                0.0
-                            }
-                        }
-
-
-                        else -> 0.0
-                    }
-                }
-
-                else -> fixedAmount.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
-            }
-
-            val englishAmount = amount
-            Log.d("englishAmount", englishAmount.toString())
-            // Usage in picker
-            val nextMonthDate = getNextMonthSameDaySafe().persianShortDate
-            Log.d("nextMonthDate", nextMonthDate)
-//            setInitDate(nextMonthDate.persianYear, nextMonthDate.persianMonth, nextMonthDate.persianDay)
-            val debt = Debts(
-                unitId = insertedUnit,
-                costId = costId,
-                description = cost.costName,
-                dueDate = nextMonthDate.toString(),
-                amount = englishAmount.toString().toDouble(),
-                paymentFlag = true
-            )
-            Log.d("debt in charge", debt.toString())
-            viewModelScope.launch(Dispatchers.IO) {
-                debtsDao.insertDebt(debt)
-            }
-        } catch (e: Exception) {
-            Log.e("insertDebt", "Error: ${e.message}")
-        }
-    }
-
-
-    // In SharedViewModel
     fun updateCostAmount(cost: Costs, newAmount: Double) {
         costsList.value = costsList.value.map {
             if (it.id == cost.id) {
@@ -673,16 +751,20 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun clearAllCostAmount() {
+        costsList.value = costsList.value.map { cost ->
+            cost.copy(tempAmount = 0.0) // Reset to 0.0 or your preferred default
+        }
+    }
+
+    fun clearDebtList() {
+        debtsList.clear()
+    }
+
 
     fun updateCostPeriod(cost: Costs, newPeriod: String) {
         costsList.value = costsList.value.map {
             if (it.id == cost.id) it.copy(period = listOf(newPeriod)) else it
-        }
-    }
-
-    fun updateCostAmountMoney(cost: Costs, newAmountMoney: String) {
-        costsList.value = costsList.value.map {
-            if (it.id == cost.id) it.copy(amountUnit = listOf(newAmountMoney)) else it
         }
     }
 
@@ -710,6 +792,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         selectedBuildingTypes = null
         selectedBuildingUsages = null
         unitsList.clear()
+        debtsList.clear()
         selectedOwnerForUnit = null
     }
 
@@ -776,5 +859,19 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
     val maxDay = calendar.getMaxDaysInMonth() // 31
 
+    fun updateFixedAmountFormat(newValue: String) {
+        // Remove non-digit characters before storing
+        val cleanValue = newValue.filter { it.isDigit() }
+        fixedAmount = cleanValue.persianToEnglishDigits()
+    }
+
+    fun updateChargeAmountFormat(newValue: String) {
+        // Remove non-digit characters before storing
+        val cleanValue = newValue.filter { it.isDigit() }
+        chargeAmount = cleanValue
+    }
+
 }
+
+
 

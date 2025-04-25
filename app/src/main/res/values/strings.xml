@@ -153,4 +153,50 @@
     <string name="edit">ویرایش</string>
     <string name="edit_tenant">ویرایش ساکن</string>
     <string name="edit_owner">ویرایش ساکن</string>
+    <string name="title">عنوان</string>
+    <string name="add_costs">ثبت هزینه</string>
+    <string name="add_income">ثبت درآمد</string>
+    <string name="due">مهلت پرداخت</string>
+    <!-- Persian Numbers -->
+    <string name="zero_persian">صفر</string>
+    <string name="one_persian">یک</string>
+    <string name="two_persian">دو</string>
+    <string name="three_persian">سه</string>
+    <string name="four_persian">چهار</string>
+    <string name="five_persian">پنج</string>
+    <string name="six_persian">شش</string>
+    <string name="seven_persian">هفت</string>
+    <string name="eight_persian">هشت</string>
+    <string name="nine_persian">نه</string>
+    <string name="ten_persian">ده</string>
+    <string name="eleven_persian">یازده</string>
+    <string name="twelve_persian">دوازده</string>
+    <string name="thirteen_persian">سیزده</string>
+    <string name="fourteen_persian">چهارده</string>
+    <string name="fifteen_persian">پانزده</string>
+    <string name="sixteen_persian">شانزده</string>
+    <string name="seventeen_persian">هفده</string>
+    <string name="eighteen_persian">هجده</string>
+    <string name="nineteen_persian">نوزده</string>
+
+    <string name="twenty_persian">بیست</string>
+    <string name="thirty_persian">سی</string>
+    <string name="forty_persian">چهل</string>
+    <string name="fifty_persian">پنجاه</string>
+    <string name="sixty_persian">شصت</string>
+    <string name="seventy_persian">هفتاد</string>
+    <string name="eighty_persian">هشتاد</string>
+    <string name="ninety_persian">نود</string>
+
+    <string name="hundred_persian">صد</string>
+    <string name="thousand_persian">هزار</string>
+    <string name="million_persian">میلیون</string>
+    <string name="billion_persian">میلیارد</string>
+    <!-- Special Persian Hundreds -->
+    <string name="one_hundred_persian">صد</string>
+    <string name="two_hundred_persian">دویست</string>
+    <string name="three_hundred_persian">سیصد</string>
+    <string name="five_hundred_persian">پانصد</string>
+
+    <string name="toman">تومان</string>
 </resources>
