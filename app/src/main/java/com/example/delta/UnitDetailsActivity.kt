@@ -1,6 +1,5 @@
 package com.example.delta
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,46 +26,40 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Units
-import com.example.delta.factory.CostViewModelFactory
-import com.example.delta.factory.DebtsViewModelFactory
-import com.example.delta.viewmodel.CostViewModel
-import com.example.delta.viewmodel.DebtsViewModel
-import com.example.delta.viewmodel.UnitsViewModel
+import com.example.delta.viewmodel.SharedViewModel
 import kotlin.getValue
-
-
 class UnitDetailsActivity : ComponentActivity() {
 
-    private val debtsViewModel: DebtsViewModel by viewModels {
-        DebtsViewModelFactory(application = this.application)
-    }
-
-    private val costsViewModel: CostViewModel by viewModels {
-        CostViewModelFactory(application = this.application)
-    }
+    // Use SharedViewModel for shared state
+    val sharedViewModel: SharedViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val unit = intent.getParcelableExtra("UNIT_DATA") as? Units
+
         setContent {
             AppTheme {
-                MaterialTheme{
-                    unit?.let { UnitDetailsScreen(it) }
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    MaterialTheme {
+                        unit?.let { UnitDetailsScreen(it) }
+                    }
                 }
             }
         }
@@ -75,20 +68,31 @@ class UnitDetailsActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun UnitDetailsScreen(unit: Units) {
+        var context = LocalContext.current
 
-        val tabTitles = listOf("Overview", "Debt", "Payments", "Report")
-        var selectedTab by remember { mutableStateOf(0) }
+        val tabTitles = listOf(
+            context.getString(R.string.overview),
+            context.getString(R.string.debt),
+            context.getString(R.string.payments),
+            context.getString(R.string.report)
+        )
+        var selectedTab by remember { mutableIntStateOf(0) }
+
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text( text = unit.unitNumber.toString() , style = MaterialTheme.typography.titleLarge) },
+                    title = {
+                        Text(
+                            text = "${context.getString(R.string.unit_name)} : ${unit.unitNumber}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { finish() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
-
             }
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
@@ -97,7 +101,12 @@ class UnitDetailsActivity : ComponentActivity() {
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            text = { Text(title) }
+                            text = {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         )
                     }
                 }
@@ -105,9 +114,9 @@ class UnitDetailsActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
-                    0 -> OverviewSection(unitId = unit.unitId)
-                    1 -> DebtSection(unitId = unit.unitId)
-                    2 -> PaymentsSection(unitId = unit.unitId)
+                    0 -> OverviewSection(unit = unit)
+                    1 -> DebtSection(unitId = unit.unitId, sharedViewModel = sharedViewModel) // Pass SharedViewModel
+                    2 -> PaymentsSection(unitId = unit.unitId, sharedViewModel = sharedViewModel) // Pass SharedViewModel
                     3 -> ReportSection(unitId = unit.unitId)
                 }
             }
@@ -115,8 +124,50 @@ class UnitDetailsActivity : ComponentActivity() {
     }
 
     @Composable
-    fun OverviewSection(unitId: Long) {
-        Text(text = "Overview for Unit $unitId")
+    fun OverviewSection(unit: Units) {
+        val context = LocalContext.current
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer // Use MaterialTheme color
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "${context.getString(R.string.area)}: ${unit.area}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "${context.getString(R.string.number_of_room)}: ${unit.numberOfRooms}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "${context.getString(R.string.number_of_parking)}: ${unit.numberOfParking}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
     }
 
     @Composable
@@ -125,21 +176,23 @@ class UnitDetailsActivity : ComponentActivity() {
     }
 
     @Composable
-    fun DebtSection(unitId: Long) {
-//        val debts by debtsViewModel.fetchAndProcessDebts(unitId).collectAsState(initial = emptyList())
-//
-//        Column {
-//            if (debts.isEmpty()) {
-//                Text("No debts found.")
-//            } else {
-//                debts.forEach { debt ->
-//                    DebtItem(debt = debt, onPayment = {
-//                        debt.paymentFlag = true
-//                        debtsViewModel.updateDebt(debt)
-//                    })
-//                }
-//            }
-//        }
+    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel) {  // Receive SharedViewModel
+        val debts by sharedViewModel.getDebtsOneUnit(unitId).collectAsState(initial = emptyList())
+        var context = LocalContext.current
+        Column {
+            if (debts.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_debts_recorded),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                debts.forEach { debt ->
+                    DebtItem(debt = debt, onPayment = {
+                        sharedViewModel.updateDebt(debt) // Use SharedViewModel to update
+                    })
+                }
+            }
+        }
     }
 
     @Composable
@@ -158,15 +211,27 @@ class UnitDetailsActivity : ComponentActivity() {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = debt.description,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${LocalContext.current.getString(R.string.description)}: ${debt.description}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "${LocalContext.current.getString(R.string.amount)}: ${debt.amount}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 if (debt.paymentFlag) {
-                    Text("Payment Done")
+                    Text(
+                        text = LocalContext.current.getString(R.string.payment_done),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 } else {
                     Button(onClick = onPayment) {
-                        Text("Pay")
+                        Text(
+                            text = LocalContext.current.getString(R.string.payment),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                 }
             }
@@ -175,20 +240,20 @@ class UnitDetailsActivity : ComponentActivity() {
 
 
     @Composable
-    fun PaymentsSection(unitId: Long) {
-        val pays by debtsViewModel.fetchAndProcessPays(unitId).collectAsState(initial = emptyList())
+    fun PaymentsSection(unitId: Long, sharedViewModel: SharedViewModel) { // Receive SharedViewModel
+        val pays by sharedViewModel.getPaysForUnit(unitId).collectAsState(initial = emptyList())
 
         Column {
             if (pays.isEmpty()) {
-                Text("No pays found.")
+                Text(text = LocalContext.current.getString(R.string.no_costs_recorded))
             } else {
                 pays.forEach { pay ->
                     DebtItem(debt = pay, onPayment = {
+                        sharedViewModel.updateDebt(pay)
                     })
                 }
             }
         }
     }
-
 }
 

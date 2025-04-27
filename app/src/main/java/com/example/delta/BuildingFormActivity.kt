@@ -449,7 +449,10 @@ fun BuildingInfoPage(
                                 try {
                                     val unitId = unitsViewModel.insertUnit(newUnit)
                                     sharedViewModel.unitsList.add(newUnit.copy(unitId = unitId)) // Update the unitId
-
+                                    Log.d(
+                                        "sharedViewModel.unitsList",
+                                        sharedViewModel.unitsList.toString()
+                                    )
                                 } catch (e: Exception) {
                                     Log.e("InsertUnitError", "Failed to insert unit: ${e.message}")
                                 }
@@ -2097,7 +2100,7 @@ fun CostPage(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                items(sharedViewModel.costsList.value) { cost ->
+                items(sharedViewModel.costsList.value.filter { it.buildingId == null }) { cost ->
                     CostItem(
                         cost = cost,
                         sharedViewModel = sharedViewModel
@@ -2307,7 +2310,7 @@ fun UnitCostDialog(
                     .fillMaxWidth()
                     .padding(0.dp)
             ) {
-                items(sharedViewModel.costsList.value) { cost ->
+                items(sharedViewModel.costsList.value.filter { it.buildingId == null }) { cost ->
                     CostItem(
                         cost = cost,
                         sharedViewModel = sharedViewModel

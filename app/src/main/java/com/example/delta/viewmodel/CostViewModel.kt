@@ -6,10 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 class CostViewModel (application: Application) : AndroidViewModel(application) {
@@ -42,6 +38,6 @@ class CostViewModel (application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchAndProcessCosts(buildingId: Long) : Flow<List<Costs>> {
-             return costsDao.getCostsForBuilding(buildingId)
+             return costsDao.getFlowCostsForBuilding(buildingId)
     }
 }

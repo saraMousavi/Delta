@@ -22,15 +22,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,14 +38,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +51,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -95,14 +89,15 @@ import com.example.delta.data.entity.Units
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
+import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.viewmodel.UnitsViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import kotlin.collections.forEach
 import kotlin.getValue
 
@@ -360,6 +355,7 @@ class BuildingProfileActivity : ComponentActivity() {
             earningsViewModel.fetchAndProcessEarnings(building.buildingId)
                 .collectAsState(initial = null)
 
+
         val buildingWithCosts =
             costsViewModel.fetchAndProcessCosts(building.buildingId).collectAsState(initial = null)
         LaunchedEffect(building.buildingId) {
@@ -451,8 +447,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
                 1 -> CostSection(
                     building = building,
-                    costs = buildingWithCosts.value ?: emptyList(),
-                    onAddCost = { buildingViewModel.showCostDialog(building.buildingId) }
+                    sharedViewModel = sharedViewModel
                 )
             }
         }
@@ -469,13 +464,16 @@ class BuildingProfileActivity : ComponentActivity() {
             )
         }
         if (buildingViewModel.showCostDialog.value) {
-            CostDialog(
-                building = building,
+            AddCostDialog(
                 onDismiss = { buildingViewModel.hideDialogs() },
-                costsFlow = costsViewModel.getAllMenuCost(),
-                onConfirm = { cost -> buildingViewModel.insertCost(cost) },
-                onInsertDebt = { debt -> buildingViewModel.insertDebt(debt) }
+                onSave = { name, amount ->
+                    // Insert cost and debts
+                    sharedViewModel.insertDebtPerNewCost(building, amount, name)
+                    buildingViewModel.hideDialogs()
+                }
             )
+
+
         }
 
 
@@ -542,138 +540,176 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
 
-    @OptIn(ExperimentalMaterial3Api::class)
+//    @OptIn(ExperimentalMaterial3Api::class)
+//    @Composable
+//    fun UnitsTab(
+//        building: Buildings,
+//        sharedViewModel: SharedViewModel,
+//        unitsViewModel: UnitsViewModel
+//    ) {
+//        var showUnitDialog by remember { mutableStateOf(false) }
+//        val context = LocalContext.current
+//        val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+//            .collectAsState(initial = emptyList())
+//        Log.d("building.buildingId", building.buildingId.toString())
+//        val expandedUnits = remember { mutableStateMapOf<Long, Boolean>() }
+//
+//        Box(modifier = Modifier.fillMaxSize()) {
+//            LazyColumn(
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .padding(16.dp)
+//            ) {
+//                items(units) { unit ->
+//                    val isExpanded = expandedUnits[unit.unitId] ?: false
+//
+//                    Column(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .clickable {
+//                                expandedUnits[unit.unitId] = !isExpanded
+//                            }
+//                            .padding(8.dp)
+//                    ) {
+//                        // Unit Basic Info
+//                        Row(
+//                            modifier = Modifier.fillMaxWidth(),
+//                            horizontalArrangement = Arrangement.SpaceBetween
+//                        ) {
+//                            Text(
+//                                text = "${context.getString(R.string.unit_name)}: ${unit.unitNumber}",
+//                                style = MaterialTheme.typography.bodyLarge
+//                            )
+//                            Icon(
+//                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+//                                contentDescription = "Expand/Collapse"
+//                            )
+//                        }
+//
+//                        // Expanded Debt Details
+//                        AnimatedVisibility(
+//                            visible = isExpanded,
+//                            enter = fadeIn() + expandVertically(),
+//                            exit = fadeOut() + shrinkVertically()
+//                        ) {
+//                            Column {
+//                                // Get all debts for this unit
+//                                val debts by sharedViewModel.getDebtsOneUnit(unit.unitId)
+//                                    .collectAsState(initial = emptyList())
+//                                Log.d("unit.unitId", unit.unitId.toString())
+//                                Log.d("debts", debts.toString())
+//                                val allDebts by sharedViewModel.getAllDebts()
+//                                    .collectAsState(initial = emptyList())
+//                                Log.d("all debts", allDebts.toString())
+//
+//                                Spacer(modifier = Modifier.height(8.dp))
+//
+//                                if (debts.isEmpty()) {
+//                                    Text(
+//                                        text = context.getString(R.string.no_costs_recorded),
+//                                        style = MaterialTheme.typography.bodyLarge,
+//                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+//                                    )
+//                                } else {
+//                                    debts.forEach { debt ->
+//                                        Row(
+//                                            modifier = Modifier
+//                                                .fillMaxWidth()
+//                                                .padding(8.dp),
+//                                            horizontalArrangement = Arrangement.SpaceBetween
+//                                        ) {
+//                                            Column {
+//                                                Text(
+//                                                    text = debt.description,
+//                                                    style = MaterialTheme.typography.bodyLarge
+//                                                )
+//                                                Text(
+//                                                    text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+//                                                    style = MaterialTheme.typography.bodyLarge,
+//                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                                                )
+//                                            }
+//                                            Text(
+//                                                text = "${debt.amount}",
+//                                                style = MaterialTheme.typography.bodyLarge,
+//                                                color = if (debt.amount > 0) Color.Red else Color.Green
+//                                            )
+//                                        }
+//                                        Divider(
+//                                            modifier = Modifier.padding(horizontal = 8.dp),
+//                                            thickness = 0.5.dp
+//                                        )
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                    Divider()
+//                }
+//            }
+//
+//            FloatingActionButton(
+//                onClick = { showUnitDialog = true },
+//                modifier = Modifier
+//                    .align(Alignment.BottomEnd)
+//                    .padding(16.dp),
+//                containerColor = Color(context.getColor(R.color.secondary_color)),
+//                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+//            ) {
+//                Icon(Icons.Filled.Add, "Add")
+//            }
+//
+//            if (showUnitDialog) {
+//                UnitDialog(
+//                    onDismiss = { showUnitDialog = false },
+//                    onAddUnit = { newUnit ->
+//                        newUnit.buildingId = building.buildingId
+////                        sharedViewModel.(newUnit)
+//                        showUnitDialog = false
+//                    }
+//                )
+//            }
+//        }
+//    }
+
     @Composable
     fun UnitsTab(
         building: Buildings,
         sharedViewModel: SharedViewModel,
         unitsViewModel: UnitsViewModel
     ) {
-        var showUnitDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
-        Log.d("building.buildingId", building.buildingId.toString())
-        val expandedUnits = remember { mutableStateMapOf<Long, Boolean>() }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                items(units) { unit ->
-                    val isExpanded = expandedUnits[unit.unitId] ?: false
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                expandedUnits[unit.unitId] = !isExpanded
-                            }
-                            .padding(8.dp)
-                    ) {
-                        // Unit Basic Info
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "${context.getString(R.string.unit_name)}: ${unit.unitNumber}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = "Expand/Collapse"
-                            )
-                        }
-
-                        // Expanded Debt Details
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
-                        ) {
-                            Column {
-                                // Get all debts for this unit
-                                val debts by sharedViewModel.getDebtsOneUnit(unit.unitId)
-                                    .collectAsState(initial = emptyList())
-                                Log.d("unit.unitId", unit.unitId.toString())
-                                Log.d("debts", debts.toString())
-                                val allDebts by sharedViewModel.getAllDebts()
-                                    .collectAsState(initial = emptyList())
-                                Log.d("all debts", allDebts.toString())
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                if (debts.isEmpty()) {
-                                    Text(
-                                        text = context.getString(R.string.no_costs_recorded),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    debts.forEach { debt ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = debt.description,
-                                                    style = MaterialTheme.typography.bodyLarge
-                                                )
-                                                Text(
-                                                    text = "${context.getString(R.string.due)}: ${debt.dueDate}",
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Text(
-                                                text = "${debt.amount}",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = if (debt.amount > 0) Color.Red else Color.Green
-                                            )
-                                        }
-                                        Divider(
-                                            modifier = Modifier.padding(horizontal = 8.dp),
-                                            thickness = 0.5.dp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Divider()
+        LazyColumn {
+            items(units) { unit ->
+                UnitItem(unit = unit) {
+                    val intent = Intent(context, UnitDetailsActivity::class.java)
+                    intent.putExtra("UNIT_DATA", unit)
+                    context.startActivity(intent)
                 }
-            }
-
-            FloatingActionButton(
-                onClick = { showUnitDialog = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                containerColor = Color(context.getColor(R.color.secondary_color)),
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Icon(Icons.Filled.Add, "Add")
-            }
-
-            if (showUnitDialog) {
-                UnitDialog(
-                    onDismiss = { showUnitDialog = false },
-                    onAddUnit = { newUnit ->
-                        newUnit.buildingId = building.buildingId
-//                        sharedViewModel.(newUnit)
-                        showUnitDialog = false
-                    }
-                )
             }
         }
     }
 
+    @Composable
+    fun UnitItem(unit: Units, onClick: () -> Unit) {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+                .clickable { onClick() },
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Text(
+                text = unit.unitNumber,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
 
 
     @Composable
@@ -799,17 +835,26 @@ class BuildingProfileActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
-    private fun CostSection(
-        building: Buildings,
-        costs: List<Costs>,
-        onAddCost: () -> Unit
-    ) {
+    fun CostSection(building: Buildings, sharedViewModel: SharedViewModel) {
         val context = LocalContext.current
-        val expandedItems = remember { mutableStateMapOf<Int, Boolean>() }
+        var showAddCostDialog by remember { mutableStateOf(false) }
+
+        // State for cost details entered in the dialog
+        var costName by remember { mutableStateOf("") }
+        var totalAmount by remember { mutableStateOf("") }
+
+        // Observe changes to costs using a Flow
+        val costs by sharedViewModel.getCostsForBuilding(building.buildingId)
+            .collectAsState(initial = emptyList())
+
         val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
-        val debts by sharedViewModel.getAllDebts()
-            .collectAsState(initial = emptyList())
+
+        // Function to handle adding a new cost
+        val onAddCost = {
+            showAddCostDialog = true
+        }
+
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
@@ -817,14 +862,14 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(bottom = 80.dp),
                 state = rememberLazyListState()
             ) {
-                itemsIndexed(costs) { index, cost ->
-                    val isExpanded = expandedItems[index] ?: false
+                items(costs) { cost -> // Directly use cost
+                    val isExpanded = remember { mutableStateOf(false) } // Remember expansion state
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                expandedItems[index] = !isExpanded
+                                isExpanded.value = !isExpanded.value
                             }
                             .padding(16.dp)
                     ) {
@@ -843,78 +888,18 @@ class BuildingProfileActivity : ComponentActivity() {
 
                         // Expanded Details
                         AnimatedVisibility(
-                            visible = isExpanded,
+                            visible = isExpanded.value,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
-                            Column {
-                                // Payment Status
-
-
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Log.d("units", units.toString())
-                                Log.d("debts", debts.toString())
-                                // Unit Breakdown
-                                units.forEach { unit ->
-                                    Log.d("unit.unitId", unit.unitId.toString())
-                                    Log.d("cost.id", cost.id.toString())
-                                    val debtState =
-                                        sharedViewModel.getDebtsForUnit(unit.unitId, cost.id)
-                                            .collectAsState(initial = null) // Initial null while loading
-                                    Log.d("debtState", debtState.toString())
-                                    Divider(
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant
-                                    )
-                                    var context = LocalContext.current
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-
-                                        // Handle different loading states
-                                        when (val debt = debtState.value) {
-//                                            null -> CircularProgressIndicator(
-//                                                modifier = Modifier.size(12.dp),
-//                                                strokeWidth = 2.dp
-//                                            )
-                                            null -> Text("0")
-                                            else -> Text(
-                                                text = "${debt.amount}}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (debt.amount > 0) Color.Red else Color.Green
-                                            )
-                                        }
-                                    }
-                                }
-
-                            }
+                            CostDetails(building = building, cost = cost, sharedViewModel = sharedViewModel)
                         }
                     }
 
-                    if (index < costs.lastIndex) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                    }
-                }
-
-                if (costs.isEmpty()) {
-                    item {
-                        Text(
-                            text = context.getString(R.string.no_costs_recorded),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
                 }
             }
 
@@ -928,6 +913,169 @@ class BuildingProfileActivity : ComponentActivity() {
                 containerColor = Color(context.getColor(R.color.secondary_color)),
                 contentColor = Color(context.getColor(R.color.white))
             )
+
+            if (showAddCostDialog) {
+                AddCostDialog(
+                    onDismiss = { showAddCostDialog = false },
+                    onSave = { name, amount ->
+                        // Insert cost and debts
+                        sharedViewModel.insertDebtPerNewCost(
+                            building = building,
+                            name = name,
+                            amount = amount
+                        )
+                        showAddCostDialog = false
+                    }
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun AddCostDialog(
+        onDismiss: () -> Unit,
+        onSave: (String, String) -> Unit
+    ) {
+        val context = LocalContext.current
+        var costName by remember { mutableStateOf("") }
+        var totalAmount by remember { mutableStateOf("") }
+
+        Dialog(onDismissRequest = onDismiss) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Add New Cost",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Cost Name Input
+                    OutlinedTextField(
+                        value = costName,
+                        onValueChange = { costName = it },
+                        label = { Text(context.getString(R.string.cost_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Total Amount Input
+                    OutlinedTextField(
+                        value = totalAmount,
+                        onValueChange = { totalAmount = it },
+                        label = { Text(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+
+                    val amount = totalAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amount)
+
+
+                    Text(
+                        text = " $amountInWords ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    //Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(onClick = onDismiss) {
+                            Text(
+                                text = context.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(onClick = {
+                            onSave(costName, totalAmount)
+                        }) {
+                            Text(
+                                text = context.getString(R.string.insert),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun CostDetails(building: Buildings, cost: Costs, sharedViewModel: SharedViewModel) {
+        val context = LocalContext.current
+        val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
+            .collectAsState(initial = emptyList())
+
+        Column {
+            if (units.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_costs_recorded),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                units.forEach { unit ->
+                    val debts by sharedViewModel
+                        .getDebtsForUnitCostCurrentAndPreviousUnpaid(
+                            buildingId = building.buildingId,
+                            costId = cost.id,
+                            unitId = unit.unitId
+                        ).collectAsState(initial = emptyList())
+
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Text(
+                            text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Log.d("debts", debts.toString())
+                        if (debts.isEmpty()) {
+                            Text(
+                                text = context.getString(R.string.no_costs_recorded),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            debts.forEach { debt ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "${context.getString(R.string.amount)}: ${debt.amount}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (debt.paymentFlag) Color.Green else Color.Red
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Divider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
+            }
         }
     }
 
@@ -1058,107 +1206,6 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-    @Composable
-    fun CostDialog(
-        building: Buildings,
-        onDismiss: () -> Unit,
-        costsFlow: Flow<List<Costs>>,
-        onConfirm: suspend (Costs) -> Unit,
-        onInsertDebt: suspend (Debts) -> Unit
-    ) {
-        var title by remember { mutableStateOf("") }
-        var amount by remember { mutableStateOf("") }
-        var isDebt by remember { mutableStateOf(false) }
 
-        val scope = rememberCoroutineScope()
-
-        Dialog(onDismissRequest = onDismiss) {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Add Cost for ${building.name}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    TextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Title") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    TextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text("Amount") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Text("Is Debt")
-                        Spacer(modifier = Modifier.width(8.dp))
-//                    Switch(
-//                        checked = isDebt,
-//                        onCheckedChange = { isDebt = it }
-//                    )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text("Cancel")
-                        }
-
-                        Button(
-                            onClick = {
-//                                val newCost = Costs(
-//                                    buildingId = building.buildingId,
-//                                    title = title,
-//                                    amount = amount.toDoubleOrNull() ?: 0.0,
-//                                    date = LocalDate.now().toString()
-//                                )
-//                                scope.launch {
-//                                    val costId = onConfirm(newCost)
-//
-//                                    if (isDebt) {
-//                                        val newDebt = Debts(
-//                                            costId = costId,
-//                                            buildingId = building.buildingId,
-//                                            amount = amount.toDoubleOrNull() ?: 0.0,
-//                                            date = LocalDate.now().toString()
-//                                        )
-//                                        onInsertDebt(newDebt)
-//                                    }
-//                                }
-                            },
-                            enabled = title.isNotBlank() && amount.isNotBlank()
-                        ) {
-                            Text("Confirm")
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
-
 

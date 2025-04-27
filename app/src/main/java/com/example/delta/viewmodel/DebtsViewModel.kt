@@ -34,7 +34,7 @@ class DebtsViewModel (application: Application) : AndroidViewModel(application) 
 //        return debtsDao.getDebtsForUnit(unitId)
 //    }
 
-    fun fetchAndProcessPays(unitId: Long) : Flow<List<Debts>> {
-        return debtsDao.getPaysForUnit(unitId)
-    }
+//    fun fetchAndProcessPays(unitId: Long) : Flow<List<Debts>> {
+//        return debtsDao.getPaysForUnit(unitId)
+//    }
 }

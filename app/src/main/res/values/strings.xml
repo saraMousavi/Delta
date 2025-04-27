@@ -199,4 +199,12 @@
     <string name="five_hundred_persian">پانصد</string>
 
     <string name="toman">تومان</string>
+    <string name="debt">پرداخت نشده</string>
+    <string name="payments">پرداخت شده</string>
+    <string name="report">گزارش</string>
+    <string name="number_of_room">تعداد اتاق ها</string>
+    <string name="no_debts_recorded">هیچ بدهی در ماه جاری وجود ندارد.</string>
+    <string name="payment_done">پرداخت شده</string>
+    <string name="payment">پرداخت</string>
+    <string name="cost_name">عنوان هزینه</string>
 </resources>
