@@ -5,8 +5,10 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.delta.data.entity.User
+import com.example.delta.data.entity.UserWithRole
 
 @Dao
 interface UsersDao {    
@@ -21,4 +23,9 @@ interface UsersDao {
 
         @Query("SELECT * FROM user")
         suspend fun getUsers(): List<User>
+
+        @Transaction
+        @Query("SELECT * FROM user")
+        fun getUsersWithRoles(): List<UserWithRole>
+
 }

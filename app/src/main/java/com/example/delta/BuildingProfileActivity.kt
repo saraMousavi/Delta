@@ -66,10 +66,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,23 +80,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Units
+import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.AuthObject
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.CostViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
+import com.example.delta.init.AuthUtils
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.viewmodel.UnitsViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
+import ir.hamsaa.persiandatepicker.util.PersianCalendar
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.collections.forEach
 import kotlin.getValue
 
@@ -148,6 +151,8 @@ class BuildingProfileActivity : ComponentActivity() {
     @Composable
     fun BuildingProfileScreen(building: Buildings) {
         var context = LocalContext.current
+        val currentRoleId = AuthUtils.getCurrentRoleId(context) // From session/prefs
+        val authDao = AppDatabase.getDatabase(application).authorizationDao()
         val tabTitles = listOf(
             context.getString(R.string.overview),
             context.getString(R.string.owners),
@@ -192,7 +197,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
-                    0 -> OverviewTab(building)
+                    0 -> OverviewTab(building, currentRoleId, authDao)
                     1 -> OwnersTab(building, sharedViewModel)
                     2 -> UnitsTab(building, sharedViewModel, unitsViewModel)
                     3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
@@ -205,7 +210,9 @@ class BuildingProfileActivity : ComponentActivity() {
 
 
     @Composable
-    fun OverviewTab(building: Buildings) {
+    fun OverviewTab(building: Buildings,
+                    roleId: Long,
+                    authDao: AuthorizationDao) {
         val context = LocalContext.current
 
         LazyColumn(
@@ -226,10 +233,24 @@ class BuildingProfileActivity : ComponentActivity() {
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "${context.getString(R.string.building_name)}: ${building.name}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        val buildingNameVisible = remember { mutableStateOf(false) }
+                        LaunchedEffect(key1 = buildingNameVisible) {
+                            buildingNameVisible.value = AuthUtils.hasFieldPermission(
+                                authDao = authDao,
+                                roleId = roleId,
+                                objectId = AuthObject.BUILDING_PROFILE.id, // replace with your object Id
+                                fieldName = R.string.building_name,
+                                required = PermissionLevel.READ
+                            )
+                        }
+                        Log.d("R.string.building_name", R.string.building_name.toString())
+                        Log.d("buildingNameVisible.value", buildingNameVisible.value.toString())
+                        if (buildingNameVisible.value) {
+                            Text(
+                                text = "${context.getString(R.string.building_name)}: ${building.name}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
@@ -847,6 +868,13 @@ class BuildingProfileActivity : ComponentActivity() {
         val costs by sharedViewModel.getCostsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
 
+        Log.d("costs", costs.toString())
+
+        val allCost by sharedViewModel.getAllCosts()
+            .collectAsState(initial = emptyList())
+
+        Log.d("allCost", allCost.toString())
+
         val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
 
@@ -1027,6 +1055,11 @@ class BuildingProfileActivity : ComponentActivity() {
         val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
             .collectAsState(initial = emptyList())
 
+        var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
+        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth + 2) }
+
+        Log.d("selectedYear", selectedYear.toString())
+        Log.d("selectedMonth",selectedMonth.toString())
         Column {
             if (units.isEmpty()) {
                 Text(
@@ -1040,19 +1073,21 @@ class BuildingProfileActivity : ComponentActivity() {
                         .getDebtsForUnitCostCurrentAndPreviousUnpaid(
                             buildingId = building.buildingId,
                             costId = cost.id,
-                            unitId = unit.unitId
+                            unitId = unit.unitId,
+                            yearStr = selectedYear.toString(),
+                            monthStr = selectedMonth.toString()
                         ).collectAsState(initial = emptyList())
 
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         Text(
                             text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyLarge
                         )
                         Log.d("debts", debts.toString())
                         if (debts.isEmpty()) {
                             Text(
                                 text = context.getString(R.string.no_costs_recorded),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
@@ -1061,10 +1096,16 @@ class BuildingProfileActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
+                                    Spacer(Modifier.height(16.dp))
                                     Text(
-                                        text = "${context.getString(R.string.amount)}: ${debt.amount}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (debt.paymentFlag) Color.Green else Color.Red
+                                        text = "${context.getString(R.string.amount)}: ${formatNumberWithCommas(debt.amount)}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(context.getColor(R.color.Red))
+                                    )
+                                    Text(
+                                        text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(context.getColor(R.color.Red))
                                     )
                                 }
                             }
@@ -1098,8 +1139,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "${context.getString(R.string.amount)}: ${earnings.amount}",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "${context.getString(R.string.amount)}: ${formatNumberWithCommas(earnings.amount)}",
+                    style = MaterialTheme.typography.bodyLarge
                 )
 
             }
@@ -1202,10 +1243,15 @@ class BuildingProfileActivity : ComponentActivity() {
                         }
                     }
                 }
+
             }
         }
     }
 
 
+}
+
+fun formatNumberWithCommas(number: Double): String {
+    return NumberFormat.getNumberInstance(Locale.US).format(number)
 }
 

@@ -11,4 +11,6 @@
     <color name="white">#FFFFFFFF</color>
     <color name="btn">#4A8A57</color>
     <color name="grey">#444343</color>
+    <color name="Green">#045725</color>
+    <color name="Red">#7A2B25</color>
 </resources>

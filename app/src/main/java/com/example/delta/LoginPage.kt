@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.content.edit
 
 class LoginPage : ComponentActivity() {
     val viewModel: BuildingsViewModel by viewModels()
@@ -67,12 +68,15 @@ fun login(username: String, password: String): User? {
 
     val pass = "1234"
     val persianPassword = convertToPersianDigits(pass)
+
+
     val users = listOf(
-        User(1, persianPhoneNumber, persianPassword, "owner"),
-        User(2, "tenant", "password", "tenant"),
-        User(3, "manager", "password", "manager"),
-        User(4, "guest", "password", "guest")
+        User(userId = 1L, mobileNumber = persianPhoneNumber, password = persianPassword, roleId = 1L), // Admin
+        User(userId = 2L, mobileNumber = convertToPersianDigits("09123456789"), password = "password", roleId = 2L), // owner
+        User(userId = 3L, mobileNumber = convertToPersianDigits("09134567890"), password = "password", roleId = 3L), // manager
+        User(userId = 4L, mobileNumber = convertToPersianDigits("09145678901"), password = "password", roleId = 4L)  // tenant
     )
+
 
     return users.find { it.mobileNumber == username && it.password == password }
 }
@@ -165,8 +169,6 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
         }
     }
 }
-
-// Example of handling login and role assignment
 fun handleLogin(
     context: Context,
     username: String,
@@ -175,36 +177,28 @@ fun handleLogin(
 ) {
     val user = login(username, password)
 
-
     if (user != null) {
-        // Save user role locally
+        // Save userId and roleId locally
         val sharedPref = context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
-        with((sharedPref.edit())) {
-            putString("role", user.role)
+        sharedPref.edit().apply {
+            putLong("user_id", user.userId)
+            putLong("role_id", user.roleId)
             apply()
         }
 
-        // Navigate to appropriate activity based on role
-        when (user.role) {
-            "owner" -> {
-                checkBuildingList(context, buildingsViewModel)
-            }
-            "tenant" -> {
-//                navigateToActivity(context, TenantActivity::class.java)
-            }
-            "manager" -> {
-//                navigateToActivity(context, ManagerActivity::class.java)
-            }
-            "guest" -> {
-                navigateToActivity(context, GuestActivity::class.java)
-            }
+        // Navigate to HomePageActivity after login
+        val intent = Intent(context, HomePageActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
+        context.startActivity(intent)
+
+        // If context is an Activity, finish it to prevent back navigation
+        if (context is Activity) {
+            context.finish()
         }
     } else {
-        Log.i("LoginDebug", "username111: $username")
-        Log.i("LoginDebug", "password111: $password")
-        Log.i("LoginDebug", "user111: ${user?.mobileNumber}")
+        Log.i("LoginDebug", "Invalid login attempt: username=$username")
         CoroutineScope(Dispatchers.Main).launch {
-            // Handle invalid login
             Toast.makeText(
                 context,
                 context.getString(R.string.invalid_username),
@@ -213,6 +207,7 @@ fun handleLogin(
         }
     }
 }
+
 
 fun checkBuildingList(context: Context, buildingsViewModel: BuildingsViewModel) {
     CoroutineScope(Dispatchers.IO).launch {

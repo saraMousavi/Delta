@@ -12,7 +12,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
@@ -205,7 +204,7 @@ fun BuildingInfoPage(
         CenterAlignedTopAppBar(
             title = {
                 Text(
-                    text = context.getString(R.string.buildings_form),
+                    text = context.getString(R.string.buildings_info),
                     style = MaterialTheme.typography.bodyLarge
                 )
             },
@@ -1274,7 +1273,12 @@ fun TenantDialog(
         showStartDatePicker = false
         showEndDatePicker = false
     }
-
+    LaunchedEffect(startDate) {
+        if (startDate.isNotEmpty()) {
+            endDate =
+                sharedViewModel.getNextYearSameDaySafe(sharedViewModel.parsePersianDate(startDate)).persianShortDate
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2577,6 +2581,13 @@ fun EditTenantDialog(
     val dismissDatePicker: () -> Unit = {
         showStartDatePicker = false
         showEndDatePicker = false
+    }
+
+    LaunchedEffect(startDate) {
+        if (startDate.isNotEmpty()) {
+            endDate =
+                sharedViewModel.getNextYearSameDaySafe(sharedViewModel.parsePersianDate(startDate)).persianShortDate
+        }
     }
 
     AlertDialog(

@@ -26,45 +26,32 @@ interface DebtsDao {
     @Query("SELECT * FROM debts WHERE unitId = :unitId and payment_flag = 0 ORDER BY due_date ASC")
     suspend fun getDebtsOneUnit(unitId: Long): List<Debts>
 
+    @Query("""
+    SELECT * FROM debts 
+    WHERE unitId = :unitId 
+    AND SUBSTR(due_date, 1, 4) = :yearStr 
+    AND SUBSTR(due_date, 6, 2) = :monthStr
+""")
+    fun getDebtsForUnitAndMonth(unitId: Long, yearStr: String, monthStr: String): List<Debts>
+
+
     @Query("SELECT * FROM debts WHERE buildingId = :buildingId and costId = :costId ORDER BY due_date ASC")
     suspend fun getDebtsOfCosts(buildingId: Long, costId: Long): List<Debts>
 
-//    @Query("SELECT * FROM debts WHERE buildingId = :buildingId and costId = :costId and unitId = :unitId ORDER BY due_date ASC")
-//    suspend fun getDebtsOfCostsForUnit(buildingId: Long, costId: Long, unitId: Long): List<Debts>
 
-//    @Query("""
-//    SELECT debts.*, units.unit_number
-//    FROM debts
-//    INNER JOIN units ON debts.unitId = units.unitId
-//    WHERE debts.buildingId = :buildingId
-//      AND debts.costId = :costId
-//      AND debts.unitId = :unitId
-//
-//    ORDER BY debts.due_date ASC
-//""")
-//    suspend fun getDebtsWithUnitNameForUnitCostCurrentAndPreviousUnpaid(
-//        buildingId: Long,
-//        costId: Long,
-//        unitId: Long
-////        ,        currentYearMonth: String
-//    ): List<DebtWithUnitName>
-//@Query("""
-//    SELECT debts.*
-//    FROM debts
-//    WHERE debts.buildingId = :buildingId
-//
-//    ORDER BY debts.due_date ASC
-//""")
-//suspend fun getDebtsWithUnitNameForUnitCostCurrentAndPreviousUnpaid(
-//    buildingId: Long
-////        ,        currentYearMonth: String
-//): List<Debts>
+    @Query("""
+    SELECT * FROM debts
+    WHERE buildingId = :buildingId
+      AND costId = :costId
+      AND unitId = :unitId and (
+        (SUBSTR(due_date, 1, 4) = :yearStr AND SUBSTR(due_date, 6, 2) = :monthStr)
+        OR
+        ( due_date < (:yearStr || '/' || :monthStr || '/01') AND payment_flag = 0) 
+        )
+    ORDER BY due_date ASC
+""")
+    fun getDebtsCurrentMonthAndPastUnpaid(buildingId: Long, costId: Long, unitId: Long, yearStr: String, monthStr: String): List<Debts>
 
-//    AND (
-//    (debts.due_date LIKE :currentYearMonth || '%')
-//    OR
-//    (debts.due_date < :currentYearMonth AND debts.payment_flag = 0)
-//    )
 
     @Query("""
     SELECT * FROM debts
@@ -72,7 +59,7 @@ interface DebtsDao {
       AND costId = :costId
       AND unitId = :unitId
 """)
-    suspend fun getDebtsForUnitCostBuilding(buildingId: Long, costId: Long, unitId: Long): List<Debts>
+    suspend fun getDebtsForUnitCostCurrentAndPreviousUnpaid(buildingId: Long, costId: Long, unitId: Long): List<Debts>
 
 
     @Query("SELECT * FROM debts inner join costs on costs.id = debts.costId " +

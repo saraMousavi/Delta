@@ -1,5 +1,6 @@
 package com.example.delta.init
 
+
 import android.app.Application
 import android.content.Context
 import android.util.Log
@@ -7,11 +8,13 @@ import com.example.delta.R
 import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.data.model.AppDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -27,25 +30,50 @@ class MyApplication : Application() {
     private lateinit var buildingDao: BuildingsDao
     private lateinit var earningsDao: EarningsDao
     private lateinit var costsDao: CostDao
-    private lateinit var usersDao: UsersDao // Assuming you have a UsersDao
+    private lateinit var usersDao: UsersDao
+    private lateinit var roleDao: RoleDao // Add Role DAO
 
     override fun onCreate() {
         super.onCreate()
         appContext = this
 
-        // Initialize buildingDao here
-        buildingDao = AppDatabase.getDatabase(this).buildingsDao()
-        earningsDao = AppDatabase.getDatabase(this).earningsDao()
-        costsDao = AppDatabase.getDatabase(this).costDao()
-        usersDao = AppDatabase.getDatabase(this).usersDao()
+        // Initialize DAOs
+        val database = AppDatabase.getDatabase(this)
+        buildingDao = database.buildingsDao()
+        earningsDao = database.earningsDao()
+        costsDao = database.costDao()
+        usersDao = database.usersDao()
+        roleDao = database.roleDao() // Initialize Role DAO
 
-
-        // Insert Default Values
-        insertDefaultValues()
+        CoroutineScope(Dispatchers.IO).launch {
+            AppDatabase.getDatabase(this@MyApplication).let { db ->
+                AuthDatabaseInitializer.initialize(db)
+                AuthFieldDatabaseInitializer.initializeFields(db)
+                // Insert Default Values
+                insertDefaultValues()
+            }
+        }
     }
 
     private fun insertDefaultValues() {
         CoroutineScope(Dispatchers.IO).launch {
+            // Insert Default Roles
+            val existingRoles = roleDao.getRoles().firstOrNull()
+            if (existingRoles == null) {
+                val defaultRoles = listOf(
+                    Role(roleName = "Admin", roleDescription = "System Administrator"),
+                    Role(roleName = "Owner", roleDescription = "Property Owner"),
+                    Role(roleName = "Manager", roleDescription = "Property Manager"),
+                    Role(roleName = "Tenant", roleDescription = "Building Tenant")
+                )
+                defaultRoles.forEach { role ->
+                    roleDao.insertRole(role)
+                }
+                Log.d("MyApplication", "Default roles inserted")
+            } else {
+                Log.d("MyApplication", "Roles already exist")
+            }
+
             // Insert Default Building Types
             val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()
             if (buildingTypes == null) {
@@ -56,44 +84,35 @@ class MyApplication : Application() {
                 defaultBuildingTypes.forEach {
                     buildingDao.insertBuildingType(it)
                 }
-            } else {
-                Log.d("MyApplication", "Building Types already exist")
             }
 
             // Insert Default Building Usages
             val buildingUsages = buildingDao.getAllBuildingUsages().firstOrNull()
             if (buildingUsages == null) {
                 val defaultBuildingUsages = listOf(
-                    BuildingUsages(buildingUsageName = getString(R.string.residential) ),
-                    BuildingUsages(buildingUsageName = getString(R.string.commercial) ),
+                    BuildingUsages(buildingUsageName = getString(R.string.residential)),
+                    BuildingUsages(buildingUsageName = getString(R.string.commercial)),
                     BuildingUsages(buildingUsageName = getString(R.string.industrial))
                 )
                 defaultBuildingUsages.forEach {
                     buildingDao.insertBuildingUsage(it)
                 }
-            } else {
-                Log.d("MyApplication", "Building Usages already exist")
             }
 
             // Insert Default Costs
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), period = listOf(getString(R.string.monthly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.mortgage), period = listOf(getString(R.string.yearly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.rent), period = listOf(getString(R.string.monthly)),  paymentLevel = listOf(getString(R.string.unit)) , fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                 )
+                    Costs(costName = getString(R.string.charge), period = listOf(getString(R.string.monthly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.mortgage), period = listOf(getString(R.string.yearly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.rent), period = listOf(getString(R.string.monthly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                )
                 defaultCosts.forEach {
-                    Log.d("MyApplication", "Inserting Costs: $it")
                     costsDao.insertCost(it)
-                    Log.d("Fix Cost", costsDao.getCosts().toString())
                 }
-            } else {
-                Log.d("MyApplication", "Costs already exist")
             }
 
-            Log.d("My Appliaction Costs", costs.toString())
-
+            // Insert Default Earnings
             val earnings = earningsDao.getEarnings().firstOrNull()
             if (earnings == null) {
                 val defaultEarnings = listOf(
@@ -102,46 +121,35 @@ class MyApplication : Application() {
                     Earnings(earningsName = getString(R.string.pool), buildingId = 0, amount = 0.0, currency = "USD")
                 )
                 defaultEarnings.forEach {
-                    Log.d("MyApplication", "Inserting Earnings: ${it.earningsName}")
                     earningsDao.insertEarnings(it)
                 }
-            } else {
-                Log.d("MyApplication", "Earnings already exist")
             }
 
+            // Insert Default Admin User
             val users = usersDao.getUsers().firstOrNull()
             if (users == null) {
+                val ownerRole = roleDao.getRoleByName("Admin")
+
                 val phoneNumber = "09103009458"
                 val persianPhoneNumber = convertToPersianDigits(phoneNumber)
-
                 val password = "1234"
                 val persianPassword = convertToPersianDigits(password)
 
                 val defaultUser = User(
                     mobileNumber = persianPhoneNumber,
                     password = persianPassword,
-                    role = "owner"
+                    roleId = ownerRole.roleId // Use roleId instead of role string
                 )
                 usersDao.insertUser(defaultUser)
-            } else {
-                Log.d("MyApplication", "Users already exist")
+                Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")
             }
         }
     }
 
     fun convertToPersianDigits(input: String): String {
         val persianDigits = listOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
-        val builder = StringBuilder()
-        for (char in input) {
-            if (char.isDigit()) {
-                val digit = char.toString().toInt()
-                builder.append(persianDigits[digit])
-            } else {
-                builder.append(char) // keep non-digit characters as is
-            }
-        }
-        return builder.toString()
+        return input.map { char ->
+            if (char.isDigit()) persianDigits[char.toString().toInt()] else char
+        }.joinToString("")
     }
-
-
 }

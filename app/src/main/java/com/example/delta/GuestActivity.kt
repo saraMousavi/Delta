@@ -5,36 +5,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
@@ -45,123 +30,132 @@ class GuestActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    var context = LocalContext.current
-                    Scaffold(
-                        topBar = {
-                            CenterAlignedTopAppBar(
-                                title = {
-                                    Text(
-                                        text = context.getString(R.string.guest_entrance),
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                }
-                            )
-                        }
-                    ) { paddingValues ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues)
-                                .padding(16.dp)
-                        ) {
-                            // Banner
-                            Image(
-                                painter = painterResource(R.drawable.banner),
-                                contentDescription = "Banner",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(150.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Sign-in section
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = context.getString(R.string.sign_in),
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    OutlinedTextField(
-                                        value = "",
-                                        onValueChange = { },
-                                        label = { Text(context.getString(R.string.mobile_number)) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Button(onClick = { }) {
-                                        Text("Sign In")
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Features section
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp)
-                            ) {
-                                Text(
-                                    text = context.getString(R.string.features),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalArrangement = Arrangement.SpaceEvenly
-                                ) {
-                                    FeatureItem(
-                                        icon = Icons.Default.Info,
-                                        text = context.getString(R.string.building_charge)
-                                    )
-                                    FeatureItem(
-                                        icon = Icons.Default.AccountBox,
-                                        text = context.getString(R.string.cost_managing)
-                                    )
-                                    FeatureItem(
-                                        icon = Icons.Default.Settings,
-                                        text = context.getString(R.string.reporting)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    GuestScreen()
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeatureItem(icon: ImageVector, text: String) {
-    Column(
-        modifier = Modifier
-            .padding(8.dp)
-            .clickable(onClick = { })
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = text,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge
-        )
+fun GuestScreen() {
+    var mobileNumber by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = context.getString(R.string.guest_entrance),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Banner
+            Image(
+                painter = painterResource(R.drawable.banner),
+                contentDescription = "Banner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Features section
+            Text(
+                text = context.getString(R.string.features),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                FeatureItem(
+                    icon = Icons.Default.Receipt,  // Changed to more appropriate icon
+                    text = context.getString(R.string.building_charge),
+                    onClick = { /* Handle feature */ }
+                )
+                FeatureItem(
+                    icon = Icons.Default.AttachMoney,  // Changed to money icon
+                    text = context.getString(R.string.cost_managing),
+                    onClick = { /* Handle feature */ }
+                )
+                FeatureItem(
+                    icon = Icons.Default.BarChart,  // Changed to chart icon
+                    text = context.getString(R.string.reporting),
+                    onClick = { /* Handle feature */ }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Guest message
+            Text(
+                text = context.getString(R.string.guest_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
     }
 }
+
+@Composable
+fun FeatureItem(icon: ImageVector, text: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .width(100.dp)
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = text,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// Add to your strings.xml:
+// <string name="guest_message">Sign in to access all features and manage your properties</string>

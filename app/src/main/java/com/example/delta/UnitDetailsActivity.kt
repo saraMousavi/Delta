@@ -1,9 +1,12 @@
 package com.example.delta
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,10 +37,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,7 +51,9 @@ import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Units
 import com.example.delta.viewmodel.SharedViewModel
+import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlin.getValue
+
 class UnitDetailsActivity : ComponentActivity() {
 
     // Use SharedViewModel for shared state
@@ -115,8 +125,14 @@ class UnitDetailsActivity : ComponentActivity() {
 
                 when (selectedTab) {
                     0 -> OverviewSection(unit = unit)
-                    1 -> DebtSection(unitId = unit.unitId, sharedViewModel = sharedViewModel) // Pass SharedViewModel
-                    2 -> PaymentsSection(unitId = unit.unitId, sharedViewModel = sharedViewModel) // Pass SharedViewModel
+                    1 -> DebtSection(
+                        unitId = unit.unitId,
+                        sharedViewModel = sharedViewModel
+                    ) // Pass SharedViewModel
+                    2 -> PaymentsSection(
+                        unitId = unit.unitId,
+                        sharedViewModel = sharedViewModel
+                    ) // Pass SharedViewModel
                     3 -> ReportSection(unitId = unit.unitId)
                 }
             }
@@ -176,10 +192,34 @@ class UnitDetailsActivity : ComponentActivity() {
     }
 
     @Composable
-    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel) {  // Receive SharedViewModel
-        val debts by sharedViewModel.getDebtsOneUnit(unitId).collectAsState(initial = emptyList())
+    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel) {
+
+        // Receive SharedViewModel
+        // State for selected year and month
+//        var selectedYear by remember { mutableStateOf(PersianCalendar().persianYear) }
+//        var selectedMonth by remember { mutableStateOf(PersianCalendar().persianMonth + 1) }
+        var selectedYear by rememberSaveable { mutableStateOf(PersianCalendar().persianYear) }
+        var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth + 1) }
+
+
+//        val debts by sharedViewModel.getDebtsOneUnit(unitId).collectAsState(initial = emptyList())
+        val debts by sharedViewModel.getDebtsForUnitAndMonth(unitId, selectedYear.toString(), selectedMonth.toString().padStart(2, '0'))
+            .collectAsState(initial = emptyList())
+        Log.d("debt", debts.toString())
+
+
         var context = LocalContext.current
+
         Column {
+            YearMonthSelector(
+                selectedYear = selectedYear,
+                onYearChange = { selectedYear = it },
+                selectedMonth = selectedMonth,
+                onMonthChange = { selectedMonth = it }
+            )
+            Log.d("slectedyear", selectedYear.toString())
+            Log.d("selectedmonth", selectedMonth.toString())
+
             if (debts.isEmpty()) {
                 Text(
                     text = context.getString(R.string.no_debts_recorded),
@@ -188,7 +228,9 @@ class UnitDetailsActivity : ComponentActivity() {
             } else {
                 debts.forEach { debt ->
                     DebtItem(debt = debt, onPayment = {
-                        sharedViewModel.updateDebt(debt) // Use SharedViewModel to update
+                        Log.d("debt", debt.toString())
+                        val updatedDebt = debt.copy(paymentFlag = true)
+                        sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
                     })
                 }
             }
@@ -212,15 +254,25 @@ class UnitDetailsActivity : ComponentActivity() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${LocalContext.current.getString(R.string.description)}: ${debt.description}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Text(
-                        text = "${LocalContext.current.getString(R.string.amount)}: ${debt.amount}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "${LocalContext.current.getString(R.string.title)}: ${debt.description}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = "${LocalContext.current.getString(R.string.amount)}: ${debt.amount}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "${LocalContext.current.getString(R.string.due)}: ${debt.dueDate}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
+                Log.d("debt.paymentFlag", debt.paymentFlag.toString())
                 if (debt.paymentFlag) {
                     Text(
                         text = LocalContext.current.getString(R.string.payment_done),

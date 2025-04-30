@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateOffsetAsState
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -38,9 +40,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoneyOff
 import androidx.compose.material.icons.outlined.Support
 import androidx.compose.material3.Button
@@ -48,6 +53,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -80,6 +86,7 @@ import com.example.delta.init.IranianLocations
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -98,7 +105,11 @@ import com.example.delta.init.WaveIndicatorShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.delta.data.dao.AuthorizationDao
+import com.example.delta.data.entity.RoleAuthorization
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.NavItem
+import com.example.delta.interfaces.RolePermissionsManager
 import com.uploadcare.android.library.api.UploadcareClient
 import com.uploadcare.android.library.api.UploadcareFile
 import com.uploadcare.android.library.callbacks.UploadFileCallback
@@ -614,12 +625,59 @@ private fun currentRoute(navController: NavHostController): String? {
 
 
 
+@Composable
+fun AuthScreen(permissionsManager: RolePermissionsManager) {
+    val context = LocalContext.current
+    val userRole = permissionsManager.getUserRole()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Log.d("userRole", userRole.toString())
+        if (userRole == "admin") {
+            Text("Admin Settings", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            RoleManagementSection(permissionsManager = permissionsManager)
+        } else {
+            // Show an error message if not an admin
+            Toast.makeText(context, "You don't have permission to access this settings.", Toast.LENGTH_SHORT).show()
+            Text("You don't have permission to access this screen.", style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+fun RoleManagementSection(permissionsManager: RolePermissionsManager) {
+    // State to hold all permissions
+    val allPermissions = remember { mutableStateListOf<RoleAuthorization>() }
+
+    // Load permissions on initial composition
+    LaunchedEffect(Unit) {
+        allPermissions.addAll(permissionsManager.getAllPermissions())
+    }
+
+    Column {
+        Text("Manage Roles and Permissions", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // List all roles
+        allPermissions.forEach { permission ->
+            Text("Role: ${permission.role}")
+            // Add options to edit/delete the role
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     context: Context,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    permissionsManager : RolePermissionsManager
 ) {
+    var showAuthScreen by remember { mutableStateOf(false) }
     val items = listOf(
         NavItem(
             title = R.string.supporting,
@@ -645,6 +703,11 @@ fun SettingsScreen(
             title = R.string.building_usage_list,
             icon = Icons.Outlined.Business,
             onClick = { context.startActivity(Intent(context, BuildingUsageActivity::class.java)) }
+        ),
+        NavItem(
+            title = R.string.user_management,
+            icon = Icons.Outlined.Lock,
+            onClick = { context.startActivity(Intent(context, UserManagementActivity::class.java)) }
         )
     )
 
@@ -676,6 +739,10 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
             }
         }
+
+    }
+    if (showAuthScreen) {
+        AuthScreen(permissionsManager = permissionsManager)
     }
 }
 
@@ -956,5 +1023,191 @@ fun UploadFile(
 //        }
     }
 }
+
+@Composable
+fun YearMonthSelector(
+    selectedYear: Int,
+    onYearChange: (Int) -> Unit,
+    selectedMonth: Int,
+    onMonthChange: (Int) -> Unit
+) {
+    val persianMonths = listOf(
+        LocalContext.current.getString(R.string.farvardin),
+        LocalContext.current.getString(R.string.ordibehesht),
+        LocalContext.current.getString(R.string.khordad),
+        LocalContext.current.getString(R.string.tir),
+        LocalContext.current.getString(R.string.mordad),
+        LocalContext.current.getString(R.string.shahrivar),
+        LocalContext.current.getString(R.string.mehr),
+        LocalContext.current.getString(R.string.aban),
+        LocalContext.current.getString(R.string.azar),
+        LocalContext.current.getString(R.string.dey),
+        LocalContext.current.getString(R.string.bahman),
+        LocalContext.current.getString(R.string.esfand)
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Year selector with border
+        Row(
+            modifier = Modifier
+                .border(
+                    width = 1.dp,
+                    color = Color.Gray,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { onYearChange(selectedYear - 1) }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Previous Year"
+                )
+            }
+            Text(
+                text = selectedYear.toString(),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            IconButton(onClick = { onYearChange(selectedYear + 1) }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropUp,
+                    contentDescription = "Next Year"
+                )
+            }
+        }
+
+        // Month selector with border
+        Row(
+            modifier = Modifier
+                .border(
+                    width = 1.dp,
+                    color = Color.Gray,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                val prevMonth = if (selectedMonth > 1) selectedMonth - 1 else 12
+                onMonthChange(prevMonth)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Previous Month"
+                )
+            }
+            Text(
+                text = persianMonths.getOrNull(selectedMonth - 1) ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            IconButton(onClick = {
+                val nextMonth = if (selectedMonth < 12) selectedMonth + 1 else 1
+                onMonthChange(nextMonth)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropUp,
+                    contentDescription = "Next Month"
+                )
+            }
+        }
+    }
+}
+
+
+// Convert to user-friendly strings
+fun PermissionLevel.toDisplayName(): String {
+    return when(this) {
+        PermissionLevel.READ -> "View"
+        PermissionLevel.WRITE -> "Edit"
+        PermissionLevel.DELETE -> "Delete"
+        PermissionLevel.FULL -> "Full Control"
+    }
+}
+
+// For permission selection dialog
+@Composable
+fun PermissionLevelSelector(
+    currentLevel: PermissionLevel,
+    onLevelSelected: (PermissionLevel) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.wrapContentSize()) {
+        Button(onClick = { expanded = true }) {
+            Text(currentLevel.toDisplayName())
+            Icon(Icons.Default.ArrowDropDown, null)
+        }
+
+        DropdownMenu(expanded, { expanded = false }) {
+            PermissionLevel.values().forEach { level ->
+                DropdownMenuItem(
+                    text = { Text(level.toDisplayName()) },
+                    onClick = {
+                        onLevelSelected(level)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PermissionedOutlinedTextField(
+    fieldName: Int,
+    objectId: Long,
+    sharedViewModel: SharedViewModel,
+    authDao: AuthorizationDao,
+    roleId: Long,
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var canEdit by remember { mutableStateOf(false) }
+
+    LaunchedEffect(fieldName, objectId, roleId) {
+        canEdit = hasFieldPermission(
+            dao = authDao,
+            roleId = roleId,
+            objectId = objectId,
+            fieldName = fieldName,
+            required = PermissionLevel.WRITE
+        )
+    }
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = { if (canEdit) onValueChange(it) },
+        label = { Text(label) },
+        modifier = modifier,
+        enabled = canEdit
+    )
+}
+
+suspend fun hasFieldPermission(
+    dao: AuthorizationDao,
+    roleId: Long,
+    objectId: Long,
+    fieldName: Int,
+    required: PermissionLevel = PermissionLevel.READ
+): Boolean {
+    val field = dao.getFieldByName(objectId, fieldName) ?: return false
+    val fieldPerm = dao.getFieldPermission(roleId, field.fieldId)
+    val objectPerm = dao.getObjectPermission(roleId, objectId)
+
+    // Prefer field-level, fallback to object-level
+    val effectivePerm = fieldPerm ?: objectPerm
+    return effectivePerm != null && effectivePerm >= required.value
+}
+
+
 
 

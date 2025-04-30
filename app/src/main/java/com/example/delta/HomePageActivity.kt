@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,14 +25,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,16 +38,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -62,8 +56,10 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
-import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.AppActivities
 import com.example.delta.factory.BuildingsViewModelFactory
+import com.example.delta.init.RolePermissionsManagerImpl
+import com.example.delta.interfaces.RolePermissionsManager
 
 
 class HomePageActivity : ComponentActivity() {
@@ -71,6 +67,11 @@ class HomePageActivity : ComponentActivity() {
         BuildingsViewModelFactory(this.application)
     }
     val sharedViewModel: SharedViewModel by viewModels()
+    // Create a mock RolePermissionsManager
+    val permissionsManager = RolePermissionsManagerImpl(
+        authorizationData = mutableListOf(),
+        currentUserRole = "admin"
+    )
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,11 +106,11 @@ class HomePageActivity : ComponentActivity() {
                             ) {
                                 composable(Screen.Home.route) {
                                     // List of buildings
-                                    BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel)
+                                    BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel, permissionsManager = permissionsManager)
 
                                 }
 
-                                composable(Screen.Settings.route) { SettingsScreen(LocalContext.current) }
+                                composable(Screen.Settings.route) { SettingsScreen(LocalContext.current, permissionsManager = permissionsManager) }
                             }
                         }
 
@@ -120,27 +121,21 @@ class HomePageActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun ActivityLauncher(
-    targetActivity: Class<*>,
-    onLaunchComplete: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        context.startActivity(Intent(context, targetActivity))
-        onLaunchComplete()
-    }
-}
 
 
 @Composable
 fun BuildingList(
     viewModel: BuildingsViewModel,
-    sharedViewModel: SharedViewModel
+    sharedViewModel: SharedViewModel,
+    permissionsManager: RolePermissionsManager
 ) {
-    val buildingsWithTypesAndUsages by viewModel.getAllBuildingsWithTypeAndUsage().collectAsState(initial = emptyList())
+    val buildingsWithTypesAndUsages by viewModel.getAllBuildingsWithTypeAndUsage()
+        .collectAsState(initial = emptyList())
     val context = LocalContext.current
+//    val userRole = permissionsManager.getUserRole()
+//    val permissions = permissionsManager.getPermissionsForRole(userRole)
 
+//    if (permissions?.authorizationObject?.contains(AppActivities.HomePageActivity.activityName) == true) {
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,9 +151,15 @@ fun BuildingList(
                 onClick = {
                     val intent = Intent(context, BuildingProfileActivity::class.java).apply {
                         putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
-                        putExtra("BUILDING_USAGE_NAME", buildingWithTypesAndUsages.buildingUsageName)
+                        putExtra(
+                            "BUILDING_USAGE_NAME",
+                            buildingWithTypesAndUsages.buildingUsageName
+                        )
                         // Only put Parcelable if your Buildings class implements Parcelable!
-                        putExtra("BUILDING_DATA", buildingWithTypesAndUsages.building as? Parcelable)
+                        putExtra(
+                            "BUILDING_DATA",
+                            buildingWithTypesAndUsages.building as? Parcelable
+                        )
                     }
                     context.startActivity(intent)
                 },
@@ -166,7 +167,11 @@ fun BuildingList(
                     sharedViewModel.deleteBuildingWithRelations(
                         buildingId = building.buildingId,
                         onSuccess = {
-                            Toast.makeText(context, context.getString(R.string.success_delete), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.success_delete),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         onError = { error ->
                             Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
@@ -177,6 +182,7 @@ fun BuildingList(
         }
     }
 }
+//}
 
 
 @Composable

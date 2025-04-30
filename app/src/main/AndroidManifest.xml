@@ -15,6 +15,10 @@
         tools:targetApi="33">
         <activity
             android:name=".HomePageActivity"
+            android:exported="false"
+        />
+        <activity
+            android:name=".LoginPage"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -23,17 +27,17 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".LoginPage"
-            android:exported="false"></activity>
-        <activity
             android:name=".AuthActivity"
             android:exported="false" />
         <activity
             android:name=".UnitDetailsActivity"
             android:exported="false" />
+        <activity android:name=".BuildingFormActivity"
+            android:exported="true" />
+
         <activity
-            android:name=".BuildingFormActivity"
-            android:exported="false"></activity>
+            android:name=".UserManagementActivity"
+            android:exported="false" />
         <activity
             android:name=".BuildingProfileActivity"
             android:exported="false" />
