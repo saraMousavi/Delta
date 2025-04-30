@@ -5,8 +5,6 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,14 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,13 +41,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Units
+import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlin.getValue
@@ -122,18 +122,32 @@ class UnitDetailsActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
+                var showAddCostDialog by remember { mutableStateOf(false) }
                 when (selectedTab) {
                     0 -> OverviewSection(unit = unit)
                     1 -> DebtSection(
                         unitId = unit.unitId,
-                        sharedViewModel = sharedViewModel
+                        sharedViewModel = sharedViewModel,
+                        onAddCostClick = { showAddCostDialog = true }
                     ) // Pass SharedViewModel
                     2 -> PaymentsSection(
                         unitId = unit.unitId,
                         sharedViewModel = sharedViewModel
                     ) // Pass SharedViewModel
                     3 -> ReportSection(unitId = unit.unitId)
+                }
+                if (showAddCostDialog) {
+                    AddCostDialog(
+                        onDismiss = { showAddCostDialog = false },
+                        onSave = { name, amount, period ->
+                            // Insert cost and debts
+                            sharedViewModel.insertDebtPerNewCost(
+                                buildingId = unit.buildingId ?: 0,
+                                amount = amount, name = name, period = period,
+                                fundFlag = FundFlag.NO_EFFECT, paymentLevel = PaymentLevel.UNIT)
+                            showAddCostDialog = false
+                        }
+                    )
                 }
             }
         }
@@ -192,14 +206,11 @@ class UnitDetailsActivity : ComponentActivity() {
     }
 
     @Composable
-    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel) {
+    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel,
+                    onAddCostClick: () -> Unit) {
 
-        // Receive SharedViewModel
-        // State for selected year and month
-//        var selectedYear by remember { mutableStateOf(PersianCalendar().persianYear) }
-//        var selectedMonth by remember { mutableStateOf(PersianCalendar().persianMonth + 1) }
-        var selectedYear by rememberSaveable { mutableStateOf(PersianCalendar().persianYear) }
-        var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth + 1) }
+        var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
+        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth + 1) }
 
 
 //        val debts by sharedViewModel.getDebtsOneUnit(unitId).collectAsState(initial = emptyList())
@@ -210,31 +221,53 @@ class UnitDetailsActivity : ComponentActivity() {
 
         var context = LocalContext.current
 
-        Column {
-            YearMonthSelector(
-                selectedYear = selectedYear,
-                onYearChange = { selectedYear = it },
-                selectedMonth = selectedMonth,
-                onMonthChange = { selectedMonth = it }
-            )
-            Log.d("slectedyear", selectedYear.toString())
-            Log.d("selectedmonth", selectedMonth.toString())
-
-            if (debts.isEmpty()) {
-                Text(
-                    text = context.getString(R.string.no_debts_recorded),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            } else {
-                debts.forEach { debt ->
-                    DebtItem(debt = debt, onPayment = {
-                        Log.d("debt", debt.toString())
-                        val updatedDebt = debt.copy(paymentFlag = true)
-                        sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
-                    })
+        Scaffold(
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = onAddCostClick,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Cost")
                 }
             }
+        ) { innerPadding ->
+            // Your debt list content here, e.g. LazyColumn
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // debt items
+                YearMonthSelector(
+                    selectedYear = selectedYear,
+                    onYearChange = { selectedYear = it },
+                    selectedMonth = selectedMonth,
+                    onMonthChange = { selectedMonth = it }
+                )
+                Log.d("slectedyear", selectedYear.toString())
+                Log.d("selectedmonth", selectedMonth.toString())
+
+                if (debts.isEmpty()) {
+                    Text(
+                        text = context.getString(R.string.no_debts_recorded),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                } else {
+                    debts.forEach { debt ->
+                        DebtItem(debt = debt, onPayment = {
+                            Log.d("debt", debt.toString())
+                            val updatedDebt = debt.copy(paymentFlag = true)
+                            sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
+                        })
+                    }
+                }
+
+            }
         }
+
     }
 
     @Composable

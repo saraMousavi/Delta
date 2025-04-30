@@ -17,6 +17,11 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.CalculateMethod
+import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
+import com.example.delta.enums.Responsible
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -103,22 +108,24 @@ class MyApplication : Application() {
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), period = listOf(getString(R.string.monthly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = true, calculateMethod = listOf(getString(R.string.area)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.mortgage), period = listOf(getString(R.string.yearly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = false, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
-                    Costs(costName = getString(R.string.rent), period = listOf(getString(R.string.monthly)), paymentLevel = listOf(getString(R.string.unit)), fundFlag = true, calculateMethod = listOf(getString(R.string.fixed)), responsible = listOf(getString(R.string.tenant)), tempAmount = 0.0),
+                    Costs(costName = getString(R.string.charge), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.AREA, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(costName = getString(R.string.mortgage), period = Period.YEARLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(costName = getString(R.string.rent), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
                 )
                 defaultCosts.forEach {
                     costsDao.insertCost(it)
                 }
             }
 
+            Log.d("My Application", costsDao.getCosts().toString())
+
             // Insert Default Earnings
             val earnings = earningsDao.getEarnings().firstOrNull()
             if (earnings == null) {
                 val defaultEarnings = listOf(
-                    Earnings(earningsName = getString(R.string.parking), buildingId = 0, amount = 0.0, currency = "USD"),
-                    Earnings(earningsName = getString(R.string.co_working_space), buildingId = 0, amount = 0.0, currency = "USD"),
-                    Earnings(earningsName = getString(R.string.pool), buildingId = 0, amount = 0.0, currency = "USD")
+                    Earnings(earningsName = getString(R.string.parking), amount = 0.0, startDate = "", endDate = "", period = Period.MONTHLY),
+                    Earnings(earningsName = getString(R.string.co_working_space), amount = 0.0, startDate = "", endDate = "", period = Period.YEARLY),
+                    Earnings(earningsName = getString(R.string.pool), amount = 0.0, startDate = "", endDate = "", period = Period.YEARLY)
                 )
                 defaultEarnings.forEach {
                     earningsDao.insertEarnings(it)

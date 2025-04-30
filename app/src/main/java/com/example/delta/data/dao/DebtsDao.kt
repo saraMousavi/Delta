@@ -53,13 +53,13 @@ interface DebtsDao {
     fun getDebtsCurrentMonthAndPastUnpaid(buildingId: Long, costId: Long, unitId: Long, yearStr: String, monthStr: String): List<Debts>
 
 
-    @Query("""
-    SELECT * FROM debts
-    WHERE buildingId = :buildingId
-      AND costId = :costId
-      AND unitId = :unitId
-""")
-    suspend fun getDebtsForUnitCostCurrentAndPreviousUnpaid(buildingId: Long, costId: Long, unitId: Long): List<Debts>
+//    @Query("""
+//    SELECT * FROM debts
+//    WHERE buildingId = :buildingId
+//      AND costId = :costId
+//      AND unitId = :unitId
+//""")
+//    suspend fun getDebtsForUnitCostCurrentAndPreviousUnpaid(buildingId: Long, costId: Long, unitId: Long): List<Debts>
 
 
     @Query("SELECT * FROM debts inner join costs on costs.id = debts.costId " +
@@ -81,4 +81,26 @@ interface DebtsDao {
 
     @Query("DELETE FROM debts WHERE  buildingId = :buildingId")
     suspend fun deleteDebtsForBuilding(buildingId: Long)
+
+
+        // Sum of debts.amount where cost.fundFlag = +1 and debts.paymentFlag = 1 for given building
+        @Query("""
+        SELECT SUM(d.amount) FROM debts d
+        INNER JOIN costs c ON d.costId = c.id
+        WHERE d.buildingId = :buildingId 
+          AND c.fund_flag = 1
+          AND d.payment_flag = 1
+    """)
+        suspend fun sumPaidFundFlagPositive(buildingId: Long): Double
+
+        // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
+        @Query("""
+        SELECT SUM(d.amount) FROM debts d
+        INNER JOIN costs c ON d.costId = c.id
+        WHERE d.buildingId = :buildingId 
+          AND c.fund_flag = -1
+          AND d.payment_flag = 0
+    """)
+        suspend fun sumUnpaidFundFlagNegative(buildingId: Long): Double
+
 }

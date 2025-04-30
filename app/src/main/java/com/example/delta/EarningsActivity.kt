@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.data.entity.Earnings
+import com.example.delta.enums.Period
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.viewmodel.EarningsViewModel
 
@@ -70,7 +71,9 @@ class EarningsActivity : ComponentActivity() {
                                     buildingId = 0,
                                     earningsName = name,
                                     amount = 0.0,
-                                    currency = name
+                                    startDate = "",
+                                    endDate = "",
+                                    period = Period.MONTHLY
                                 )
                             )
                         },

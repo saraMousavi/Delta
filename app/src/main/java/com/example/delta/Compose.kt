@@ -116,6 +116,23 @@ import com.uploadcare.android.library.callbacks.UploadFileCallback
 import com.uploadcare.android.library.exceptions.UploadcareApiException
 import com.uploadcare.android.library.upload.FileUploader
 import kotlin.math.roundToInt
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import kotlinx.coroutines.launch
+
 
 
 @Composable
@@ -1121,12 +1138,12 @@ fun YearMonthSelector(
 
 
 // Convert to user-friendly strings
-fun PermissionLevel.toDisplayName(): String {
+fun PermissionLevel.toDisplayName(context: Context): String {
     return when(this) {
-        PermissionLevel.READ -> "View"
-        PermissionLevel.WRITE -> "Edit"
-        PermissionLevel.DELETE -> "Delete"
-        PermissionLevel.FULL -> "Full Control"
+        PermissionLevel.READ -> context.getString(R.string.view)
+        PermissionLevel.WRITE -> context.getString(R.string.edit)
+        PermissionLevel.DELETE -> context.getString(R.string.delete)
+        PermissionLevel.FULL -> context.getString(R.string.full)
     }
 }
 
@@ -1134,20 +1151,21 @@ fun PermissionLevel.toDisplayName(): String {
 @Composable
 fun PermissionLevelSelector(
     currentLevel: PermissionLevel,
+    context: Context,
     onLevelSelected: (PermissionLevel) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.wrapContentSize()) {
         Button(onClick = { expanded = true }) {
-            Text(currentLevel.toDisplayName())
+            Text(currentLevel.toDisplayName(context))
             Icon(Icons.Default.ArrowDropDown, null)
         }
 
         DropdownMenu(expanded, { expanded = false }) {
-            PermissionLevel.values().forEach { level ->
+            PermissionLevel.entries.forEach { level ->
                 DropdownMenuItem(
-                    text = { Text(level.toDisplayName()) },
+                    text = { Text(level.toDisplayName(context)) },
                     onClick = {
                         onLevelSelected(level)
                         expanded = false
@@ -1207,6 +1225,180 @@ suspend fun hasFieldPermission(
     val effectivePerm = fieldPerm ?: objectPerm
     return effectivePerm != null && effectivePerm >= required.value
 }
+
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@Composable
+fun AnimatedLoginScreen(
+    onLoginClick: (username: String, password: String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // States for inputs and UI
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var loginSuccess by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+
+
+    // Animate button width and color on loading
+    val buttonWidth by animateDpAsState(targetValue = if (isLoading) 60.dp else 280.dp)
+    val buttonColor by animateColorAsState(
+        targetValue = if (loginSuccess) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+    )
+
+    // Animate login success message visibility
+    AnimatedVisibility(
+        visible = loginSuccess,
+        enter = fadeIn(animationSpec = tween(700)) + slideInVertically(),
+        exit = fadeOut(animationSpec = tween(700)) + slideOutVertically()
+    ) {
+        Text(
+            text = "ورود موفقیت‌آمیز بود!",
+            color = Color(0xFF4CAF50),
+            fontSize = 20.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+
+    // Main Column
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFF2196F3), Color(0xFF21CBF3))
+                )
+            )
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Title
+        Text(
+            text = "خوش آمدید",
+            style = MaterialTheme.typography.headlineLarge.copy(color = Color.White),
+            modifier = Modifier.padding(bottom = 40.dp)
+        )
+
+        // Username TextField
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("نام کاربری") },
+            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User Icon") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.White,
+                unfocusedIndicatorColor = Color.White.copy(alpha = 0.5f),
+                cursorColor = Color.White,
+                focusedLabelColor = Color.White,
+                unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
+            ),
+
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Password TextField
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("رمز عبور") },
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
+            trailingIcon = {
+                val image = if (passwordVisible)
+                    Icons.Filled.Person else Icons.Filled.Lock
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.Person else Icons.Default.Lock,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                        tint = Color.White
+                    )
+                }
+            },
+            singleLine = true,
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.White,
+                unfocusedIndicatorColor = Color.White.copy(alpha = 0.5f),
+                cursorColor = Color.White,
+                focusedLabelColor = Color.White,
+                unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
+            ),
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Error message
+        errorMessage?.let {
+            Text(
+                text = it,
+                color = Color(0xFFFF5252),
+                modifier = Modifier.padding(bottom = 16.dp),
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // Login Button with animation
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(buttonWidth)
+                .height(56.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(buttonColor)
+                .clickable(enabled = !isLoading) {
+                    focusManager.clearFocus()
+                    errorMessage = null
+                    if (username.isBlank() || password.isBlank()) {
+                        errorMessage = "لطفا نام کاربری و رمز عبور را وارد کنید"
+                        return@clickable
+                    }
+                    isLoading = true
+                    coroutineScope.launch {
+                        delay(2000)
+                        if (username == "admin" && password == "1234") {
+                            loginSuccess = true
+                            errorMessage = null
+                        } else {
+                            errorMessage = "نام کاربری یا رمز عبور اشتباه است"
+                            loginSuccess = false
+                        }
+                        isLoading = false
+                    }
+                }
+
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(28.dp)
+                )
+            } else {
+                Text(
+                    text = "ورود",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+    }
+}
+
 
 
 

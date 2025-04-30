@@ -123,7 +123,7 @@
     <string name="hezar_toman">هزار تومان</string>
     <string name="milion_toman">میلیون تومان</string>
     <string name="automatic_charge">محاسبه شارژ به صورت اتوماتیک انجام شود.</string>
-    <string name="nafari">نفرات</string>
+    <string name="people">نفرات</string>
     <string name="acount_base">مبنای محاسبه</string>
     <string name="base_amount">مبلغ واحد</string>
     <string name="not_account">شما حساب کاربری فعال ندارید؟</string>
@@ -249,4 +249,11 @@
     <string name="owners_page">صفحه اطلاعات مالکین</string>
     <string name="tenants_page">صفحه اطلاعات ساکنین</string>
     <string name="cost_page">صفحه اطلاعات مالی</string>
+    <string name="view">مشاهده</string>
+    <string name="full">کامل</string>
+    <string name="automatic">اتوماتیک</string>
+    <string name="add_new_cost">ثبت هزینه جدید</string>
+    <string name="add_new_earning">"ثبت درآمد برای "</string>
+    <string name="earning_title">عنوان درآمد</string>
+    <string name="doesnt_have">ندارد</string>
 </resources>

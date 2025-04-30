@@ -9,20 +9,22 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.data.entity.User
 import com.example.delta.viewmodel.BuildingsViewModel
@@ -30,7 +32,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.core.content.edit
 
 class LoginPage : ComponentActivity() {
     val viewModel: BuildingsViewModel by viewModels()
@@ -81,6 +82,95 @@ fun login(username: String, password: String): User? {
     return users.find { it.mobileNumber == username && it.password == password }
 }
 
+//@OptIn(ExperimentalMaterial3Api::class)
+//@Composable
+//fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
+//    var username by remember { mutableStateOf("") }
+//    var password by remember { mutableStateOf("") }
+//    val context = LocalContext.current
+//    val scope = rememberCoroutineScope()
+//
+//    Scaffold(
+//        topBar = {
+//            CenterAlignedTopAppBar(
+//                title = {
+//                    Text(
+//                        text = context.getString(R.string.login_user),
+//                        style = MaterialTheme.typography.bodyLarge
+//                    )
+//                }
+//            )
+//        }
+//    ) { innerPadding ->
+//        Column(
+//            modifier = Modifier
+//                .fillMaxSize()
+//                .padding(innerPadding)
+//                .padding(16.dp),
+//            horizontalAlignment = Alignment.CenterHorizontally
+//        ) {
+//            OutlinedTextField(
+//                value = username,
+//                onValueChange = { username = it },
+//                label = {
+//                    Text(
+//                        text = context.getString(R.string.mobile_number),
+//                        style = MaterialTheme.typography.bodyLarge
+//                    )
+//                },
+//                modifier = Modifier.fillMaxWidth()
+//            )
+//            Spacer(modifier = Modifier.height(8.dp))
+//            PasswordTextField(
+//                password = password,
+//                onPasswordChange = { password = it },
+//                context = context
+//            )
+//            Spacer(modifier = Modifier.height(16.dp))
+//
+//            Button(
+//                onClick = {
+//                    scope.launch(Dispatchers.IO) { // Launch in IO dispatcher
+//                        handleLogin(context, username, password, buildingsViewModel)
+//                    }
+//                },
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                ),
+//                modifier = Modifier.fillMaxWidth()
+//            ) {
+//                Text(
+//                    context.getString(R.string.login),
+//                    modifier = Modifier.padding(2.dp),
+//                    style = MaterialTheme.typography.bodyLarge
+//                )
+//            }
+//            Spacer(modifier = Modifier.height(8.dp))
+//            Text(
+//                buildAnnotatedString {
+//                    append(context.getString(R.string.not_account))
+//                    withLink(
+//                        LinkAnnotation.Url(
+//                            url = "guest",
+//                            styles = TextLinkStyles(
+//                                style = SpanStyle(color = Color.Blue)
+//                            ),
+//                            linkInteractionListener = {
+//                                // Navigate to guest page
+//                                val intent = Intent(context, GuestActivity::class.java)
+//                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+//                                context.startActivity(intent)
+//                            }
+//                        )
+//                    ) {
+//                        append(context.getString(R.string.guest_entrance))
+//                    }
+//                }
+//            )
+//        }
+//    }
+//}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
@@ -95,9 +185,15 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
                 title = {
                     Text(
                         text = context.getString(R.string.login_user),
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.shadow(4.dp)
             )
         }
     ) { innerPadding ->
@@ -105,70 +201,68 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = {
-                    Text(
-                        text = context.getString(R.string.mobile_number),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
+                label = { Text(text = context.getString(R.string.mobile_number)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             PasswordTextField(
                 password = password,
                 onPasswordChange = { password = it },
                 context = context
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    scope.launch(Dispatchers.IO) { // Launch in IO dispatcher
+                    scope.launch(Dispatchers.IO) {
                         handleLogin(context, username, password, buildingsViewModel)
                     }
                 },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                ),
-                modifier = Modifier.fillMaxWidth()
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 Text(
-                    context.getString(R.string.login),
-                    modifier = Modifier.padding(2.dp),
-                    style = MaterialTheme.typography.bodyLarge
+                    text = context.getString(R.string.login),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(20.dp))
+
             Text(
-                buildAnnotatedString {
-                    append(context.getString(R.string.not_account))
-                    withLink(
-                        LinkAnnotation.Url(
-                            url = "guest",
-                            styles = TextLinkStyles(
-                                style = SpanStyle(color = Color.Blue)
-                            ),
-                            linkInteractionListener = {
-                                // Navigate to guest page
-                                val intent = Intent(context, GuestActivity::class.java)
-                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                context.startActivity(intent)
-                            }
-                        )
-                    ) {
+                text = buildAnnotatedString {
+                    append(context.getString(R.string.not_account) + " ")
+                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                         append(context.getString(R.string.guest_entrance))
                     }
-                }
+                },
+                modifier = Modifier.clickable {
+                    val intent = Intent(context, GuestActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                    context.startActivity(intent)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
+
 fun handleLogin(
     context: Context,
     username: String,
@@ -187,10 +281,19 @@ fun handleLogin(
         }
 
         // Navigate to HomePageActivity after login
-        val intent = Intent(context, HomePageActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
-        context.startActivity(intent)
+        Log.d("buildingsViewModel.getAllBuildingsList()", buildingsViewModel.getAllBuildingsList().toString())
+        if(buildingsViewModel.getAllBuildingsList().isEmpty()){
+            val intent = Intent(context, BuildingFormActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
+            context.startActivity(intent)
+        } else {
+            val intent = Intent(context, HomePageActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
+            context.startActivity(intent)
+        }
+
 
         // If context is an Activity, finish it to prevent back navigation
         if (context is Activity) {

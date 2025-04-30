@@ -43,6 +43,7 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
+import com.example.delta.enums.Period
 import com.example.delta.factory.SharedViewModelFactory
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.BuildingTypeViewModel
@@ -2040,7 +2041,7 @@ fun CostPage(
                     },
                     items = listOf(
                         context.getString(R.string.area),
-                        context.getString(R.string.nafari)
+                        context.getString(R.string.people)
                     ),
                     modifier = Modifier
                         .padding(vertical = 8.dp),
@@ -2241,12 +2242,15 @@ fun CostItem(
                 // Period Dropdown (30%)
                 ExposedDropdownMenuBoxExample(
                     items = sharedViewModel.periods,
-                    selectedItem = cost.period.firstOrNull() ?: "",
-                    onItemSelected = { sharedViewModel.updateCostPeriod(cost, it) },
+                    selectedItem = cost.period, // default value if empty
+                    onItemSelected = { selectedPeriod ->
+                        sharedViewModel.updateCostPeriod(cost, selectedPeriod)
+                    },
                     label = context.getString(R.string.period),
                     modifier = Modifier.weight(0.4f),
-                    itemLabel = { it }
+                    itemLabel = { it.getDisplayName(context) }
                 )
+
 
                 Spacer(Modifier.width(4.dp))
 

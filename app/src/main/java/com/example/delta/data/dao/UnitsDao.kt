@@ -31,5 +31,6 @@ interface UnitsDao {
     @Query("SELECT * FROM units where unitId = :unitId")
     fun getUnit(unitId: Long): Units
 
-
+    @Query("SELECT COUNT(*) FROM units WHERE buildingId = :buildingId")
+    suspend fun countUnits(buildingId: Long): Int
 }

@@ -13,15 +13,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.delta.R
 import com.example.delta.data.entity.*
 import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.CalculateMethod
+import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
+import com.example.delta.enums.Responsible
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -38,6 +41,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val unitsDao = AppDatabase.getDatabase(application).unitsDao()
     private val costsDao = AppDatabase.getDatabase(application).costDao()
     private val debtsDao = AppDatabase.getDatabase(application).debtsDao()
+    private val earningsDao = AppDatabase.getDatabase(application).earningsDao()
     private val authorizationDoa = AppDatabase.getDatabase(application).authorizationDao()
     private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
@@ -50,7 +54,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var street by mutableStateOf("")
     var province by mutableStateOf("")
     var state by mutableStateOf("")
-    var tempAmount by mutableStateOf("")
     var sameArea by mutableStateOf(false)
     var numberOfUnits by mutableStateOf("")
     var unitArea by mutableStateOf("")
@@ -69,16 +72,15 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var costsList = mutableStateOf(listOf<Costs>())
     var charge = mutableStateOf(listOf<Costs>())
     var unitsList = mutableStateListOf<Units>()
-    var temptunitsList = mutableStateListOf<Units>()
     var debtsList = mutableStateListOf<Debts>()
     var newOwnerId: Long by mutableLongStateOf(0L)
     var newTenantId: Long by mutableLongStateOf(0L)
-    var lastChargeId: Long by mutableLongStateOf(0L)
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
 
     // These represent the selected items from your dropdowns
     var selectedBuildingTypes by mutableStateOf<BuildingTypes?>(null)
     var selectedBuildingUsages by mutableStateOf<BuildingUsages?>(null)
+    var selectedEarnings by mutableStateOf<Earnings?>(null)
 
     // Unit selection state
     var selectedUnits = mutableStateListOf<Units>()
@@ -100,8 +102,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     // Options Lists
-    val periods = listOf("هفته", "ماه", "سال")
-    val amountUnitOptions = listOf("هزار تومان", "میلیون تومان")
+    val periods = Period.entries
 
 
     init {
@@ -164,10 +165,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         yearStr: String,
         monthStr: String
     ): Flow<List<Debts>> = flow {
-        val units = debtsDao.getDebtsForUnitCostCurrentAndPreviousUnpaid(
+        val units = debtsDao.getDebtsCurrentMonthAndPastUnpaid(
             buildingId = buildingId,
             costId = costId,
-            unitId = unitId
+            unitId = unitId,
+            yearStr = yearStr,
+            monthStr = monthStr
 //            ,            getCurrentYearMonth()
         )
         emit(units)
@@ -184,14 +187,33 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(debts)
     }.flowOn(Dispatchers.IO)
 
+    fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double> = flow {
+        val sum = debtsDao.sumPaidFundFlagPositive(buildingId)
+        Log.d("sum paid", sum.toString())
+        emit(sum)
+    }.flowOn(Dispatchers.IO)
+
+    fun sumUnpaidFundFlagNegative(buildingId: Long): Flow<Double> = flow {
+        val sum = debtsDao.sumUnpaidFundFlagNegative(buildingId)
+
+        Log.d("sum unpaid", sum.toString())
+        emit(sum)
+    }.flowOn(Dispatchers.IO)
+
     fun getAllCosts(): Flow<List<Costs>> = flow {
         val costs = costsDao.getCosts()
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
     fun getCostsForBuilding(buildingId: Long): Flow<List<Costs>> = flow {
-        val costs = costsDao.getCostsForBuilding(buildingId)
+        val costs = costsDao.getCostsForBuildingWithFundFlag(buildingId, FundFlag.NO_EFFECT)
         emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun countUnits(buildingId: Long): Flow<Int> = flow {
+        val units = unitsDao.countUnits(buildingId)
+        Log.d("unit count", units.toString())
+        emit(units)
     }.flowOn(Dispatchers.IO)
 
     fun getUnitsForBuilding(buildingId: Long): Flow<List<Units>> = flow {
@@ -217,6 +239,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = flow {
         val tenants = tenantsDao.getTenantsForBuilding(buildingId)
         emit(tenants)
+    }.flowOn(Dispatchers.IO)
+
+    fun getFixedEarnings(): Flow<List<Earnings>> = flow {
+        val earnings = earningsDao.getAllMenuEarnings()
+        emit(earnings)
     }.flowOn(Dispatchers.IO)
 
     fun getAllTenantUnitRelationships(): Flow<List<TenantsUnitsCrossRef>> = flow {
@@ -283,7 +310,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
 
     }
-    fun insertDebtPerNewCost(building: Buildings, amount: String, name: String) {
+    fun insertDebtPerNewCost(buildingId: Long, amount: String, name: String, period: Period, paymentLevel: PaymentLevel, fundFlag: FundFlag) {
 
         viewModelScope.launch(Dispatchers.IO) {
             // Convert amount to Double
@@ -291,7 +318,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val parsedAmount = amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0
             Log.d("parsedAmount", parsedAmount.toString())
 
-            var units = unitsDao.getUnitsByBuildingId(building.buildingId)
+            var units = unitsDao.getUnitsByBuildingId(buildingId)
             // Calculate debt per unit
             val numberOfUnits = units.size
             Log.d("numberOfUnits", numberOfUnits.toString())
@@ -299,17 +326,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             Log.d("amountPerUnit", amountPerUnit.toString())
             // Insert Cost
             val cost = Costs(
-                buildingId = building.buildingId,
+                buildingId = buildingId,
                 costName = name,
-                tempAmount = parsedAmount.toString().persianToEnglishDigits()
-                    .toDoubleOrNull() ?: 0.0,
-                period = emptyList(), // adjust
-                calculateMethod = listOf("ثابت"), // adjust
-                paymentLevel = listOf("واحد"), // adjust
-                responsible = listOf("ساکن"),// adjust
-                fundFlag = false
+                tempAmount = parsedAmount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0,
+                period = period,
+                calculateMethod = CalculateMethod.FIXED,
+                paymentLevel = paymentLevel,
+                responsible = Responsible.TENANT,
+                fundFlag = fundFlag
             )
-            //@TODO change fundflag type into list of (-1, 0 , 1)
+
             Log.d("new cost", cost.toString())
             val costId = costsDao.insertCost(cost)
 
@@ -318,7 +344,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 val debt = Debts(
                     unitId = unit.unitId,
                     costId = costId,
-                    buildingId = building.buildingId,
+                    buildingId = buildingId,
                     description = name, //Customizing description
                     dueDate = getNextMonthSameDaySafe().persianShortDate,
                     amount = amountPerUnit.toString().persianToEnglishDigits()
@@ -414,6 +440,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 )
 
+                Log.d("buildingIdd", buildingId.toString())
+
                 // Prepare Charges
                 val updatedCharges = mutableListOf<Costs>()
                 val updatedCosts = mutableListOf<Costs>()
@@ -474,7 +502,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         Log.d("automaticCharge ", automaticCharge.toString())
                         // Determine Amount for Charge
                         val amount = when {
-                            automaticCharge && cost in charge.value -> { //Check if amount comes from charge
+                            automaticCharge && cost in updatedCharges -> { //Check if amount comes from charge
                                 when {
                                     selectedChargeType.contains("متراژ") -> {
                                         val area = unitsDao.getUnit(insertedUnit).area
@@ -521,7 +549,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         val endDate = parsePersianDate(tenant?.endDate ?: "")
 
                         // Create debt for monthly period
-                        if (cost.period.contains("ماه")) {
+                        if (cost.period == Period.MONTHLY) {
                             if (startDate != null && endDate != null) {
                                 var dueDate = startDate
 
@@ -820,26 +848,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val costsFromDb = costsDao.getCostsWithNullBuildingId()
             withContext(Dispatchers.Main) {
                 val fixedCosts = costsFromDb.filter { cost ->
-                    cost.calculateMethod.any { method ->
-                        method.equals("ثابت", ignoreCase = true)
-                    }
+                    cost.calculateMethod == CalculateMethod.FIXED
                 }.map {
                     it.copy(
                         tempAmount = 0.0,
-                        period = mutableListOf("سال"),
-                        responsible = mutableListOf("")
+                        period = Period.YEARLY,
+                        responsible = Responsible.TENANT // or appropriate value
                     )
                 }
+
                 costsList.value = fixedCosts
                 val chargeCost = costsFromDb.filter { cost ->
-                    cost.calculateMethod.any { method ->
-                        method.equals("متراژ", ignoreCase = true)
-                    }
+                    cost.calculateMethod == CalculateMethod.AREA
                 }.map {
                     it.copy(
                         tempAmount = 0.0,
-                        period = mutableListOf("ماه"),
-                        responsible = mutableListOf("")
+                        period = Period.MONTHLY,
+                        responsible = Responsible.TENANT
                     )
                 }
                 charge.value = chargeCost
@@ -867,9 +892,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    fun updateCostPeriod(cost: Costs, newPeriod: String) {
+    fun updateCostPeriod(cost: Costs, newPeriod: Period) {
         costsList.value = costsList.value.filter { it.buildingId == null }.map {
-            if (it.id == cost.id) it.copy(period = listOf(newPeriod)) else it
+            if (it.id == cost.id) it.copy(period = newPeriod) else it
         }
     }
 

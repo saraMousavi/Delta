@@ -3,6 +3,7 @@ package com.example.delta.data.dao
 import androidx.room.*
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Units
+import com.example.delta.enums.FundFlag
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -49,8 +50,9 @@ interface CostDao {
     @Query("SELECT * FROM costs")
     suspend fun getCosts(): List<Costs>
 
-    @Query("SELECT * FROM costs where buildingId = :buildingId")
-    suspend fun getCostsForBuilding(buildingId: Long): List<Costs>
+    @Query("SELECT * FROM costs WHERE buildingId = :buildingId AND fund_flag != :fundFlag")
+    suspend fun getCostsForBuildingWithFundFlag(buildingId: Long, fundFlag: FundFlag): List<Costs>
+
 
     @Query("SELECT * FROM costs WHERE buildingId IS NULL")
     suspend fun getCostsWithNullBuildingId(): List<Costs>

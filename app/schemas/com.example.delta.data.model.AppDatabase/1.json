@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "cbdbc4e479cee032a5640f7906ed99a1",
+    "identityHash": "5476ec3b2aee6ff5955f3e78bd6e9242",
     "entities": [
       {
         "tableName": "building_types",
@@ -258,7 +258,7 @@
       },
       {
         "tableName": "earnings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -275,8 +275,7 @@
           {
             "fieldPath": "buildingId",
             "columnName": "buildingId",
-            "affinity": "INTEGER",
-            "notNull": true
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "amount",
@@ -285,8 +284,20 @@
             "notNull": true
           },
           {
-            "fieldPath": "currency",
-            "columnName": "currency",
+            "fieldPath": "period",
+            "columnName": "period",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "start_date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "end_date",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -1266,7 +1277,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cbdbc4e479cee032a5640f7906ed99a1')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5476ec3b2aee6ff5955f3e78bd6e9242')"
     ]
   }
 }

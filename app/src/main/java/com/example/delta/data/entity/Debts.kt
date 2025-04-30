@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
             entity = Costs::class,
             parentColumns = ["id"],
             childColumns = ["costId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = CASCADE
         ),
         ForeignKey(
             entity = Units::class,

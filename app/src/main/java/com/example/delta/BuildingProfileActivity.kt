@@ -59,7 +59,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -87,6 +86,9 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Units
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.AuthObject
+import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.CostViewModelFactory
@@ -99,10 +101,14 @@ import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.viewmodel.UnitsViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.collections.forEach
 import kotlin.getValue
+import kotlinx.coroutines.flow.combine
+
 
 class BuildingProfileActivity : ComponentActivity() {
     private val earningsViewModel: EarningsViewModel by viewModels {
@@ -210,9 +216,11 @@ class BuildingProfileActivity : ComponentActivity() {
 
 
     @Composable
-    fun OverviewTab(building: Buildings,
-                    roleId: Long,
-                    authDao: AuthorizationDao) {
+    fun OverviewTab(
+        building: Buildings,
+        roleId: Long,
+        authDao: AuthorizationDao
+    ) {
         val context = LocalContext.current
 
         LazyColumn(
@@ -376,6 +384,8 @@ class BuildingProfileActivity : ComponentActivity() {
             earningsViewModel.fetchAndProcessEarnings(building.buildingId)
                 .collectAsState(initial = null)
 
+        val fundFlow = remember(building.buildingId) { calculateBuildingFundFlow(sharedViewModel, building.buildingId) }
+        val fund by fundFlow.collectAsState(initial = 0.0)
 
         val buildingWithCosts =
             costsViewModel.fetchAndProcessCosts(building.buildingId).collectAsState(initial = null)
@@ -402,7 +412,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${context.getString(R.string.fund_lbl)}: ${building.fund}",
+                        text = "${context.getString(R.string.fund_lbl)}: $fund",
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -481,15 +491,19 @@ class BuildingProfileActivity : ComponentActivity() {
                 onConfirm = { earning ->
                     buildingViewModel.insertEarnings(earning)
                     buildingViewModel.hideDialogs()
-                }
+                },
+                sharedViewModel = sharedViewModel
             )
         }
         if (buildingViewModel.showCostDialog.value) {
             AddCostDialog(
                 onDismiss = { buildingViewModel.hideDialogs() },
-                onSave = { name, amount ->
+                onSave = { name, amount, period ->
                     // Insert cost and debts
-                    sharedViewModel.insertDebtPerNewCost(building, amount, name)
+                    sharedViewModel.insertDebtPerNewCost(
+                        buildingId = building.buildingId,
+                        amount = amount, name = name, period = period,
+                        fundFlag = FundFlag.NEGATIVE_EFFECT, paymentLevel = PaymentLevel.BUILDING)
                     buildingViewModel.hideDialogs()
                 }
             )
@@ -846,7 +860,12 @@ class BuildingProfileActivity : ComponentActivity() {
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
                 icon = { Icon(Icons.Default.Add, "Add Earnings") },
-                text = { Text(text = context.getString(R.string.add_income)) },
+                text = {
+                    Text(
+                        text = context.getString(R.string.add_income),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
                 containerColor = Color(context.getColor(R.color.secondary_color)),
                 contentColor = Color(context.getColor(R.color.white))
             )
@@ -920,7 +939,11 @@ class BuildingProfileActivity : ComponentActivity() {
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
-                            CostDetails(building = building, cost = cost, sharedViewModel = sharedViewModel)
+                            CostDetails(
+                                building = building,
+                                cost = cost,
+                                sharedViewModel = sharedViewModel
+                            )
                         }
                     }
 
@@ -937,7 +960,12 @@ class BuildingProfileActivity : ComponentActivity() {
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
                 icon = { Icon(Icons.Default.Add, "Add Costs") },
-                text = { Text(text = context.getString(R.string.add_costs)) },
+                text = {
+                    Text(
+                        text = context.getString(R.string.add_costs),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
                 containerColor = Color(context.getColor(R.color.secondary_color)),
                 contentColor = Color(context.getColor(R.color.white))
             )
@@ -945,13 +973,12 @@ class BuildingProfileActivity : ComponentActivity() {
             if (showAddCostDialog) {
                 AddCostDialog(
                     onDismiss = { showAddCostDialog = false },
-                    onSave = { name, amount ->
+                    onSave = { name, amount, period ->
                         // Insert cost and debts
                         sharedViewModel.insertDebtPerNewCost(
-                            building = building,
-                            name = name,
-                            amount = amount
-                        )
+                            buildingId = building.buildingId,
+                            amount = amount, name = name, period = period,
+                            fundFlag = FundFlag.NEGATIVE_EFFECT, paymentLevel = PaymentLevel.BUILDING)
                         showAddCostDialog = false
                     }
                 )
@@ -959,95 +986,7 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-    @Composable
-    fun AddCostDialog(
-        onDismiss: () -> Unit,
-        onSave: (String, String) -> Unit
-    ) {
-        val context = LocalContext.current
-        var costName by remember { mutableStateOf("") }
-        var totalAmount by remember { mutableStateOf("") }
 
-        Dialog(onDismissRequest = onDismiss) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "Add New Cost",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Cost Name Input
-                    OutlinedTextField(
-                        value = costName,
-                        onValueChange = { costName = it },
-                        label = { Text(context.getString(R.string.cost_name)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Total Amount Input
-                    OutlinedTextField(
-                        value = totalAmount,
-                        onValueChange = { totalAmount = it },
-                        label = { Text(context.getString(R.string.amount)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-
-                    val amount = totalAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
-                    val amountInWords = NumberCommaTransformation().numberToWords(context, amount)
-
-
-                    Text(
-                        text = " $amountInWords ${context.getString(R.string.toman)}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    //Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(onClick = onDismiss) {
-                            Text(
-                                text = context.getString(R.string.cancel),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = {
-                            onSave(costName, totalAmount)
-                        }) {
-                            Text(
-                                text = context.getString(R.string.insert),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     @Composable
     fun CostDetails(building: Buildings, cost: Costs, sharedViewModel: SharedViewModel) {
@@ -1059,7 +998,7 @@ class BuildingProfileActivity : ComponentActivity() {
         var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth + 2) }
 
         Log.d("selectedYear", selectedYear.toString())
-        Log.d("selectedMonth",selectedMonth.toString())
+        Log.d("selectedMonth", selectedMonth.toString())
         Column {
             if (units.isEmpty()) {
                 Text(
@@ -1075,7 +1014,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             costId = cost.id,
                             unitId = unit.unitId,
                             yearStr = selectedYear.toString(),
-                            monthStr = selectedMonth.toString()
+                            monthStr = selectedMonth.toString().padStart(2, '0')
                         ).collectAsState(initial = emptyList())
 
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -1098,14 +1037,22 @@ class BuildingProfileActivity : ComponentActivity() {
                                 ) {
                                     Spacer(Modifier.height(16.dp))
                                     Text(
-                                        text = "${context.getString(R.string.amount)}: ${formatNumberWithCommas(debt.amount)}",
+                                        text = "${context.getString(R.string.amount)}: ${
+                                            formatNumberWithCommas(
+                                                debt.amount
+                                            )
+                                        }",
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(context.getColor(R.color.Red))
+                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                            context.getColor(R.color.Red)
+                                        )
                                     )
                                     Text(
                                         text = "${context.getString(R.string.due)}: ${debt.dueDate}",
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(context.getColor(R.color.Red))
+                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                            context.getColor(R.color.Red)
+                                        )
                                     )
                                 }
                             }
@@ -1172,86 +1119,322 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         }
     }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EarningsDialog(
+    building: Buildings,
+    onDismiss: () -> Unit,
+    onConfirm: (Earnings) -> Unit,
+    sharedViewModel: SharedViewModel
+) {
+//    var title by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
+    var startDate by remember { mutableStateOf("") }
+    var endDate by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
-    @Composable
-    fun EarningsDialog(
-        building: Buildings,
-        onDismiss: () -> Unit,
-        onConfirm: (Earnings) -> Unit
-    ) {
+    val defaultEarnings by sharedViewModel.getFixedEarnings()
+        .collectAsState(initial = emptyList())
 
-        var title by remember { mutableStateOf("") }
-        var amount by remember { mutableStateOf("") }
+    // Add "Add New" option
+    val earningsList = remember(defaultEarnings) {
+        defaultEarnings + Earnings(
+            id = -1, // Special ID to identify "Add New" option
+            earningsName = context.getString(R.string.add_new_earning),
+            amount = 0.0,
+            period = Period.MONTHLY,
+            startDate = "",
+            endDate = "",
+            buildingId = null
+        )
+    }
 
-        Dialog(onDismissRequest = onDismiss) {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surface
+    var showEarningForm by remember { mutableStateOf(false) }
+
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
+    fun dismissStartDatePicker() {
+        showStartDatePicker = false
+    }
+
+    fun dismissEndDatePicker() {
+        showEndDatePicker = false
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
             ) {
-                Column(
+                Text(
+                    text = "${context.getString(R.string.add_new_earning)} ${building.name}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                ExposedDropdownMenuBoxExample(
+                    items = earningsList ,
+                    selectedItem = sharedViewModel.selectedEarnings,
+                    onItemSelected = {
+                        if (it.earningsName == context.getString(R.string.addNew)) {
+                            // Open dialog to add new building type
+                            showEarningForm = true
+                        } else {
+                            sharedViewModel.selectedEarnings = it
+                        }
+                    },
+                    label = context.getString(R.string.earning_title),
                     modifier = Modifier
-                        .padding(16.dp)
+                        .fillMaxWidth(1f),
+                    itemLabel = { it.earningsName}
+                )
+
+//                OutlinedTextField(
+//                    value = title,
+//                    onValueChange = { title = it },
+//                    label = { Text(context.getString(R.string.earning_title), style = MaterialTheme.typography.bodyLarge) },
+//                    modifier = Modifier.fillMaxWidth()
+//                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text(context.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Period Dropdown using your existing component
+                ExposedDropdownMenuBoxExample(
+                    items = Period.entries,
+                    selectedItem = selectedPeriod,
+                    onItemSelected = { selectedPeriod = it },
+                    label = context.getString(R.string.period),
+                    modifier = Modifier.fillMaxWidth(),
+                    itemLabel = { it.getDisplayName(context) }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Start Date Picker
+                OutlinedTextField(
+                    value = startDate,
+                    onValueChange = {},
+                    label = { Text(context.getString(R.string.start_date)) },
+                    modifier = Modifier
                         .fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Add Earnings for ${building.name}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        .clickable { showStartDatePicker = true },
+                    readOnly = true
+                )
+
+                if (showStartDatePicker) {
+                    PersianDatePickerDialogContent(
+                        onDateSelected = { selected ->
+                            startDate = selected
+                            dismissStartDatePicker()
+                        },
+                        onDismiss = { dismissStartDatePicker() },
+                        context = context
                     )
-
-                    TextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Title") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    TextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text("Amount") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text("Cancel")
-                        }
-
-                        Button(
-                            onClick = {
-                                val newEarning = Earnings(
-                                    buildingId = building.buildingId,
-                                    earningsName = title,
-                                    amount = amount.toDoubleOrNull() ?: 0.0,
-                                    currency = ""
-                                )
-                                onConfirm(newEarning)
-                            },
-                            enabled = title.isNotBlank() && amount.isNotBlank()
-                        ) {
-                            Text("Confirm")
-                        }
-                    }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // End Date Picker
+                OutlinedTextField(
+                    value = endDate,
+                    onValueChange = {},
+                    label = { Text(context.getString(R.string.end_date)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showEndDatePicker = true },
+                    readOnly = true
+                )
+
+                if (showEndDatePicker) {
+                    PersianDatePickerDialogContent(
+                        onDateSelected = { selected ->
+                            endDate = selected
+                            dismissEndDatePicker()
+                        },
+                        onDismiss = { dismissEndDatePicker() },
+                        context = context
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                    }
+
+                    Button(
+                        onClick = {
+                            val newEarning = Earnings(
+                                buildingId = building.buildingId,
+                                earningsName = sharedViewModel.selectedEarnings?.earningsName ?: "",
+                                amount = amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0,
+                                period = selectedPeriod ?: Period.MONTHLY,
+                                startDate = startDate,
+                                endDate = endDate
+                            )
+                            onConfirm(newEarning)
+                        }
+//                        enabled = sharedViewModel.selectedEarnings?.earningsName ?: "".isNotBlank() && amount.isNotBlank() && startDate.isNotBlank() && endDate.isNotBlank() && selectedPeriod != null
+                    ) {
+                        Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
             }
         }
     }
-
-
 }
+
+
+
 
 fun formatNumberWithCommas(number: Double): String {
     return NumberFormat.getNumberInstance(Locale.US).format(number)
 }
 
+
+@Composable
+fun AddCostDialog(
+    onDismiss: () -> Unit,
+    onSave: (String, String, Period) -> Unit
+) {
+    val context = LocalContext.current
+    var costName by remember { mutableStateOf("") }
+    var totalAmount by remember { mutableStateOf("") }
+    var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = context.getString(R.string.add_new_cost),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Cost Name Input
+                OutlinedTextField(
+                    value = costName,
+                    onValueChange = { costName = it },
+                    label = { Text(context.getString(R.string.cost_name)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Total Amount Input
+                OutlinedTextField(
+                    value = totalAmount,
+                    onValueChange = { totalAmount = it },
+                    label = { Text(context.getString(R.string.amount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+
+                val amount = totalAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                val amountInWords = NumberCommaTransformation().numberToWords(context, amount)
+
+
+                Text(
+                    text = " $amountInWords ${context.getString(R.string.toman)}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ExposedDropdownMenuBoxExample(
+                    items = Period.entries,
+                    selectedItem = selectedPeriod,
+                    onItemSelected = { selectedPeriod = it },
+                    label = context.getString(R.string.period),
+                    modifier = Modifier.fillMaxWidth(),
+                    itemLabel = { it.getDisplayName(context) }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                //Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(onClick = onDismiss) {
+                        Text(
+                            text = context.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        onSave(costName, totalAmount, selectedPeriod?: Period.NONE)
+                    }) {
+                        Text(
+                            text = context.getString(R.string.insert),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+fun calculateBuildingFundFlow(
+    sharedViewModel: SharedViewModel,
+    buildingId: Long
+): Flow<Double> {
+    val sumPositiveFlow = sharedViewModel.sumPaidFundFlagPositive(buildingId)
+        .map { it  }
+    val sumNegativeFlow = sharedViewModel.sumUnpaidFundFlagNegative(buildingId)
+        .map { it  }
+    val unitCountFlow = sharedViewModel.countUnits(buildingId)
+        .map { it.toDouble() }
+
+    return combine(sumPositiveFlow, sumNegativeFlow, unitCountFlow) { sumPositive, sumNegative, unitCount ->
+        (sumPositive) - sumNegative
+    }
+}

@@ -1,14 +1,16 @@
 package com.example.delta.data.entity
 
 import android.os.Parcelable
-import androidx.compose.ui.res.stringResource
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.ForeignKey.Companion.CASCADE
-import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.example.delta.R
+import com.example.delta.enums.CalculateMethod
+import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
+import com.example.delta.enums.Responsible
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -28,9 +30,9 @@ data class Costs(
     @ColumnInfo(name = "buildingId") val buildingId: Long?=null, // Foreign key reference
     @ColumnInfo(name = "cost_name") val costName: String,
     @ColumnInfo(name = "temp_amount") val tempAmount: Double,
-    @ColumnInfo(name = "period") val period: List<String>,//weekly , monthly , yearly
-    @ColumnInfo(name = "calculate_method") val calculateMethod: List<String>, //fixed, automatic, area, people
-    @ColumnInfo(name = "payment_level") val paymentLevel: List<String>, // units, building
-    @ColumnInfo(name = "responsible") val responsible: List<String>, // owner, tenant
-    @ColumnInfo(name = "fund_flag") var fundFlag: Boolean = false
+    @ColumnInfo(name = "period") val period: Period,//weekly , monthly , yearly
+    @ColumnInfo(name = "calculate_method") val calculateMethod: CalculateMethod, //fixed, automatic, area, people
+    @ColumnInfo(name = "payment_level") val paymentLevel: PaymentLevel, // units, building
+    @ColumnInfo(name = "responsible") val responsible: Responsible, // owner, tenant
+    @ColumnInfo(name = "fund_flag") var fundFlag: FundFlag
 ) : Parcelable
