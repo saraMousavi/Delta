@@ -75,6 +75,9 @@ interface BuildingsDao {
     @Query("SELECT * FROM Buildings")
     suspend fun getBuildings(): List<Buildings>
 
+    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
+    fun getBuilding(buildingId: Long): Buildings
+
     @Query("""
         SELECT 
             b.*, 

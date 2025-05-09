@@ -89,6 +89,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.room.ktx)
     implementation(libs.date.picker)
+//    implementation (libs.firebase)
     testImplementation libs.junit
     // Mockito for mocking dependencies
     testImplementation(libs.mockito.core)

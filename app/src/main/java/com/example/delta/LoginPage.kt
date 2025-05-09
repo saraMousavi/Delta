@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,15 +33,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.content.edit
 
 class LoginPage : ComponentActivity() {
     val viewModel: BuildingsViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            AppTheme {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    LoginPageForm(viewModel)
+        if (isUserLoggedIn(this)) {
+            startActivity(Intent(this, HomePageActivity::class.java))
+            finish()
+            return
+        } else {
+            setContent {
+                AppTheme {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        LoginPageForm(viewModel)
+                    }
                 }
             }
         }
@@ -81,95 +89,6 @@ fun login(username: String, password: String): User? {
 
     return users.find { it.mobileNumber == username && it.password == password }
 }
-
-//@OptIn(ExperimentalMaterial3Api::class)
-//@Composable
-//fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
-//    var username by remember { mutableStateOf("") }
-//    var password by remember { mutableStateOf("") }
-//    val context = LocalContext.current
-//    val scope = rememberCoroutineScope()
-//
-//    Scaffold(
-//        topBar = {
-//            CenterAlignedTopAppBar(
-//                title = {
-//                    Text(
-//                        text = context.getString(R.string.login_user),
-//                        style = MaterialTheme.typography.bodyLarge
-//                    )
-//                }
-//            )
-//        }
-//    ) { innerPadding ->
-//        Column(
-//            modifier = Modifier
-//                .fillMaxSize()
-//                .padding(innerPadding)
-//                .padding(16.dp),
-//            horizontalAlignment = Alignment.CenterHorizontally
-//        ) {
-//            OutlinedTextField(
-//                value = username,
-//                onValueChange = { username = it },
-//                label = {
-//                    Text(
-//                        text = context.getString(R.string.mobile_number),
-//                        style = MaterialTheme.typography.bodyLarge
-//                    )
-//                },
-//                modifier = Modifier.fillMaxWidth()
-//            )
-//            Spacer(modifier = Modifier.height(8.dp))
-//            PasswordTextField(
-//                password = password,
-//                onPasswordChange = { password = it },
-//                context = context
-//            )
-//            Spacer(modifier = Modifier.height(16.dp))
-//
-//            Button(
-//                onClick = {
-//                    scope.launch(Dispatchers.IO) { // Launch in IO dispatcher
-//                        handleLogin(context, username, password, buildingsViewModel)
-//                    }
-//                },
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-//                ),
-//                modifier = Modifier.fillMaxWidth()
-//            ) {
-//                Text(
-//                    context.getString(R.string.login),
-//                    modifier = Modifier.padding(2.dp),
-//                    style = MaterialTheme.typography.bodyLarge
-//                )
-//            }
-//            Spacer(modifier = Modifier.height(8.dp))
-//            Text(
-//                buildAnnotatedString {
-//                    append(context.getString(R.string.not_account))
-//                    withLink(
-//                        LinkAnnotation.Url(
-//                            url = "guest",
-//                            styles = TextLinkStyles(
-//                                style = SpanStyle(color = Color.Blue)
-//                            ),
-//                            linkInteractionListener = {
-//                                // Navigate to guest page
-//                                val intent = Intent(context, GuestActivity::class.java)
-//                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-//                                context.startActivity(intent)
-//                            }
-//                        )
-//                    ) {
-//                        append(context.getString(R.string.guest_entrance))
-//                    }
-//                }
-//            )
-//        }
-//    }
-//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -259,6 +178,16 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            TextButton(
+                onClick = {
+                    val context = context
+                    context.startActivity(Intent(context, SignUpActivity::class.java))
+                },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(stringResource(R.string.sign_up), style = MaterialTheme.typography.bodyLarge)
+            }
+
         }
     }
 }
@@ -273,12 +202,9 @@ fun handleLogin(
 
     if (user != null) {
         // Save userId and roleId locally
-        val sharedPref = context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
-        sharedPref.edit().apply {
-            putLong("user_id", user.userId)
-            putLong("role_id", user.roleId)
-            apply()
-        }
+        // After successful login
+        saveLoginState(context, true)
+
 
         // Navigate to HomePageActivity after login
         Log.d("buildingsViewModel.getAllBuildingsList()", buildingsViewModel.getAllBuildingsList().toString())
@@ -335,3 +261,15 @@ fun navigateToActivity(context: Context, activityClass: Class<*>) {
         context.finish()
     }
 }
+
+fun saveLoginState(context: Context, isLoggedIn: Boolean) {
+    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    prefs.edit() { putBoolean("is_logged_in", isLoggedIn) }
+}
+
+fun isUserLoggedIn(context: Context): Boolean {
+    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    return prefs.getBoolean("is_logged_in", false)
+}
+
+

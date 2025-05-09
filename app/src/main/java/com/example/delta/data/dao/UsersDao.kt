@@ -7,13 +7,18 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.User
+import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UserWithRole
 
 @Dao
 interface UsersDao {    
         @Insert(onConflict = OnConflictStrategy.REPLACE)
         suspend fun insertUser(user: User): Long
+
+        @Insert
+        suspend fun insertUserRoleCrossRef(crossRef: UserRoleCrossRef)
 
         @Update
         suspend fun updateUser(user: User)

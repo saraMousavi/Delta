@@ -30,6 +30,21 @@
             android:name=".AuthActivity"
             android:exported="false" />
         <activity
+            android:name=".OwnerDetailsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".OwnersActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".TenantsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SignUpActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".UnitDetailsActivity"
             android:exported="false" />
         <activity android:name=".BuildingFormActivity"

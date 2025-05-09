@@ -2,6 +2,7 @@ package com.example.delta.data.dao
 
 import androidx.room.*
 import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.TenantsWithUnits
@@ -77,6 +78,16 @@ interface TenantDao {
 
     @Query("SELECT * FROM tenants_units_cross_ref")
     suspend fun getAllTenantUnitRelationships(): List<TenantsUnitsCrossRef>
+
+    @Query("""
+    SELECT tenants.*, crossRef.startDate, crossRef.endDate, crossRef.status
+    FROM tenants
+    INNER JOIN tenants_units_cross_ref AS crossRef ON tenants.tenantId = crossRef.tenantId
+    WHERE crossRef.unitId = :unitId
+""")
+    fun getTenantsWithRelationForUnit(unitId: Long): Flow<List<TenantWithRelation>>
+
+
 
 
     @Query("""

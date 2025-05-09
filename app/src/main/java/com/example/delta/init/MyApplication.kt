@@ -16,6 +16,7 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
+import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
@@ -147,7 +148,9 @@ class MyApplication : Application() {
                     password = persianPassword,
                     roleId = ownerRole.roleId // Use roleId instead of role string
                 )
-                usersDao.insertUser(defaultUser)
+                var userId = usersDao.insertUser(defaultUser)
+                usersDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = ownerRole.roleId, userId = userId))
+
                 Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")
             }
         }

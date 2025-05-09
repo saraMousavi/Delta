@@ -4,6 +4,7 @@ import androidx.room.*
 import com.example.delta.data.entity.OwnerWithBuildings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
+import com.example.delta.data.entity.UnitWithDang
 import com.example.delta.data.entity.Units
 import kotlinx.coroutines.flow.Flow
 
@@ -42,10 +43,16 @@ interface OwnersDao {
 
     // Helper function to get owner details
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
-    suspend fun getOwnerById(ownerId: Int): Owners
+    suspend fun getOwnerById(ownerId: Long): Owners
 
-    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM owners_units_cross_ref WHERE ownerId = :ownerId)")
-    suspend fun getUnitsForOwner(ownerId: Long): List<Units>
+    @Query("""
+    SELECT units.*, owners_units_cross_ref.dang
+    FROM units
+    INNER JOIN owners_units_cross_ref ON units.unitId = owners_units_cross_ref.unitId
+    WHERE owners_units_cross_ref.ownerId = :ownerId
+""")
+    suspend fun getUnitsWithDangForOwner(ownerId: Long): List<UnitWithDang>
+
 
     @Query("""
     SELECT o.* FROM Owners o

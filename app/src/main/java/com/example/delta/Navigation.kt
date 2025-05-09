@@ -42,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +69,7 @@ fun DetailDrawer(
                     Text(
                         text = title,
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(Modifier.height(12.dp))
                     Box(
@@ -90,7 +91,7 @@ fun DetailDrawer(
                     Text(
                         text = context.getString(R.string.first_sect),
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.bodyLarge
                     )
                     NavigationDrawerItem(
                         label = { Text(context.getString(R.string.account)) },
@@ -136,9 +137,18 @@ fun DetailDrawer(
 
                     Spacer(Modifier.height(12.dp))
                     NavigationDrawerItem(
-                        label = { Text(context.getString(R.string.app_version)) },
+                        label = { Text(context.getString(R.string.logout)) },
                         selected = false,
                         onClick = {}
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    NavigationDrawerItem(
+                        label = { Text(context.getString(R.string.app_version)) },
+                        selected = false,
+                        onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                            prefs.edit() { putBoolean("is_logged_in", false) }
+
+                        }
                     )
                     Spacer(Modifier.height(12.dp))
 

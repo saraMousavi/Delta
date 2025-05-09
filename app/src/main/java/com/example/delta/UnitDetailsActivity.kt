@@ -2,16 +2,20 @@ package com.example.delta
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,6 +36,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,11 +50,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.lazy.items
 import com.example.delta.data.entity.Debts
+import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Units
-import com.example.delta.enums.FundFlag
 import com.example.delta.enums.PaymentLevel
-import com.example.delta.enums.Period
+import com.example.delta.enums.Responsible
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlin.getValue
@@ -138,13 +144,24 @@ class UnitDetailsActivity : ComponentActivity() {
                 }
                 if (showAddCostDialog) {
                     AddCostDialog(
+                        buildingId = unit.buildingId ?: 0,
+                        sharedViewModel = sharedViewModel,
                         onDismiss = { showAddCostDialog = false },
-                        onSave = { name, amount, period ->
-                            // Insert cost and debts
+                        onSave = { selectedCost, amount, period, fundFlag, responsible, selectedUnits, selectedOwners, dueDate ->
+                            // Insert cost and debts using selectedCost info
+
                             sharedViewModel.insertDebtPerNewCost(
                                 buildingId = unit.buildingId ?: 0,
-                                amount = amount, name = name, period = period,
-                                fundFlag = FundFlag.NO_EFFECT, paymentLevel = PaymentLevel.UNIT)
+                                amount = amount,
+                                name = selectedCost.costName,
+                                period = period,
+                                dueDate = dueDate,
+                                fundFlag = fundFlag,
+                                paymentLevel = PaymentLevel.UNIT,
+                                responsible = Responsible.TENANT,
+                                selectedUnitIds = selectedUnits.map { it }
+                            )
+
                             showAddCostDialog = false
                         }
                     )
@@ -162,6 +179,7 @@ class UnitDetailsActivity : ComponentActivity() {
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            // Unit info card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -169,13 +187,14 @@ class UnitDetailsActivity : ComponentActivity() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer // Use MaterialTheme color
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -197,6 +216,92 @@ class UnitDetailsActivity : ComponentActivity() {
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tenants section
+            Text(
+                text = context.getString(R.string.tenants),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            val tenantsWithRelation by sharedViewModel
+                .getTenantUnitRelationshipsOfUnit(unit.unitId)
+                .collectAsState(initial = emptyList())
+            if (tenantsWithRelation.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_tenants_found),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                // List tenants
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(tenantsWithRelation) { tenantWithRelation ->
+                        TenantCard(tenantWithRelation)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+            }
+        }
+    }
+
+    @Composable
+    fun TenantCard(tenantWithRelation: TenantWithRelation) {
+        val context = LocalContext.current
+        val tenant = tenantWithRelation.tenant
+        val relation = tenantWithRelation.crossRef
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "${tenant.firstName} ${tenant.lastName}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "${context.getString(R.string.phone_number)}: ${tenant.phoneNumber}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "${context.getString(R.string.mobile_number)}: ${tenant.mobileNumber}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "${context.getString(R.string.email)}: ${tenant.email}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row {
+                    Text(
+                        text = "${context.getString(R.string.start_date)}: ${relation.startDate}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = "${context.getString(R.string.end_date)}: ${relation.endDate}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "${context.getString(R.string.status)}: ${relation.status}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 
@@ -206,17 +311,24 @@ class UnitDetailsActivity : ComponentActivity() {
     }
 
     @Composable
-    fun DebtSection(unitId: Long, sharedViewModel: SharedViewModel,
-                    onAddCostClick: () -> Unit) {
+    fun DebtSection(
+        unitId: Long, sharedViewModel: SharedViewModel,
+        onAddCostClick: () -> Unit
+    ) {
 
         var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
-        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth + 1) }
+        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
 
 
-//        val debts by sharedViewModel.getDebtsOneUnit(unitId).collectAsState(initial = emptyList())
-        val debts by sharedViewModel.getDebtsForUnitAndMonth(unitId, selectedYear.toString(), selectedMonth.toString().padStart(2, '0'))
-            .collectAsState(initial = emptyList())
-        Log.d("debt", debts.toString())
+        val debts by sharedViewModel.getDebtsForUnitAndMonth(
+            unitId,
+            selectedYear.toString(),
+            selectedMonth.toString().padStart(2, '0')
+        ).collectAsState(initial = emptyList())
+
+        LaunchedEffect(debts) {
+            sharedViewModel.addUnpaidDebtListList(debts)
+        }
 
 
         var context = LocalContext.current
@@ -250,17 +362,22 @@ class UnitDetailsActivity : ComponentActivity() {
                 Log.d("slectedyear", selectedYear.toString())
                 Log.d("selectedmonth", selectedMonth.toString())
 
-                if (debts.isEmpty()) {
+                if (sharedViewModel.unpaidDebtList.value.isEmpty()) {
                     Text(
                         text = context.getString(R.string.no_debts_recorded),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 } else {
-                    debts.forEach { debt ->
+                    sharedViewModel.unpaidDebtList.value.forEach { debt ->
                         DebtItem(debt = debt, onPayment = {
                             Log.d("debt", debt.toString())
                             val updatedDebt = debt.copy(paymentFlag = true)
                             sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
+                            sharedViewModel.updateDebtPaymentFlag(debt, true)
+                            Toast.makeText(
+                                context, context.getString(R.string.success_pay),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         })
                     }
                 }
@@ -293,7 +410,11 @@ class UnitDetailsActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            text = "${LocalContext.current.getString(R.string.amount)}: ${debt.amount}",
+                            text = "${LocalContext.current.getString(R.string.amount)}: ${
+                                formatNumberWithCommas(
+                                    debt.amount
+                                )
+                            }",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }

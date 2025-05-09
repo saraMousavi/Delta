@@ -84,7 +84,6 @@ import androidx.lifecycle.ViewModel
 import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.draw.clip
@@ -118,21 +117,20 @@ import com.uploadcare.android.library.upload.FileUploader
 import kotlin.math.roundToInt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.font.FontWeight
+import com.example.delta.data.entity.Owners
 import kotlinx.coroutines.launch
-
 
 
 @Composable
@@ -142,7 +140,7 @@ fun SimpleOutlinedTextFieldSample(name: String, modifier: Modifier = Modifier) {
     OutlinedTextField(
         value = text,
         onValueChange = { text = it },
-        label = { Text(" $name")},
+        label = { Text(" $name") },
         modifier = modifier
     )
 }
@@ -207,7 +205,7 @@ fun <VM : ViewModel> CostForm(
 
 
 @Composable
-fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismiss: () -> Unit,) {
+fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismiss: () -> Unit) {
     var itemName by remember { mutableStateOf(itemNameState) }
     val context = LocalContext.current
     AppTheme {
@@ -216,7 +214,12 @@ fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismis
             modifier = Modifier.fillMaxWidth(),
             onValueChange = { itemName = it },
             keyboardOptions = KeyboardOptions.Default,
-            label = { Text(text = context.getString(R.string.type), style = MaterialTheme.typography.bodyLarge) }
+            label = {
+                Text(
+                    text = context.getString(R.string.type),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         )
         Box(
             modifier = Modifier
@@ -279,28 +282,28 @@ fun <T> GenericItem(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-AppTheme {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(context.getColor(R.color.primary_color))),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
+    AppTheme {
+        Card(
+            modifier = modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(context.getColor(R.color.primary_color))),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            shape = RoundedCornerShape(8.dp)
         ) {
-            Text(
-                style = MaterialTheme.typography.bodyMedium,
-                text = itemName(item) // Use the lambda to get the name
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    style = MaterialTheme.typography.bodyMedium,
+                    text = itemName(item) // Use the lambda to get the name
+                )
+            }
         }
     }
-}
 }
 
 
@@ -365,7 +368,6 @@ fun AddItemDialog(
 }
 
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> ExposedDropdownMenuBoxExample(
@@ -384,7 +386,9 @@ fun <T> ExposedDropdownMenuBoxExample(
             onExpandedChange = { expanded = it }
         ) {
             OutlinedTextField(
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
                 readOnly = true,
                 value = selectedItem?.let { itemLabel(it) } ?: "",
                 onValueChange = { },
@@ -403,9 +407,12 @@ fun <T> ExposedDropdownMenuBoxExample(
             ) {
                 items.forEach { item ->
                     DropdownMenuItem(
-                        text = { Text(
-                            text = itemLabel(item),
-                            style = MaterialTheme.typography.bodyMedium) },
+                        text = {
+                            Text(
+                                text = itemLabel(item),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
                         onClick = {
                             onItemSelected(item)
                             expanded = false
@@ -416,6 +423,7 @@ fun <T> ExposedDropdownMenuBoxExample(
         }
     }
 }
+
 @Composable
 fun ProvinceStateSelector(
     sharedViewModel: SharedViewModel,
@@ -494,6 +502,40 @@ fun ChipGroupUnits(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun ChipGroupOwners(
+    selectedOwners: List<Owners>,
+    onSelectionChange: (List<Owners>) -> Unit,
+    owners: List<Owners>,
+    label: String
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    FlowRow(
+        modifier = Modifier.padding(8.dp)
+    ) {
+        owners.forEach { owner ->
+            InputChip(
+                selected = selectedOwners.contains(owner),
+                onClick = {
+                    val newSelection = if (selectedOwners.contains(owner)) {
+                        selectedOwners.filter { it != owner }
+                    } else {
+                        selectedOwners + owner
+                    }
+                    onSelectionChange(newSelection)
+                },
+                label = { Text(text = "${owner.firstName} ${owner.lastName}") }
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -578,8 +620,12 @@ fun PasswordTextField(
     OutlinedTextField(
         value = password,
         onValueChange = onPasswordChange,
-        label = { Text(text = context.getString(R.string.prompt_password),
-            style = MaterialTheme.typography.bodyLarge) },
+        label = {
+            Text(
+                text = context.getString(R.string.prompt_password),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
         trailingIcon = {
@@ -640,8 +686,6 @@ private fun currentRoute(navController: NavHostController): String? {
 }
 
 
-
-
 @Composable
 fun AuthScreen(permissionsManager: RolePermissionsManager) {
     val context = LocalContext.current
@@ -659,8 +703,15 @@ fun AuthScreen(permissionsManager: RolePermissionsManager) {
             RoleManagementSection(permissionsManager = permissionsManager)
         } else {
             // Show an error message if not an admin
-            Toast.makeText(context, "You don't have permission to access this settings.", Toast.LENGTH_SHORT).show()
-            Text("You don't have permission to access this screen.", style = MaterialTheme.typography.bodyLarge)
+            Toast.makeText(
+                context,
+                "You don't have permission to access this settings.",
+                Toast.LENGTH_SHORT
+            ).show()
+            Text(
+                "You don't have permission to access this screen.",
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
@@ -692,7 +743,7 @@ fun RoleManagementSection(permissionsManager: RolePermissionsManager) {
 fun SettingsScreen(
     context: Context,
     modifier: Modifier = Modifier,
-    permissionsManager : RolePermissionsManager
+    permissionsManager: RolePermissionsManager
 ) {
     var showAuthScreen by remember { mutableStateOf(false) }
     val items = listOf(
@@ -700,6 +751,16 @@ fun SettingsScreen(
             title = R.string.supporting,
             icon = Icons.Outlined.Support,
             onClick = { /* Handle support */ }
+        ),
+        NavItem(
+            title = R.string.owners_list,
+            icon = Icons.Outlined.Badge,
+            onClick = { context.startActivity(Intent(context, OwnersActivity::class.java)) }
+        ),
+        NavItem(
+            title = R.string.tenant_list,
+            icon = Icons.Outlined.People,
+            onClick = { context.startActivity(Intent(context, TenantsActivity::class.java)) }
         ),
         NavItem(
             title = R.string.cost_list,
@@ -728,23 +789,12 @@ fun SettingsScreen(
         )
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = context.getString(R.string.setting),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            )
-        }
-    ) { innerPadding ->
+    Scaffold { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()) // debug background
                 .padding(16.dp)
         ) {
             items.forEach { item ->
@@ -762,6 +812,7 @@ fun SettingsScreen(
         AuthScreen(permissionsManager = permissionsManager)
     }
 }
+
 
 @Composable
 fun ClickableSettingItem(
@@ -798,8 +849,6 @@ fun ClickableSettingItem(
         }
     }
 }
-
-
 
 
 @Composable
@@ -872,21 +921,26 @@ fun CurvedBottomNavigation(
                     .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                    // In your Row items.forEach
-                    items.forEach { screen ->
-                        CurvedBottomNavItem(
-                            icon = screen.icon,
-                            label = "",//screen.title
-                            selected = currentRoute == screen.route,
-                            isAddButton = screen == Screen.Add, // Identify Add button
-                            onClick = {
-                                if (screen == Screen.Add) {
-                                    context.startActivity(Intent(context, BuildingFormActivity::class.java))
-                                } else {
-                                    navController.navigate(screen.route)
-                                }
+                // In your Row items.forEach
+                items.forEach { screen ->
+                    CurvedBottomNavItem(
+                        icon = screen.icon,
+                        label = "",//screen.title
+                        selected = currentRoute == screen.route,
+                        isAddButton = screen == Screen.Add, // Identify Add button
+                        onClick = {
+                            if (screen == Screen.Add) {
+                                context.startActivity(
+                                    Intent(
+                                        context,
+                                        BuildingFormActivity::class.java
+                                    )
+                                )
+                            } else {
+                                navController.navigate(screen.route)
                             }
-                        )
+                        }
+                    )
                 }
             }
         }
@@ -902,13 +956,12 @@ fun CurvedBottomNavItem(
     isAddButton: Boolean = false // New parameter
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
                 .padding(8.dp)
-                .then(if(isAddButton) Modifier.offset(y = (-16).dp) else Modifier)
+                .then(if (isAddButton) Modifier.offset(y = (-16).dp) else Modifier)
                 .background(
                     color = when {
                         isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -922,7 +975,8 @@ fun CurvedBottomNavItem(
                     color = if (isAddButton) MaterialTheme.colorScheme.primary else Color.Transparent,
                     shape = if (isAddButton) RoundedCornerShape(6.dp) else CircleShape
                 )
-                .padding(8.dp)
+                .clickable(onClick = onClick)
+                .padding(12.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -945,6 +999,7 @@ fun CurvedBottomNavItem(
 
 @Composable
 fun Dp.toPx() = with(LocalDensity.current) { this@toPx.toPx() }
+
 @Composable
 fun Float.toDp() = with(LocalDensity.current) { this@toDp.toDp() }
 
@@ -986,7 +1041,11 @@ fun UploadFile(
                     Log.e("Upload", errorMessage!!)
                 }
 
-                override fun onProgressUpdate(bytesWritten: Long, contentLength: Long, progress: Double) {
+                override fun onProgressUpdate(
+                    bytesWritten: Long,
+                    contentLength: Long,
+                    progress: Double
+                ) {
                     // Handle progress updates if needed
                 }
             })
@@ -1139,7 +1198,7 @@ fun YearMonthSelector(
 
 // Convert to user-friendly strings
 fun PermissionLevel.toDisplayName(context: Context): String {
-    return when(this) {
+    return when (this) {
         PermissionLevel.READ -> context.getString(R.string.view)
         PermissionLevel.WRITE -> context.getString(R.string.edit)
         PermissionLevel.DELETE -> context.getString(R.string.delete)
@@ -1305,7 +1364,7 @@ fun AnimatedLoginScreen(
                 unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
             ),
 
-        )
+            )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -1398,6 +1457,61 @@ fun AnimatedLoginScreen(
         }
     }
 }
+
+@Composable
+fun FundInfoBox(formattedFund: String, context: Context) {
+    Surface(
+        tonalElevation = 4.dp,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "${context.getString(R.string.fund_lbl)}: ${formattedFund.englishToPersianDigits()} ${
+                    context.getString(
+                        R.string.toman
+                    )
+                }",
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+        }
+
+
+    }
+}
+
+// Add to your utilities
+fun String.englishToPersianDigits(): String {
+    return this.map { char ->
+        when (char) {
+            '0' -> '۰'
+            '1' -> '۱'
+            '2' -> '۲'
+            '3' -> '۳'
+            '4' -> '۴'
+            '5' -> '۵'
+            '6' -> '۶'
+            '7' -> '۷'
+            '8' -> '۸'
+            '9' -> '۹'
+            else -> char
+        }
+    }.joinToString("")
+}
+
+
+
 
 
 

@@ -28,6 +28,7 @@ import androidx.room.Index
 )
 data class OwnersUnitsCrossRef(
     val ownerId: Long,
-    val unitId: Long
+    val unitId: Long,
+    val dang: Double
 )
 

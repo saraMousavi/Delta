@@ -37,6 +37,7 @@ import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.User
+import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.init.Converter
 import java.security.acl.Owner
 
@@ -52,7 +53,7 @@ import java.security.acl.Owner
         AuthorizationField::class,
         RoleAuthorizationObjectCrossRef::class,
         RoleAuthorizationFieldCrossRef::class,
-        User::class, Role::class],
+        User::class, Role::class, UserRoleCrossRef::class],
     version = 1,
     exportSchema = true
 )

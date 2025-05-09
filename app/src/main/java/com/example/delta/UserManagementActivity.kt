@@ -33,12 +33,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.AuthorizationObject
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.viewmodel.SharedViewModel
@@ -66,14 +64,21 @@ class UserManagementActivity : ComponentActivity() {
 fun UserManagementScreen(viewModel: SharedViewModel) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val tabTitles = listOf("User Info", "Authorization Objects")
+    val tabTitles = listOf(context.getString(R.string.user_info), context.getString(R.string.permisions))
     var selectedTab by remember { mutableIntStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
 
     // User input states
     val mobileNumberState = remember { mutableStateOf(TextFieldValue()) }
-    var selectedRole = remember { mutableStateOf("Select Role") }
+
+    val mobileNumber = mobileNumberState.value.text
+    val userWithRole by viewModel.getUserWithRoleByMobile(mobileNumber).collectAsState(initial = null)
     val roles by viewModel.getRoles().collectAsState(initial = emptyList())
+    var selectedRole by remember { mutableStateOf<Role?>(null) }
+
+    LaunchedEffect(userWithRole) {
+        selectedRole = userWithRole
+    }
 
     Scaffold(
         topBar = {
@@ -98,7 +103,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
                 ExtendedFloatingActionButton(
                     onClick = { showAddAuthDialog = true },
                     icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
-                    text = { Text("Add Authorization") }
+                    text = { Text(text = context.getString(R.string.add_auth), style = MaterialTheme.typography.bodyLarge) }
                 )
 
                 if (showAddAuthDialog) {
@@ -137,7 +142,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
 //                        if (foundRole != null) selectedRole = foundRole  // <-- fix here: was `c`
 //                    }
                 },
-                label = { Text("Mobile Number") },
+                label = { Text(text = context.getString(R.string.mobile_number), style = MaterialTheme.typography.bodyLarge) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -146,20 +151,15 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Role Selection Dropdown using ExposedDropdownMenuBoxExample
-            OutlinedTextField(
-                value = mobileNumberState.value,
-                onValueChange = {
-                    mobileNumberState.value = it
-//                    coroutineScope.launch {
-//                        val userRoleName = viewModel.getUserRole(it.text)
-//                        val foundRole = roles.find { role -> role.roleName == userRoleName }
-//                        if (foundRole != null) selectedRole = foundRole
-//                    }
-                },
-                label = { Text("Mobile Number") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            ExposedDropdownMenuBoxExample(
+                items = roles,
+                selectedItem = selectedRole,
+                onItemSelected = { selectedRole = it },
+                label = context.getString(R.string.role),
+                itemLabel = { it.roleName },
                 modifier = Modifier.fillMaxWidth()
             )
+
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -180,7 +180,8 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title) }
+                        text = { Text(text = title,
+                                style = MaterialTheme.typography.bodyLarge) }
                     )
                 }
             }
@@ -220,10 +221,9 @@ fun UserDetailCard(user: User) {
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("User Details", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            DetailRow("Mobile", user.mobileNumber)
-            DetailRow("RoleId", user.roleId.toString())
+            DetailRow(LocalContext.current.getString(R.string.mobile_number), user.mobileNumber)
+            DetailRow(LocalContext.current.getString(R.string.role), user.roleId.toString())
             // Add more fields as needed
         }
     }
@@ -267,7 +267,7 @@ fun ExpandableAuthObjectCard(authObject: AuthorizationObject, viewModel: SharedV
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = LocalContext.current.getString(authObject.name),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(Modifier.weight(1f))
                 Icon(
@@ -325,15 +325,15 @@ fun AddAuthorizationDialog(
                     }
                 }
             ) {
-                Text("Add")
+                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
             }
         },
-        title = { Text("Add Authorization") },
+        title = { Text(text = context.getString(R.string.add_auth), style = MaterialTheme.typography.bodyLarge) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 ExposedDropdownMenuBoxExample(
@@ -343,7 +343,7 @@ fun AddAuthorizationDialog(
                         selectedAuthObject = it
                         selectedField = null // Reset field selection on new object
                     },
-                    label = "Authorization Object",
+                    label = context.getString(R.string.first_level),
                     itemLabel = { context.getString(it.name) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -354,7 +354,7 @@ fun AddAuthorizationDialog(
                     items = fieldsForSelectedObject,
                     selectedItem = selectedField,
                     onItemSelected = { selectedField = it },
-                    label = "Authorization Field",
+                    label = context.getString(R.string.second_level),
                     itemLabel = { context.getString(it.name)},
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -365,7 +365,7 @@ fun AddAuthorizationDialog(
                     items = permissionLevels,
                     selectedItem = selectedPermission,
                     onItemSelected = { selectedPermission = it },
-                    label = "Permission Level",
+                    label = context.getString(R.string.permision_type),
                     itemLabel = { it.name },
                     modifier = Modifier.fillMaxWidth()
                 )
