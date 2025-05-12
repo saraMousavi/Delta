@@ -46,7 +46,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val authorizationDoa = AppDatabase.getDatabase(application).authorizationDao()
     private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
-
+    private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
     // State for Building Info Page
     var name by mutableStateOf("")
     var phone by mutableStateOf("")
@@ -59,6 +59,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var numberOfUnits by mutableStateOf("")
     var unitArea by mutableStateOf("")
     var sharedUtilities by mutableStateOf(listOf<String>())
+    var savedFilePaths = mutableStateListOf<String>()
+
 
     var selectedChargeType by mutableStateOf(listOf<String>())
 
@@ -81,6 +83,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var newOwnerId: Long by mutableLongStateOf(0L)
     var newTenantId: Long by mutableLongStateOf(0L)
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
+    var fileList = mutableStateListOf<UploadedFileEntity>()
 
     // These represent the selected items from your dropdowns
     var selectedBuildingTypes by mutableStateOf<BuildingTypes?>(null)
@@ -94,6 +97,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // Maps to store unit associations for owners and tenants
     val ownerUnitMap = mutableMapOf<Owners, List<OwnersUnitsCrossRef>>()
     val tenantUnitMap = mutableMapOf<Tenants, Units>()
+
 
 
     var automaticCharge by mutableStateOf(false)
@@ -683,6 +687,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 )
 
+                fileList.forEach { file ->
+                    var fileID = uploadedFileDao.insertUploadedFile(file)
+                    buildingDao.insertCrossRef(BuildingUploadedFileCrossRef(buildingId = buildingId, fileId = fileID))
+                }
+
                 Log.d("buildingIdd", buildingId.toString())
 
                 // Prepare Charges
@@ -1148,7 +1157,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-
+    fun addFileList(uploadedFileEntity : UploadedFileEntity){
+        fileList.add(uploadedFileEntity)
+    }
 
     fun loadCosts() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1256,6 +1267,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         selectedBuildingTypes = null
         selectedBuildingUsages = null
         unitsList.clear()
+        fileList.clear()
         Log.d("unitsList.clear()", "yes")
         debtsList.clear()
         selectedOwnerForUnit = null
@@ -1473,6 +1485,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 //            )
         )
     }
+
+    fun saveUploadedFileUrl(buildingId: Long, fileUrl: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val fileId = uploadedFileDao.insertUploadedFile(UploadedFileEntity(fileUrl = fileUrl))
+            buildingDao.insertCrossRef(BuildingUploadedFileCrossRef(buildingId, fileId))
+        }
+    }
+
+    fun getBuildingFiles(buildingId: Long): Flow<List<UploadedFileEntity>> = flow {
+        val obj = uploadedFileDao.getFileUrlsForBuilding(buildingId)
+        emit(obj)
+    }.flowOn(Dispatchers.IO)
 
 }
 

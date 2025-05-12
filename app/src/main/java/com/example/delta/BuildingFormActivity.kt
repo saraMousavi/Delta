@@ -52,6 +52,7 @@ import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
+import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.enums.FundFlag
 import com.example.delta.factory.SharedViewModelFactory
 import com.example.delta.init.NumberCommaTransformation
@@ -82,6 +83,7 @@ class BuildingFormActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("onCreate", true.toString())
         sharedViewModel.resetState()
         setContent {
             AppTheme {
@@ -108,7 +110,8 @@ class BuildingFormActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        sharedViewModel.resetState()
+        Log.d("onResume", true.toString())
+//        sharedViewModel.resetState()
     }
 }
 
@@ -170,6 +173,7 @@ fun BuildingFormScreen(
                             sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
                                 tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations(),
                                 onSuccess = {
+                                    Log.d("buildingForm", true.toString())
                                     sharedViewModel.resetState()
                                     // Create an Intent to start HomePageActivity
                                     val intent = Intent(context, HomePageActivity::class.java)
@@ -431,9 +435,13 @@ fun BuildingInfoPage(
 
             item {
                 UploadFile(
-                    context = LocalContext.current,
-                    modifier = Modifier.padding(16.dp)
+                    sharedViewModel = sharedViewModel,
+                    context = context,
+                    onFileSaved = { localPath ->
+                        sharedViewModel.addFileList(UploadedFileEntity(fileUrl = localPath))
+                    }
                 )
+
             }
         }
 

@@ -17,6 +17,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,10 +25,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -74,7 +77,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,6 +87,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
@@ -113,6 +119,7 @@ import kotlin.getValue
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 
 
 class BuildingProfileActivity : ComponentActivity() {
@@ -203,7 +210,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
-                    0 -> OverviewTab(building, currentRoleId, authDao)
+                    0 -> OverviewTab(sharedViewModel, building, currentRoleId, authDao)
                     1 -> OwnersTab(building, sharedViewModel)
                     2 -> UnitsTab(building, sharedViewModel)
                     3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
@@ -217,11 +224,14 @@ class BuildingProfileActivity : ComponentActivity() {
 
     @Composable
     fun OverviewTab(
+        sharedViewModel: SharedViewModel,
         building: Buildings,
         roleId: Long,
         authDao: AuthorizationDao
     ) {
         val context = LocalContext.current
+        val fileList by sharedViewModel.getBuildingFiles(building.buildingId).collectAsState(initial = emptyList())
+        var selectedImagePath by remember { mutableStateOf<String?>(null) }
 
         LazyColumn(
             modifier = Modifier
@@ -373,7 +383,59 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 }
             }
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
+                    )
+                ) {
+                    Row(modifier = Modifier.padding(8.dp)) {
+                        fileList.forEach { file ->
+                            Image(
+                                painter = rememberAsyncImagePainter(File(file.fileUrl)),
+                                contentDescription = "Saved image",
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { selectedImagePath = file.fileUrl },
+                                contentScale = ContentScale.Crop
+                            )
+
+                            Spacer(Modifier.width(8.dp))
+                        }
+                    }
+                }
+                // Fullscreen image dialog
+                if (selectedImagePath != null) {
+                    Dialog(onDismissRequest = { selectedImagePath = null }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.8f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(File(selectedImagePath!!)),
+                                contentDescription = "Full image",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.8f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { selectedImagePath = null }, // dismiss on click
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                }
+            }
+
         }
+
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

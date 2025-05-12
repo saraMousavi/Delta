@@ -16,12 +16,14 @@ import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.dao.TenantDao
 import com.example.delta.data.dao.UnitsDao
+import com.example.delta.data.dao.UploadedFileDao
 import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.AuthorizationObject
 import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.BuildingTenantCrossRef
 import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
@@ -36,6 +38,7 @@ import com.example.delta.data.entity.RoleAuthorizationObjectCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
+import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.init.Converter
@@ -53,7 +56,8 @@ import java.security.acl.Owner
         AuthorizationField::class,
         RoleAuthorizationObjectCrossRef::class,
         RoleAuthorizationFieldCrossRef::class,
-        User::class, Role::class, UserRoleCrossRef::class],
+        User::class, Role::class, UserRoleCrossRef::class,
+        UploadedFileEntity::class, BuildingUploadedFileCrossRef::class],
     version = 1,
     exportSchema = true
 )
@@ -71,6 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun usersDao(): UsersDao
     abstract fun authorizationDao(): AuthorizationDao
     abstract fun roleDao(): RoleDao
+    abstract fun uploadedFileDao() : UploadedFileDao
 
 
     companion object {

@@ -109,14 +109,13 @@ import com.example.delta.data.entity.RoleAuthorization
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.NavItem
 import com.example.delta.interfaces.RolePermissionsManager
-import com.uploadcare.android.library.api.UploadcareClient
-import com.uploadcare.android.library.api.UploadcareFile
-import com.uploadcare.android.library.callbacks.UploadFileCallback
-import com.uploadcare.android.library.exceptions.UploadcareApiException
-import com.uploadcare.android.library.upload.FileUploader
+import androidx.compose.foundation.lazy.items
 import kotlin.math.roundToInt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Badge
@@ -128,9 +127,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.Owners
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 
 @Composable
@@ -1008,87 +1011,89 @@ fun Float.toDp() = with(LocalDensity.current) { this@toDp.toDp() }
 fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
 }
-
-@Composable
-fun UploadFile(
-    context: Context,
-    modifier: Modifier = Modifier
-) {
-    // State for tracking upload progress and result
-    var isUploading by remember { mutableStateOf(false) }
-    var fileUrl by remember { mutableStateOf<String?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    // Image picker launcher
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            isUploading = true
-            val client = UploadcareClient("YOUR_PUBLIC_KEY", "YOUR_SECRET_KEY")
-            val fileUploader = FileUploader(client, uri, context).store(true)
-
-            fileUploader.uploadAsync(object : UploadFileCallback {
-                override fun onSuccess(result: UploadcareFile) {
-                    fileUrl = result.originalFileUrl.toString()
-                    errorMessage = null
-                    isUploading = false
-                }
-
-                override fun onFailure(e: UploadcareApiException) {
-                    errorMessage = "Upload failed: ${e.message}"
-                    isUploading = false
-                    Log.e("Upload", errorMessage!!)
-                }
-
-                override fun onProgressUpdate(
-                    bytesWritten: Long,
-                    contentLength: Long,
-                    progress: Double
-                ) {
-                    // Handle progress updates if needed
-                }
-            })
-        }
-    }
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-//        Text(
-//            text = context.getString(R.string.upload),
-//            style = MaterialTheme.typography.bodyLarge
-//        )
-
-        Box {
-            // Upload button
-            Button(
-                onClick = { imagePicker.launch("image/*") },
-                enabled = !isUploading
-            ) {
-                if (isUploading) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    Text(context.getString(R.string.upload))
-                }
-            }
-
-            // Show error message if exists
-            errorMessage?.let {
-                Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                )
-            }
-        }
-
-        // Display uploaded image thumbnail
+//
+//@Composable
+//fun UploadFile(
+//    context: Context,
+//    modifier: Modifier = Modifier,
+//    onUploadSuccess: (String) -> Unit  // Callback to pass uploaded URL
+//) {
+//    // State for tracking upload progress and result
+//    var isUploading by remember { mutableStateOf(false) }
+//    var fileUrl by remember { mutableStateOf<String?>(null) }
+//    var errorMessage by remember { mutableStateOf<String?>(null) }
+//
+//    // Image picker launcher
+//    val imagePicker = rememberLauncherForActivityResult(
+//        contract = ActivityResultContracts.GetContent()
+//    ) { uri: Uri? ->
+//        uri?.let {
+//            isUploading = true
+//            val client = UploadcareClient("YOUR_PUBLIC_KEY", "YOUR_SECRET_KEY")
+//            val fileUploader = FileUploader(client, uri, context).store(true)
+//
+//            fileUploader.uploadAsync(object : UploadFileCallback {
+//                override fun onSuccess(result: UploadcareFile) {
+//                    fileUrl = result.originalFileUrl.toString()
+//                    errorMessage = null
+//                    isUploading = false
+//                    onUploadSuccess(fileUrl!!)
+//                }
+//
+//                override fun onFailure(e: UploadcareApiException) {
+//                    errorMessage = "Upload failed: ${e.message}"
+//                    isUploading = false
+//                    Log.e("Upload", errorMessage!!)
+//                }
+//
+//                override fun onProgressUpdate(
+//                    bytesWritten: Long,
+//                    contentLength: Long,
+//                    progress: Double
+//                ) {
+//                    // Handle progress updates if needed
+//                }
+//            })
+//        }
+//    }
+//
+//    Row(
+//        modifier = modifier.fillMaxWidth(),
+//        verticalAlignment = Alignment.CenterVertically,
+//        horizontalArrangement = Arrangement.SpaceBetween
+//    ) {
+////        Text(
+////            text = context.getString(R.string.upload),
+////            style = MaterialTheme.typography.bodyLarge
+////        )
+//
+//        Box {
+//            // Upload button
+//            Button(
+//                onClick = { imagePicker.launch("image/*") },
+//                enabled = !isUploading
+//            ) {
+//                if (isUploading) {
+//                    CircularProgressIndicator(
+//                        color = MaterialTheme.colorScheme.onPrimary,
+//                        modifier = Modifier.size(20.dp)
+//                    )
+//                } else {
+//                    Text(context.getString(R.string.upload))
+//                }
+//            }
+//
+//            // Show error message if exists
+//            errorMessage?.let {
+//                Text(
+//                    text = it,
+//                    color = MaterialTheme.colorScheme.error,
+//                    modifier = Modifier.align(Alignment.BottomEnd)
+//                )
+//            }
+//        }
+//
+//        // Display uploaded image thumbnail
 //        fileUrl?.let { url ->
 //            Image(
 //                painter = rememberAsyncImagePainter(url),
@@ -1097,6 +1102,128 @@ fun UploadFile(
 //                contentScale = ContentScale.Crop
 //            )
 //        }
+//    }
+//}
+
+fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): String? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+        val file = File(context.filesDir, filename)
+        val outputStream = FileOutputStream(file)
+        inputStream.copyTo(outputStream)
+        inputStream.close()
+        outputStream.close()
+        file.absolutePath
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+@Composable
+fun UploadFile(
+    sharedViewModel: SharedViewModel,
+    context: Context,
+    modifier: Modifier = Modifier,
+    onFileSaved: (String) -> Unit
+) {
+    var isSaving by remember { mutableStateOf(false) }
+    val savedFilePaths = sharedViewModel.savedFilePaths
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedImagePath by remember { mutableStateOf<String?>(null) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            isSaving = true
+            val filename = "uploaded_${System.currentTimeMillis()}.jpg"
+            val savedPath = copyUriToInternalStorage(context, it, filename)
+            if (savedPath != null) {
+                savedFilePaths.add(savedPath)
+                errorMessage = null
+                onFileSaved(savedPath)
+            } else {
+                errorMessage = "Failed to save file"
+            }
+            isSaving = false
+        }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box {
+                Button(
+                    onClick = { imagePicker.launch("image/*") },
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Text(
+                            text = context.getString(R.string.upload),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items = savedFilePaths) { path ->
+                Image(
+                    painter = rememberAsyncImagePainter(File(path)),
+                    contentDescription = "Saved image",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { selectedImagePath = path },
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+    }
+
+    // Fullscreen image dialog
+    if (selectedImagePath != null) {
+        Dialog(onDismissRequest = { selectedImagePath = null }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.8f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = rememberAsyncImagePainter(File(selectedImagePath!!)),
+                    contentDescription = "Full image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.8f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { selectedImagePath = null }, // dismiss on click
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
     }
 }
 

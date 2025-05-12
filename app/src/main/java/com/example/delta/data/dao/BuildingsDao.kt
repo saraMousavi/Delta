@@ -4,46 +4,30 @@ import androidx.room.*
 import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.BuildingTenantCrossRef
 import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithOwnersAndTenants
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
+import com.example.delta.data.entity.BuildingWithUploadedFiles
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Tenants
+import com.example.delta.data.entity.UploadedFileEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BuildingsDao {
 
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBuildingOwnerCrossRef(crossRef: BuildingOwnerCrossRef)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBuildingTenantCrossRef(crossRef: BuildingTenantCrossRef)
-
     @Insert
     suspend fun insertBuilding(building: Buildings): Long
 
-    @Insert
-    suspend fun insertOwner(owner: Owners): Long
-
-    @Insert
-    suspend fun insertTenant(tenant: Tenants): Long
-
-    // Query buildings with owners and tenants
-    @Transaction
-    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
-    suspend fun getBuildingWithOwnersAndTenants(buildingId: Long): BuildingWithOwnersAndTenants
 
     @Delete
     suspend fun deleteBuildings(buildings: Buildings)
-
-    @Query("SELECT * FROM buildings")
-    fun getAllBuildings(): Flow<List<Buildings>>
 
     @Query("SELECT * FROM buildings")
     fun getAllBuildingsList(): List<Buildings>
@@ -100,4 +84,16 @@ interface BuildingsDao {
 
     @Update
     suspend fun updateCost(cost: Costs)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCrossRef(crossRef: BuildingUploadedFileCrossRef)
+
+
+    @Update
+    suspend fun updateCrossRef(crossRef: BuildingUploadedFileCrossRef)
+
+
+    // Delete cross-references by fileId(s) (optional)
+    @Query("DELETE FROM building_uploaded_files_cross_ref WHERE fileId IN (:fileIds)")
+    suspend fun deleteCrossRefsByFileIds(fileIds: List<Long>)
 }
