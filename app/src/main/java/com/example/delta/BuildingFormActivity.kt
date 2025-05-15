@@ -1440,6 +1440,7 @@ fun TenantDialog(
         if (startDate.isNotEmpty()) {
             endDate =
                 sharedViewModel.getNextYearSameDaySafe(sharedViewModel.parsePersianDate(startDate)).persianShortDate
+            Log.d("endDate", endDate.toString())
         }
     }
 
@@ -1599,7 +1600,9 @@ fun TenantDialog(
 
                     OutlinedTextField(
                         value = endDate,
-                        onValueChange = { endDate = it },
+                        onValueChange = {
+                            endDate = it
+                            Log.d("it", it.toString())},
                         label = { Text(context.getString(R.string.end_date)) },
                         modifier = Modifier
                             .fillMaxWidth()

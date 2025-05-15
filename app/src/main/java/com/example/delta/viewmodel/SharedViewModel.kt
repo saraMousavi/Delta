@@ -47,6 +47,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
     private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
+
     // State for Building Info Page
     var name by mutableStateOf("")
     var phone by mutableStateOf("")
@@ -97,7 +98,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // Maps to store unit associations for owners and tenants
     val ownerUnitMap = mutableMapOf<Owners, List<OwnersUnitsCrossRef>>()
     val tenantUnitMap = mutableMapOf<Tenants, Units>()
-
 
 
     var automaticCharge by mutableStateOf(false)
@@ -167,19 +167,19 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // New function to get debts for a specific unit and month
     fun getDebtsForUnitAndMonth(unitId: Long, year: String, month: String): Flow<List<Debts>> =
         flow {
-            val debts = debtsDao.getDebtsForUnitAndMonth(unitId, year, month)
+            val debts = debtsDao.getDebtsForUnits(unitId = unitId, yearStr = year, monthStr = month, responsible = Responsible.TENANT)
             emit(debts)
         }.flowOn(Dispatchers.IO)
 
     fun getDebtsForOwner(ownerId: Long, year: String, month: String): Flow<List<Debts>> =
         flow {
-            val debts = debtsDao.getDebtsForOwner(ownerId, year, month)
+            val debts = debtsDao.getDebtsForOwner(ownerId = ownerId, yearStr =  year, monthStr = month, responsible = Responsible.OWNER)
             emit(debts)
         }.flowOn(Dispatchers.IO)
 
     fun getPaysForOwner(ownerId: Long): Flow<List<Debts>> =
         flow {
-            val debts = debtsDao.getPaysForOwner(ownerId)
+            val debts = debtsDao.getPaysForOwner(ownerId, Responsible.OWNER)
             emit(debts)
         }.flowOn(Dispatchers.IO)
 
@@ -230,21 +230,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double> = flow {
         val sum = debtsDao.sumPaidFundFlagPositive(buildingId)
-        Log.d("sum paid", sum.toString())
         emit(sum)
     }.flowOn(Dispatchers.IO)
 
     fun sumPaidEarnings(buildingId: Long): Flow<Double> = flow {
         val sum = earningsDao.sumPaidEarning(buildingId)
-
-        Log.d("sum unpaid", sum.toString())
         emit(sum)
     }.flowOn(Dispatchers.IO)
 
     fun sumUnpaidFundFlagNegative(buildingId: Long): Flow<Double> = flow {
         val sum = debtsDao.sumUnpaidFundFlagNegative(buildingId)
-
-        Log.d("sum unpaid", sum.toString())
         emit(sum)
     }.flowOn(Dispatchers.IO)
 
@@ -289,7 +284,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun countUnits(buildingId: Long): Flow<Int> = flow {
         val units = unitsDao.countUnits(buildingId)
-        Log.d("unit count", units.toString())
         emit(units)
     }.flowOn(Dispatchers.IO)
 
@@ -380,7 +374,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             .flowOn(Dispatchers.IO)
 
 
-
     fun getAllUnits(): Flow<List<Units>> = flow {
         val units = unitsDao.getUnits()
         emit(units)
@@ -425,7 +418,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
-
 
 
     val buildingsWithTypesAndUsagesList = mutableStateOf(listOf<BuildingWithTypesAndUsages>())
@@ -508,19 +500,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             var newDueDate = ""
-            Log.d("period", period.toString())
-            Log.d("Period.NONE", Period.NONE.toString())
             if (period == Period.NONE) {
                 newDueDate = dueDate
-                Log.d("newDueDate1", newDueDate)
             } else {
                 //@TODO loop of period
                 newDueDate = getNextMonthSameDaySafe().persianShortDate
-                Log.d("newDueDate2", newDueDate)
             }
-            Log.d("selectedOwnerIds", selectedOwnerIds.toString())
-
-            Log.d("units", units.toString())
 
             val numberOfUnits = units.size
             val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
@@ -553,16 +538,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch(Dispatchers.IO) {
             // Convert amount to Double
-            Log.d("amount", amount.toString())
             val parsedAmount = amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0
-            Log.d("parsedAmount", parsedAmount.toString())
 
             var units = unitsDao.getUnitsByBuildingId(buildingId)
             // Calculate debt per unit
             val numberOfUnits = units.size
-            Log.d("numberOfUnits", numberOfUnits.toString())
             val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
-            Log.d("amountPerUnit", amountPerUnit.toString())
             // Insert Cost
             val cost = Costs(
                 buildingId = buildingId,
@@ -576,7 +557,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 fundFlag = fundFlag
             )
 
-            Log.d("new cost", cost.toString())
             val costId = costsDao.insertCost(cost)
 
             // Insert Debts
@@ -591,7 +571,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         .toDoubleOrNull() ?: 0.0,
                     paymentFlag = false
                 )
-                Log.d("new debt", debt.toString())
                 debtsDao.insertDebt(debt)
             }
         }
@@ -603,10 +582,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 // Insert owner and get the new ownerId
                 val newOwnerId = ownersDao.insertOwners(owner)
-                Log.d("newOwnerId", newOwnerId.toString())
 
-                // For each OwnersUnitsCrossRef, insert the cross-reference with the correct dang value
-                Log.d("ownerUnits", ownerUnits.toString())
 
                 ownerUnits.forEach { oUnit ->
                     // Make sure dang is clamped between 0.0 and 6.0
@@ -624,7 +600,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
                 val updatedOwner = owner.copy(ownerId = newOwnerId)
                 ownersList.add(updatedOwner)
-                addOwnerUnits(owner, ownerUnits)
+                addOwnerUnits(updatedOwner, ownerUnits)
             } catch (e: Exception) {
                 Log.e("SaveError", "Failed to save owner with units: ${e.message}")
             }
@@ -655,7 +631,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 tenantsDao.getActiveTenantUnitRelationships(unit.unitId, "فعال")
 
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { Log.d("Unknown error", e.message.toString()) }
+                withContext(Dispatchers.Main) { Log.e("Unknown error", e.message.toString()) }
             }
 
         }
@@ -689,21 +665,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
                 fileList.forEach { file ->
                     var fileID = uploadedFileDao.insertUploadedFile(file)
-                    buildingDao.insertCrossRef(BuildingUploadedFileCrossRef(buildingId = buildingId, fileId = fileID))
+                    buildingDao.insertCrossRef(
+                        BuildingUploadedFileCrossRef(
+                            buildingId = buildingId,
+                            fileId = fileID
+                        )
+                    )
                 }
-
-                Log.d("buildingIdd", buildingId.toString())
 
                 // Prepare Charges
                 val updatedCharges = mutableListOf<Costs>()
                 val updatedCosts = mutableListOf<Costs>()
-                Log.d("costsList.value 1", costsList.value.toString())
                 // Prepare Costs
 
                 if (sameCosts) {
                     costsList.value.filter { it.buildingId == null }.forEach { cost ->
                         val newCost = cost.copy(buildingId = buildingId, id = 0L)
-                        Log.d("newCost", newCost.toString())
                         costsList.value = costsList.value + newCost
                     }
                 } else {
@@ -733,17 +710,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         buildingId = buildingId
                     )
                 }.forEach { cost ->
-                    Log.d("new cost", cost.toString())
                     var insertedId = costsDao.insertCost(cost)
 
                     updatedCosts.add(cost.copy(id = insertedId))
                 }
 
-
-                Log.d("charge.value", charge.value.toString())
                 charge.value.filter { it.buildingId == null }.forEach { cost ->
                     val newCost = cost.copy(buildingId = buildingId, id = 0L)
-                    Log.d("newCost", newCost.toString())
                     charge.value = charge.value + newCost
                 }
                 charge.value.filter { it.buildingId == buildingId }.map {
@@ -756,23 +729,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     updatedCharges.add(charge.copy(id = insertedId))
                 }
 
-                Log.d("costs", costsDao.getCosts().toString())
-
                 // Prepare units
                 unitsList.forEach { unit ->
                     val unitWithBuildingId = unit.copy(buildingId = buildingId)
-                    Log.d("unitWithBuildingId", unitWithBuildingId.toString())
-                    Log.d("c buildingId", buildingId.toString())
                     val insertedUnit = unitsDao.insertUnit(unitWithBuildingId)
-                    Log.d("units", unitsDao.getUnits().toString())
-
-                    // **Loop Through Both costsList.value AND charge.value**
-                    Log.d("costsList.value", costsList.value.toString())
-                    Log.d("charge.value", charge.value.toString())
                     (updatedCosts + updatedCharges).filter { it.buildingId == buildingId }
                         .forEach { cost ->
-
-                            Log.d("automaticCharge ", automaticCharge.toString())
                             // Determine Amount for Charge
                             val amount = when {
                                 automaticCharge && cost in updatedCharges -> { //Check if amount comes from charge
@@ -812,17 +774,15 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                     ?: 0.0 //If not from charge get from cost amount
                             }
 
-                            Log.d("amount", amount.toString())
-
                             // Retrieve Tenant information
                             val tenant = tenantsList.value.firstOrNull { tenant ->
                                 val tenantUnit = tenantUnitMap[tenant]
                                 tenantUnit?.unitId == insertedUnit
                             }
-                            Log.d("tenant", tenant.toString())
                             val startDate = parsePersianDate(tenant?.startDate ?: "")
                             val endDate = parsePersianDate(tenant?.endDate ?: "")
-
+                            Log.d("startDate", startDate.toString())
+                            Log.d("endDate", endDate.toString())
                             // Create debt for monthly period
                             if (cost.period == Period.MONTHLY) {
                                 if (startDate != null && endDate != null) {
@@ -833,15 +793,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                             String.format(
                                                 "%04d/%02d/%02d",
                                                 it.persianYear,
-                                                it.persianMonth + 1,
+                                                it.persianMonth,
                                                 it.persianDay
                                             )
                                         } ?: ""
+                                        Log.d("formattedDueDate", formattedDueDate.toString())
 
-                                        // Insert debt with dueDate
-                                        Log.d("insertedUnit", insertedUnit.toString())
-                                        Log.d("cost.id", cost.id.toString())
-                                        Log.d("buildingIdd", buildingId.toString())
                                         val debt = Debts(
                                             unitId = insertedUnit,
                                             costId = cost.id,
@@ -852,7 +809,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                             paymentFlag = false
                                         )
                                         debtsDao.insertDebt(debt)
-                                        Log.d("debt", debtsDao.getAllDebts().toString())
 
                                         // Move to next month safely
                                         dueDate = getNextMonthSameDaySafe(dueDate)
@@ -1138,17 +1094,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 unitDebtsList.add(debt)
             }
-            Log.d("temp debt", debt.toString())
 
         }
     }
 
     fun addUnitDebtsList(debts: List<Debts>) {
-        unitDebtsList.clear()
-        debts.forEach { debt ->
-            unitDebtsList.add(debt)
-        }
+        if (debts.isEmpty()) return
+
+        val unitIdToReplace = debts.first().unitId
+
+        // Remove debts with the same unitId
+        unitDebtsList.removeAll { it.unitId == unitIdToReplace }
+
+        // Add new debts
+        unitDebtsList.addAll(debts)
     }
+
 
     fun addUnpaidDebtListList(debts: List<Debts>) {
         unpaidDebtList.value = emptyList()
@@ -1157,7 +1118,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun addFileList(uploadedFileEntity : UploadedFileEntity){
+    fun addFileList(uploadedFileEntity: UploadedFileEntity) {
         fileList.add(uploadedFileEntity)
     }
 
@@ -1268,7 +1229,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         selectedBuildingUsages = null
         unitsList.clear()
         fileList.clear()
-        Log.d("unitsList.clear()", "yes")
         debtsList.clear()
         selectedOwnerForUnit = null
     }
@@ -1355,10 +1315,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getNextYearSameDaySafe(inputDate: PersianCalendar?): PersianCalendar {
         val date = inputDate ?: PersianCalendar() // Use current date if null
-        Log.d("inputDate", "${date.persianYear}/${date.persianMonth + 1}/${date.persianDay}")
-
         val newYear = date.persianYear + 1
-        val newMonth = date.persianMonth // zero-based month
+        val newMonth = date.persianMonth// zero-based month
 
         // Temporary PersianCalendar for max days in the same month next year
         val temp = PersianCalendar().apply {
@@ -1373,8 +1331,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 min(date.persianDay, maxDay)
             )
         }
-
-        Log.d("resultDate", "${result.persianYear}/${result.persianMonth + 1}/${result.persianDay}")
         return result
     }
 
@@ -1442,7 +1398,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         // Remove non-digit characters before storing
         val cleanValue = newValue.filter { it.isDigit() }
         chargeAmount = cleanValue
-        Log.d("chargeAmount", chargeAmount)
         charge.value = charge.value.filter { it.buildingId == null }.map {
             it.copy(tempAmount = chargeAmount.toDoubleOrNull() ?: 0.0)
         }

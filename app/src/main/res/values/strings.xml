@@ -284,4 +284,5 @@
     <string name="logout">خروج از برنامه</string>
     <string name="success_pay">پرداخت با موفقیت انجام شد</string>
     <string name="no_tenants_found">هیچ ساکنی برای این واحد تعریف نشده است</string>
+    <string name="no_payments_recorded">هیچ هزینه ی پرداخت شده ای وجود ندارد</string>
 </resources>

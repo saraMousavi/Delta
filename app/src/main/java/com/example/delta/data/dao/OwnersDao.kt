@@ -72,5 +72,8 @@ interface OwnersDao {
     @Query("SELECT * FROM owners_units_cross_ref WHERE ownerId = :ownerId")
     suspend fun getOwnersWithUnits(ownerId: Long): List<OwnersUnitsCrossRef>
 
+    @Query("SELECT * FROM owners_units_cross_ref")
+    suspend fun getOwnersUnitsCrossRef(): List<OwnersUnitsCrossRef>
+
 
 }

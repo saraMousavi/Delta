@@ -56,8 +56,9 @@ interface UnitsDao {
     suspend fun getActiveUnits(buildingId: Long): List<Units>
 
     @Query("""
-    SELECT u.* FROM units u
-    WHERE u.ownerId IN (:ownerIds)
+    SELECT distinct u.* FROM units u
+    INNER JOIN owners_units_cross_ref ou ON u.unitId = ou.unitId
+    WHERE ou.ownerId IN (:ownerIds)
 """)
     suspend fun getUnitsByOwnerIds(ownerIds: List<Long>): List<Units>
 

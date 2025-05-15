@@ -56,6 +56,7 @@ import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Responsible
+import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlin.getValue
@@ -385,63 +386,6 @@ class UnitDetailsActivity : ComponentActivity() {
             }
         }
 
-    }
-
-    @Composable
-    fun DebtItem(debt: Debts, onPayment: () -> Unit) {
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "${LocalContext.current.getString(R.string.title)}: ${debt.description}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = "${LocalContext.current.getString(R.string.amount)}: ${
-                                formatNumberWithCommas(
-                                    debt.amount
-                                )
-                            }",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "${LocalContext.current.getString(R.string.due)}: ${debt.dueDate}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-                Log.d("debt.paymentFlag", debt.paymentFlag.toString())
-                if (debt.paymentFlag) {
-                    Text(
-                        text = LocalContext.current.getString(R.string.payment_done),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                } else {
-                    Button(onClick = onPayment) {
-                        Text(
-                            text = LocalContext.current.getString(R.string.payment),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        }
     }
 
 

@@ -1121,12 +1121,11 @@ class BuildingProfileActivity : ComponentActivity() {
         val context = LocalContext.current
         val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
             .collectAsState(initial = emptyList())
+        Log.d("units", units.toString())
 
         var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
         var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth ) }
 
-        Log.d("selectedYear", selectedYear.toString())
-        Log.d("selectedMonth", selectedMonth.toString())
         Column {
             if (units.isEmpty()) {
                 Text(

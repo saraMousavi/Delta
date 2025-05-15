@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.delta.data.entity.Debts
+import com.example.delta.enums.Responsible
 
 @Dao
 interface DebtsDao {
@@ -23,35 +24,41 @@ interface DebtsDao {
     suspend fun getDebtsOneUnit(unitId: Long): List<Debts>
 
     @Query("""
-    SELECT * FROM debts 
-    WHERE unitId = :unitId 
+    SELECT debts.*
+    FROM debts
+    INNER JOIN costs ON debts.costId = costs.id
+    WHERE debts.unitId = :unitId
+      AND SUBSTR(debts.due_date, 1, 4) = :yearStr
+      AND SUBSTR(debts.due_date, 6, 2) = :monthStr
+      AND debts.payment_flag = 0
+      AND costs.responsible = :responsible
+""")
+    fun getDebtsForUnits(unitId: Long, yearStr: String, monthStr: String, responsible: Responsible): List<Debts>
+
+    @Query("""
+    SELECT debts.*
+    FROM debts
+    INNER JOIN costs ON debts.costId = costs.id
+    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
+    WHERE owners_units_cross_ref.ownerId = :ownerId 
     AND SUBSTR(due_date, 1, 4) = :yearStr 
     AND SUBSTR(due_date, 6, 2) = :monthStr
     AND payment_flag = 0
+    AND costs.responsible = :responsible
 """)
-    fun getDebtsForUnitAndMonth(unitId: Long, yearStr: String, monthStr: String): List<Debts>
+    fun getDebtsForOwner(ownerId: Long, yearStr: String, monthStr: String, responsible: Responsible): List<Debts>
 
     @Query("""
     SELECT debts.*
     FROM debts
     INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
-    WHERE owners_units_cross_ref.ownerId = :ownerId and (
-        (SUBSTR(due_date, 1, 4) = :yearStr AND SUBSTR(due_date, 6, 2) = :monthStr)
-        OR
-        ( due_date < (:yearStr || '/' || :monthStr || '/01') AND payment_flag = 0) 
-        )
+    inner join costs on debts.costId = costs.id
+    WHERE owners_units_cross_ref.ownerId = :ownerId 
+    AND payment_flag = 1
+    AND costs.responsible = :responsible
     ORDER BY due_date ASC
 """)
-    fun getDebtsForOwner(ownerId: Long, yearStr: String, monthStr: String): List<Debts>
-
-    @Query("""
-    SELECT debts.*
-    FROM debts
-    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
-    WHERE owners_units_cross_ref.ownerId = :ownerId AND payment_flag = 1
-    ORDER BY due_date ASC
-""")
-    fun getPaysForOwner(ownerId: Long): List<Debts>
+    fun getPaysForOwner(ownerId: Long, responsible: Responsible): List<Debts>
 
 
 

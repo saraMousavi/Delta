@@ -667,8 +667,10 @@ fun PersianDatePickerDialogContent(
                     .setShowInBottomSheet(true)
                     .setListener(object : PersianPickerListener {
                         override fun onDateSelected(persianPickerDate: PersianPickerDate) {
-                            val dateStr =
-                                "${persianPickerDate.persianYear}/${persianPickerDate.persianMonth}/${persianPickerDate.persianDay}"
+                            val monthStr = persianPickerDate.persianMonth.toString().padStart(2, '0')
+                            val dayStr = persianPickerDate.persianDay.toString().padStart(2, '0')
+                            val dateStr = "${persianPickerDate.persianYear}/$monthStr/$dayStr"
+
                             onDateSelected(dateStr)
                         }
 
