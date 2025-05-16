@@ -32,11 +32,12 @@ import com.example.delta.viewmodel.BuildingsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.core.content.edit
+import com.example.delta.viewmodel.SharedViewModel
 
 class LoginPage : ComponentActivity() {
     val viewModel: BuildingsViewModel by viewModels()
+    val sharedViewModel: SharedViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (isUserLoggedIn(this)) {
@@ -47,7 +48,8 @@ class LoginPage : ComponentActivity() {
             setContent {
                 AppTheme {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        LoginPageForm(viewModel)
+                        val users by sharedViewModel.getUsers().collectAsState(initial = emptyList())
+                        LoginPageForm(users, viewModel)
                     }
                 }
             }
@@ -56,35 +58,36 @@ class LoginPage : ComponentActivity() {
 }
 
 // Example of a simple login function
-fun convertToPersianDigits(input: String): String {
-    val persianDigits = listOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
-    val builder = StringBuilder()
-    for (char in input) {
-        if (char.isDigit()) {
-            val digit = char.toString().toInt()
-            builder.append(persianDigits[digit])
-        } else {
-            builder.append(char) // keep non-digit characters as is
-        }
-    }
-    return builder.toString()
-}
+//fun convertToPersianDigits(input: String): String {
+//    val persianDigits = listOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+//    val builder = StringBuilder()
+//    for (char in input) {
+//        if (char.isDigit()) {
+//            val digit = char.toString().toInt()
+//            builder.append(persianDigits[digit])
+//        } else {
+//            builder.append(char) // keep non-digit characters as is
+//        }
+//    }
+//    return builder.toString()
+//}
 
-fun login(username: String, password: String): User? {
+fun login(users: List<User>, username: String, password: String): User? {
     // Simulate backend authentication
-    val phoneNumber = "09103009458"
-    val persianPhoneNumber = convertToPersianDigits(phoneNumber)
+//    val phoneNumber = "09103009458"
+//    val persianPhoneNumber = convertToPersianDigits(phoneNumber)
+//
+//    val pass = "1234"
+//    val persianPassword = convertToPersianDigits(pass)
 
-    val pass = "1234"
-    val persianPassword = convertToPersianDigits(pass)
 
-
-    val users = listOf(
-        User(userId = 1L, mobileNumber = persianPhoneNumber, password = persianPassword, roleId = 1L), // Admin
-        User(userId = 2L, mobileNumber = convertToPersianDigits("09123456789"), password = "password", roleId = 2L), // owner
-        User(userId = 3L, mobileNumber = convertToPersianDigits("09134567890"), password = "password", roleId = 3L), // manager
-        User(userId = 4L, mobileNumber = convertToPersianDigits("09145678901"), password = "password", roleId = 4L)  // tenant
-    )
+//    val users = listOf(
+//        User(userId = 1L, mobileNumber = persianPhoneNumber, password = persianPassword, roleId = 1L), // Admin
+//        User(userId = 2L, mobileNumber = "09103009458", password = "1234", roleId = 2L), // owner
+//        User(userId = 2L, mobileNumber = convertToPersianDigits("09123456789"), password = "password", roleId = 2L), // owner
+//        User(userId = 3L, mobileNumber = convertToPersianDigits("09134567890"), password = "password", roleId = 3L), // manager
+//        User(userId = 4L, mobileNumber = convertToPersianDigits("09145678901"), password = "password", roleId = 4L)  // tenant
+//    )
 
 
     return users.find { it.mobileNumber == username && it.password == password }
@@ -92,7 +95,7 @@ fun login(username: String, password: String): User? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
+fun LoginPageForm(users: List<User>, buildingsViewModel: BuildingsViewModel) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -142,7 +145,7 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
             Button(
                 onClick = {
                     scope.launch(Dispatchers.IO) {
-                        handleLogin(context, username, password, buildingsViewModel)
+                        handleLogin(context, users , username, password, buildingsViewModel)
                     }
                 },
                 modifier = Modifier
@@ -155,7 +158,7 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
             ) {
                 Text(
                     text = context.getString(R.string.login),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             }
@@ -175,7 +178,7 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
                     }
                     context.startActivity(intent)
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             TextButton(
@@ -194,11 +197,12 @@ fun LoginPageForm(buildingsViewModel: BuildingsViewModel) {
 
 fun handleLogin(
     context: Context,
+    user: List<User>,
     username: String,
     password: String,
     buildingsViewModel: BuildingsViewModel
 ) {
-    val user = login(username, password)
+    val user = login(user , username, password)
 
     if (user != null) {
         // Save userId and roleId locally
@@ -237,34 +241,34 @@ fun handleLogin(
     }
 }
 
+//
+//fun checkBuildingList(context: Context, buildingsViewModel: BuildingsViewModel) {
+//    CoroutineScope(Dispatchers.IO).launch {
+//        // Simulate checking if there are buildings for the user
+//        val buildings = buildingsViewModel.getAllBuildingsList()
+//        withContext(Dispatchers.Main) {
+//            Log.d("buildings.isEmpty()", buildings.isEmpty().toString())
+//            if (buildings.isEmpty()) {
+//                navigateToActivity(context, BuildingFormActivity::class.java)
+//            } else {
+//                navigateToActivity(context, HomePageActivity::class.java)
+//            }
+//        }
+//    }
+//}
 
-fun checkBuildingList(context: Context, buildingsViewModel: BuildingsViewModel) {
-    CoroutineScope(Dispatchers.IO).launch {
-        // Simulate checking if there are buildings for the user
-        val buildings = buildingsViewModel.getAllBuildingsList()
-        withContext(Dispatchers.Main) {
-            Log.d("buildings.isEmpty()", buildings.isEmpty().toString())
-            if (buildings.isEmpty()) {
-                navigateToActivity(context, BuildingFormActivity::class.java)
-            } else {
-                navigateToActivity(context, HomePageActivity::class.java)
-            }
-        }
-    }
-}
-
-fun navigateToActivity(context: Context, activityClass: Class<*>) {
-    val intent = Intent(context, activityClass)
-    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-    context.startActivity(intent)
-    if (context is Activity) {
-        context.finish()
-    }
-}
+//fun navigateToActivity(context: Context, activityClass: Class<*>) {
+//    val intent = Intent(context, activityClass)
+//    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+//    context.startActivity(intent)
+//    if (context is Activity) {
+//        context.finish()
+//    }
+//}
 
 fun saveLoginState(context: Context, isLoggedIn: Boolean) {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-    prefs.edit() { putBoolean("is_logged_in", isLoggedIn) }
+    prefs.edit { putBoolean("is_logged_in", isLoggedIn) }
 }
 
 fun isUserLoggedIn(context: Context): Boolean {

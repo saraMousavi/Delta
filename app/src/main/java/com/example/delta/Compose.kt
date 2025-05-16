@@ -301,7 +301,7 @@ fun <T> GenericItem(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     text = itemName(item) // Use the lambda to get the name
                 )
             }
@@ -395,8 +395,8 @@ fun <T> ExposedDropdownMenuBoxExample(
                 readOnly = true,
                 value = selectedItem?.let { itemLabel(it) } ?: "",
                 onValueChange = { },
-                label = { Text(text = label, style = MaterialTheme.typography.bodyMedium) },
-                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text(text = label, style = MaterialTheme.typography.bodyLarge) },
+                textStyle = MaterialTheme.typography.bodyLarge,
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = expanded
@@ -413,7 +413,7 @@ fun <T> ExposedDropdownMenuBoxExample(
                         text = {
                             Text(
                                 text = itemLabel(item),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         },
                         onClick = {

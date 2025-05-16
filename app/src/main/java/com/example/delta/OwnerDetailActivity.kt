@@ -14,6 +14,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.HomeWork
+import androidx.compose.material.icons.filled.House
+import androidx.compose.material.icons.filled.MobileFriendly
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
@@ -21,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -131,6 +135,8 @@ fun OwnerOverviewTab(
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var mobile by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
 
     LaunchedEffect(owner) {
         if (owner != null) {
@@ -138,6 +144,8 @@ fun OwnerOverviewTab(
             lastName = owner!!.lastName
             email = owner!!.email
             phone = owner!!.phoneNumber
+            mobile = owner!!.mobileNumber
+            address = owner!!.address
         }
     }
     var context = LocalContext.current
@@ -148,7 +156,7 @@ fun OwnerOverviewTab(
                 .fillMaxWidth()
                 .padding(16.dp),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = Color(context.getColor(R.color.primary_color)))
         ) {
             Column(
                 modifier = Modifier
@@ -226,18 +234,50 @@ fun OwnerOverviewTab(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = mobile,
+                            onValueChange = { mobile = it },
+                            label = {
+                                Text(
+                                    context.getString(R.string.mobile_number),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = { address = it },
+                            label = {
+                                Text(
+                                    context.getString(R.string.address),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(16.dp))
+
                         Row {
                             Button(
                                 onClick = {
                                     // Save changes
-//                                    sharedViewModel.updateOwnerWithUnits(
-//                                        owner!!.copy(
-//                                            firstName = firstName,
-//                                            lastName = lastName,
-//                                            email = email,
-//                                            phoneNumber = phone
-//                                        )
-//                                    )
+                                    sharedViewModel.updateOwner(
+                                        owner!!.copy(
+                                            firstName = firstName,
+                                            lastName = lastName,
+                                            email = email,
+                                            phoneNumber = phone,
+                                            mobileNumber = mobile,
+                                            address = address,
+                                        ),
+                                        onError = {
+                                            Toast.makeText(context, context.getString(R.string.operation_problem),
+                                                Toast.LENGTH_LONG).show()
+                                        }
+                                    )
                                     isEditing = false
                                 }
                             ) {
@@ -300,6 +340,37 @@ fun OwnerOverviewTab(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.MobileFriendly,
+                                contentDescription = "Mobile",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = owner!!.mobileNumber.ifBlank { context.getString(R.string.no) },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.HomeWork,
+                                contentDescription = "Address",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = owner!!.address.ifBlank { context.getString(R.string.no) },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -325,68 +396,66 @@ fun OwnerOverviewTab(
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
-
+    var context = LocalContext.current
     var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
     var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
     var showDebtDialog by remember { mutableStateOf(false) }
+
     val debts by sharedViewModel.getDebtsForOwner(
         ownerId, selectedYear.toString(),
         selectedMonth.toString().padStart(2, '0')
-    )
+    ).collectAsState(initial = emptyList())
+    Log.d("debts pay", debts.toString())
+
+    val buildingsId = debts.firstOrNull()?.buildingId
+
+    val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
         .collectAsState(initial = emptyList())
-    Log.d("debts", debts.toString())
-    var context = LocalContext.current
-    if (debts.isNotEmpty()) {
-        val buildingsId = debts[0].buildingId
-        val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
-            .collectAsState(initial = emptyList())
-        val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
-            .collectAsState(initial = emptyList())
-        val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
-            .collectAsState(initial = emptyList())
-        val areaByOwner: Map<Long, Double> = calculateAreaByOwners(owners, units, crossRef)
-//        val payments = calculateOwnerPaymentsPerCost(sharedViewModel, debts, areaByOwner, crossRef)
-        // Collect all costs as a map for fast lookup
-        // Get all unique costIds from debts
-        val costIds = debts.map { it.costId }.distinct()
-        Log.d("costIds", costIds.toString())
-        val costs: Map<Long, Costs?> = costIds.associateWith { costId ->
-            sharedViewModel.getCost(costId).collectAsState(initial = null).value
-        }
-        Log.d("costs", costs.toString())
-        val payments by remember(debts, areaByOwner, crossRef) {
-            derivedStateOf {
-                calculateOwnerPaymentsPerCost(debts, areaByOwner, crossRef, costs)
-            }
-        }
+    val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
+        .collectAsState(initial = emptyList())
+    val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
+        .collectAsState(initial = emptyList())
 
-        Log.d("payments", payments.toString())
-        LaunchedEffect(payments) {
-            // Calculate payments per costId for this owner
+    // Fetch all costs at once (ideally from ViewModel, not in a loop)
+    val costIds = debts.map { it.costId }.distinct()
+    Log.d("costIds pay", costIds.toString())
+    val costs by sharedViewModel.getCostsByIds(costIds)
+        .collectAsState(initial = emptyList())
+    Log.d("costs pay", costs.toString())
 
-            // Convert to a list of Debts or your UI model to add to unpaid debt list
-            val unpaidDebts = payments.mapNotNull { (costId, amount) ->
-                // Find a representative debt to get buildingId, description, dueDate for this costId
-                Log.d("amount", amount.toString())
-                val representativeDebt =
-                    debts.find { it.costId == costId } ?: return@mapNotNull null
-                Debts(
-                    debtId = representativeDebt.debtId,
-                    costId = costId,
-                    unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
-                    buildingId = representativeDebt.buildingId,
-                    description = representativeDebt.description,
-                    dueDate = representativeDebt.dueDate,
-                    amount = amount,
-                    paymentFlag = false
-                )
-            }
-            Log.d("unpaidDebts", unpaidDebts.toString())
+    val costsMap = remember(costs) { costs.associateBy { it.id } }
+    Log.d("costsMap pay", costsMap.toString())
 
-            sharedViewModel.addUnpaidDebtListList(unpaidDebts)
+    val areaByOwner = remember(owners, units, crossRef) {
+        calculateAreaByOwners(owners, units, crossRef)
+    }
+    val payments = remember(debts, areaByOwner, crossRef, costsMap) {
+        calculateOwnerPaymentsPerCost(debts, areaByOwner, crossRef, costsMap)
+    }
+    Log.d("payments", payments.toString())
+    LaunchedEffect(payments) {
+        // Calculate payments per costId for this owner
+
+        // Convert to a list of Debts or your UI model to add to unpaid debt list
+        val unpaidDebts = payments.mapNotNull { (costId, amount) ->
+            // Find a representative debt to get buildingId, description, dueDate for this costId
+            Log.d("amount", amount.toString())
+            val representativeDebt =
+                debts.find { it.costId == costId } ?: return@mapNotNull null
+            Debts(
+                debtId = representativeDebt.debtId,
+                costId = costId,
+                unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
+                buildingId = representativeDebt.buildingId,
+                description = representativeDebt.description,
+                dueDate = representativeDebt.dueDate,
+                amount = amount,
+                paymentFlag = false
+            )
         }
-    } else {
-        sharedViewModel.unpaidDebtList.value = emptyList()
+        Log.d("unpaidDebts", unpaidDebts.toString())
+
+        sharedViewModel.addUnpaidDebtListList(unpaidDebts)
     }
     Scaffold(
         floatingActionButton = {
@@ -402,9 +471,11 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
         }
     ) { innerPadding ->
 
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             // debt items
             YearMonthSelector(
                 selectedYear = selectedYear,
@@ -422,7 +493,10 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
                     style = MaterialTheme.typography.bodyLarge
                 )
             } else {
-
+                Log.d(
+                    "sharedViewModel.unpaidDebtList.value",
+                    sharedViewModel.unpaidDebtList.value.toString()
+                )
                 sharedViewModel.unpaidDebtList.value.forEach { debt ->
                     DebtItem(debt = debt, onPayment = {
                         Log.d("debt", debt.toString())
@@ -456,50 +530,59 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
 fun OwnerPaymentTab(ownerId: Long, sharedViewModel: SharedViewModel) {
     val payments by sharedViewModel.getPaysForOwner(ownerId = ownerId)
         .collectAsState(initial = emptyList())
+    Log.d("payments debt", payments.toString())
 
     var context = LocalContext.current
-    if (payments.isNotEmpty()) {
-        val buildingsId = payments[0].buildingId
-        val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
-            .collectAsState(initial = emptyList())
-        val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
-            .collectAsState(initial = emptyList())
-        val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
-            .collectAsState(initial = emptyList())
-        val areaByOwner: Map<Long, Double> = calculateAreaByOwners(owners, units, crossRef)
-        val costIds = payments.map { it.costId }.distinct()
+    val buildingsId = payments.firstOrNull()?.buildingId ?: return
 
-        val costs: Map<Long, Costs?> = costIds.associateWith { costId ->
-            sharedViewModel.getCost(costId).collectAsState(initial = null).value
+    val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
+        .collectAsState(initial = emptyList())
+    val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
+        .collectAsState(initial = emptyList())
+    val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
+        .collectAsState(initial = emptyList())
+
+    // Fetch all costs at once (ideally from ViewModel, not in a loop)
+    val costIds = payments.map { it.costId }.distinct()
+    val costs by sharedViewModel.getCostsByIds(costIds)
+        .collectAsState(initial = emptyList())
+
+    val costsMap = remember(costs) { costs.associateBy { it.id } }
+    Log.d("cost mao", costsMap.toString())
+
+    val areaByOwner = remember(owners, units, crossRef) {
+        calculateAreaByOwners(owners, units, crossRef)
+    }
+    val payment = remember(payments, areaByOwner, crossRef, costsMap) {
+        calculateOwnerPaymentsPerCost(payments, areaByOwner, crossRef, costsMap)
+    }
+    Log.d("payments", payments.toString())
+
+
+    LaunchedEffect(payment) {
+        // Calculate payments per costId for this owner
+
+        // Convert to a list of Debts or your UI model to add to unpaid debt list
+        val paidDebts = payment.mapNotNull { (costId, amount) ->
+            // Find a representative debt to get buildingId, description, dueDate for this costId
+            val representativeDebt =
+                payments.find { it.costId == costId } ?: return@mapNotNull null
+            Debts(
+                debtId = representativeDebt.debtId,
+                costId = costId,
+                unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
+                buildingId = representativeDebt.buildingId,
+                description = representativeDebt.description,
+                dueDate = representativeDebt.dueDate,
+                amount = amount,
+                paymentFlag = true
+            )
         }
-        val payment =
-            calculateOwnerPaymentsPerCost( payments, areaByOwner, crossRef, costs)
 
-
-        LaunchedEffect(payments) {
-            // Calculate payments per costId for this owner
-
-            // Convert to a list of Debts or your UI model to add to unpaid debt list
-            val paidDebts = payment.mapNotNull { (costId, amount) ->
-                // Find a representative debt to get buildingId, description, dueDate for this costId
-                val representativeDebt =
-                    payments.find { it.costId == costId } ?: return@mapNotNull null
-                Debts(
-                    costId = costId,
-                    unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
-                    buildingId = representativeDebt.buildingId,
-                    description = representativeDebt.description,
-                    dueDate = representativeDebt.dueDate,
-                    amount = amount,
-                    paymentFlag = true
-                )
-            }
-
-            sharedViewModel.addUnpaidDebtListList(paidDebts)
-        }
+        sharedViewModel.addUnpaidDebtListList(paidDebts)
     }
     Column(modifier = Modifier.padding(16.dp)) {
-        Log.d("sharedViewModel.unpaidDebtList.value","1")
+        Log.d("sharedViewModel.unpaidDebtList.value", "1")
         if (sharedViewModel.unpaidDebtList.value.isEmpty()) {
             Text(
                 text = context.getString(R.string.no_payments_recorded),
@@ -541,27 +624,27 @@ fun calculateOwnerPaymentsPerCost(
             val unitId = debt.unitId
             val debtAmount = debt.amount
             when (cost.calculateMethod.name) {
-                    CalculateMethod.DANG.name -> {
+                CalculateMethod.DANG.name -> {
 // Sum total dang for all owners across all units
-                        val totalDang = ownersUnitsCrossRefs.sumOf { it.dang }
-                        Log.d("totalDang", totalDang.toString())
-                        // Calculate each owner's total dang
-                        val dangByOwner = ownersUnitsCrossRefs.groupBy { it.ownerId }
-                            .mapValues { entry -> entry.value.sumOf { it.dang } }
+                    val totalDang = ownersUnitsCrossRefs.sumOf { it.dang }
+                    Log.d("totalDang", totalDang.toString())
+                    // Calculate each owner's total dang
+                    val dangByOwner = ownersUnitsCrossRefs.groupBy { it.ownerId }
+                        .mapValues { entry -> entry.value.sumOf { it.dang } }
 
-                        // Calculate proportional share
-                        dangByOwner.forEach { (ownerId, ownerDang) ->
-                            val share =
-                                if (totalDang > 0) (ownerDang / totalDang) * debt.amount else 0.0
-                            costPayments[ownerId] = share
-                        }
+                    // Calculate proportional share
+                    dangByOwner.forEach { (ownerId, ownerDang) ->
+                        val share =
+                            if (totalDang > 0) (ownerDang / totalDang) * debt.amount else 0.0
+                        costPayments[ownerId] = share
                     }
+                }
 
-                    CalculateMethod.AREA.name -> {
-                        val totalArea: Double = areaByOwner.values.sumByDouble { it }
+                CalculateMethod.AREA.name -> {
+                    val totalArea: Double = areaByOwner.values.sumByDouble { it }
 
 
-                        // Calculate each owner's total area (sum of areas of units they own)
+                    // Calculate each owner's total area (sum of areas of units they own)
 //                    val areaByOwner = ownersUnitsCrossRefs.groupBy { it.ownerId }
 //                        .mapValues { entry ->
 //                            entry.value.sumOf { ou ->
@@ -569,27 +652,27 @@ fun calculateOwnerPaymentsPerCost(
 //                            }
 //                        }
 
-                        // Calculate proportional share by area
-                        areaByOwner.forEach { (ownerId, ownerArea) ->
-                            val share =
-                                if (totalArea > 0) (ownerArea / totalArea) * debt.amount else 0.0
-                            costPayments[ownerId] = share
-                        }
+                    // Calculate proportional share by area
+                    areaByOwner.forEach { (ownerId, ownerArea) ->
+                        val share =
+                            if (totalArea > 0) (ownerArea / totalArea) * debt.amount else 0.0
+                        costPayments[ownerId] = share
                     }
-
-                    CalculateMethod.FIXED.name -> {
-// Get distinct owners
-                        val distinctOwners = ownersUnitsCrossRefs.map { it.ownerId }.distinct()
-                        Log.d("distinctOwners", distinctOwners.toString())
-                        val sharePerOwner =
-                            if (distinctOwners.isNotEmpty()) debt.amount / distinctOwners.size else 0.0
-                        Log.d("sharePerOwner", sharePerOwner.toString())
-                        distinctOwners.forEach { ownerId ->
-                            costPayments[ownerId] = sharePerOwner
-                        }
-                    }
-
                 }
+
+                CalculateMethod.FIXED.name -> {
+// Get distinct owners
+                    val distinctOwners = ownersUnitsCrossRefs.map { it.ownerId }.distinct()
+                    Log.d("distinctOwners", distinctOwners.toString())
+                    val sharePerOwner =
+                        if (distinctOwners.isNotEmpty()) debt.amount / distinctOwners.size else 0.0
+                    Log.d("sharePerOwner", sharePerOwner.toString())
+                    distinctOwners.forEach { ownerId ->
+                        costPayments[ownerId] = sharePerOwner
+                    }
+                }
+
+            }
             // Find owner's dang for this unit
             val ownerUnit = ownersUnitsCrossRefs.find { it.unitId == unitId }
             val ownerDang = ownerUnit?.dang ?: 0.0

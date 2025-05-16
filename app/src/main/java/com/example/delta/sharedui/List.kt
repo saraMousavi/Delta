@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -44,13 +45,14 @@ fun DebtItem(debt: Debts, onPayment: () -> Unit) {
                         text = "${LocalContext.current.getString(R.string.title)}: ${debt.description}",
                         style = MaterialTheme.typography.bodyLarge
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = "${LocalContext.current.getString(R.string.amount)}: ${
                             formatNumberWithCommas(
                                 debt.amount
                             )
                         }",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
                 Spacer(Modifier.height(8.dp))

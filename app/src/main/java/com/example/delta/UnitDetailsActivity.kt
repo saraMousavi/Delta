@@ -148,7 +148,7 @@ class UnitDetailsActivity : ComponentActivity() {
                         buildingId = unit.buildingId ?: 0,
                         sharedViewModel = sharedViewModel,
                         onDismiss = { showAddCostDialog = false },
-                        onSave = { selectedCost, amount, period, fundFlag, responsible, selectedUnits, selectedOwners, dueDate ->
+                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, responsible, selectedUnits, selectedOwners, dueDate ->
                             // Insert cost and debts using selectedCost info
 
                             sharedViewModel.insertDebtPerNewCost(
@@ -159,6 +159,7 @@ class UnitDetailsActivity : ComponentActivity() {
                                 dueDate = dueDate,
                                 fundFlag = fundFlag,
                                 paymentLevel = PaymentLevel.UNIT,
+                                calculateMethod = calculatedMethod,
                                 responsible = Responsible.TENANT,
                                 selectedUnitIds = selectedUnits.map { it }
                             )
@@ -194,7 +195,7 @@ class UnitDetailsActivity : ComponentActivity() {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -223,7 +224,7 @@ class UnitDetailsActivity : ComponentActivity() {
             // Tenants section
             Text(
                 text = context.getString(R.string.tenants),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             val tenantsWithRelation by sharedViewModel
@@ -232,7 +233,7 @@ class UnitDetailsActivity : ComponentActivity() {
             if (tenantsWithRelation.isEmpty()) {
                 Text(
                     text = context.getString(R.string.no_tenants_found),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
@@ -266,41 +267,41 @@ class UnitDetailsActivity : ComponentActivity() {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "${tenant.firstName} ${tenant.lastName}",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = "${context.getString(R.string.phone_number)}: ${tenant.phoneNumber}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
                     text = "${context.getString(R.string.mobile_number)}: ${tenant.mobileNumber}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
                     text = "${context.getString(R.string.email)}: ${tenant.email}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row {
                     Text(
                         text = "${context.getString(R.string.start_date)}: ${relation.startDate}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Text(
                         text = "${context.getString(R.string.end_date)}: ${relation.endDate}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = "${context.getString(R.string.status)}: ${relation.status}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
         }

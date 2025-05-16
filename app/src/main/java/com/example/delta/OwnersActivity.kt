@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,8 +22,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Owners
-import com.example.delta.data.entity.Units
-import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.factory.SharedViewModelFactory
 
@@ -41,6 +40,12 @@ class OwnersActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    var showOwnerDialog by remember { mutableStateOf(false) }
+                    val ownerUnitsState =
+                        sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
+                    val ownerUnits = ownerUnitsState.value
+                    val dangSumsMap: Map<Long, Double> = ownerUnits.associate { it.unitId to it.totalDang }
+                    val units by sharedViewModel.getAllUnits().collectAsState(initial = emptyList())
                     Scaffold(
                         topBar = {
                             CenterAlignedTopAppBar(
@@ -59,12 +64,32 @@ class OwnersActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                        },
+                        floatingActionButton = {
+                            FloatingActionButton(
+                                onClick = { showOwnerDialog = true }
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Add Tenant")
+                            }
                         }
                     ) { innerPadding ->
                         OwnersListScreen(
                             sharedViewModel = sharedViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
+                        if (showOwnerDialog) {
+                            OwnerDialog(
+                                units = units,
+                                onDismiss = { showOwnerDialog = false },
+                                dangSums = dangSumsMap,
+                                onAddOwner = { newOwner, selectedUnits ->
+                                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
+                                    showOwnerDialog = false
+                                },
+                                sharedViewModel = sharedViewModel,
+                                isOwner = true
+                            )
+                        }
                     }
                 }
             }
@@ -103,22 +128,28 @@ fun OwnerWithUnitsAndBuildingsCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "${context.getString(R.string.last_name)}: ${owner.lastName}",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                text = "${context.getString(R.string.email)}: ${owner.email}",
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(
+                    text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${context.getString(R.string.last_name)}: ${owner.lastName}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+//            Text(
+//                text = "${context.getString(R.string.email)}: ${owner.email}",
+//                style = MaterialTheme.typography.bodyLarge
+//            )
             Text(
                 text = "${context.getString(R.string.phone_number)}: ${owner.phoneNumber}",
                 style = MaterialTheme.typography.bodyLarge
             )
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "${context.getString(R.string.mobile_number)}: ${owner.mobileNumber}",
                 style = MaterialTheme.typography.bodyLarge
@@ -132,17 +163,21 @@ fun OwnerWithUnitsAndBuildingsCard(
                 units.forEach { unit ->
                     val building by sharedViewModel.getBuildingsForUnit(unit.unit.unitId).collectAsState(initial = null)
                     Column(modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)) {
-                        Text(
-                            text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
-                                    "${context.getString(R.string.area)}: ${unit.unit.area}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        if (building != null) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (building != null) {
+                                Text(
+                                    text = "${context.getString(R.string.building)}: ${building?.name ?: ""}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "${context.getString(R.string.building)}: ${building?.name ?: ""}",
-                                style = MaterialTheme.typography.bodySmall
+                                text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
+                                        "${context.getString(R.string.area)}: ${unit.unit.area}",
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         }
+
                     }
                 }
             }

@@ -139,15 +139,16 @@ fun DetailDrawer(
                     NavigationDrawerItem(
                         label = { Text(context.getString(R.string.logout)) },
                         selected = false,
-                        onClick = {}
+                        onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                            prefs.edit() { putBoolean("is_logged_in", false) }
+                            context.startActivity(Intent(context, LoginPage::class.java))
+                        }
                     )
                     Spacer(Modifier.height(12.dp))
                     NavigationDrawerItem(
                         label = { Text(context.getString(R.string.app_version)) },
                         selected = false,
-                        onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-                            prefs.edit() { putBoolean("is_logged_in", false) }
-
+                        onClick = {
                         }
                     )
                     Spacer(Modifier.height(12.dp))

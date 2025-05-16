@@ -220,7 +220,7 @@
     <string name="bahman">بهمن</string>
     <string name="esfand">اسفند</string>
     <string name="apply_authorization">اعطای دسترسی</string>
-    <string name="guest_message">Sign in to access all features and manage your properties</string>
+    <string name="guest_message">جهت دسترسی به تمامی امکانات برنامه ثبت نام کنید</string>
     <string name="homepage_display">صفحه اصلی</string>
     <string name="homepage_desc">نمایش لیست ساختمان ها</string>
     <string name="building_form_display">فرم ایجاد ساختمان</string>
@@ -285,4 +285,7 @@
     <string name="success_pay">پرداخت با موفقیت انجام شد</string>
     <string name="no_tenants_found">هیچ ساکنی برای این واحد تعریف نشده است</string>
     <string name="no_payments_recorded">هیچ هزینه ی پرداخت شده ای وجود ندارد</string>
+    <string name="operation_problem">عملیات با خطا مواجه شد</string>
+    <string name="calculate_method">مبنای محاسبه</string>
+    <string name="no">...</string>
 </resources>

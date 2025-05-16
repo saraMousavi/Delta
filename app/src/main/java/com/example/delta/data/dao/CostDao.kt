@@ -67,6 +67,8 @@ interface CostDao {
     suspend fun getCostById(costId: Long): Costs
 
 
+    @Query("SELECT * FROM costs WHERE id in ( :costId )")
+    suspend fun getCostsByIds(costId: List<Long>): List<Costs>
 
     @Query("DELETE FROM costs WHERE buildingId = :buildingId")
     suspend fun deleteCostsForBuilding(buildingId: Long)

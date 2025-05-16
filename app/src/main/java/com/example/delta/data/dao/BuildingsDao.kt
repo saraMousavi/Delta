@@ -56,7 +56,7 @@ interface BuildingsDao {
     @Query("SELECT * FROM building_usages")
     suspend fun getAllBuildingUsages(): List<BuildingUsages>
 
-    @Query("SELECT * FROM Buildings")
+    @Query("SELECT * FROM buildings")
     suspend fun getBuildings(): List<Buildings>
 
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")

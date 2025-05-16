@@ -78,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -376,7 +377,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         building.utilities.forEach { utility ->
                             Text(
                                 text = utility,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -547,7 +548,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                onSave = { selectedCost, amount, period, fundFlag, responsible, selectedUnits, selectedOwners, dueDate ->
+                onSave = { selectedCost, amount, period, fundFlag, calculateMethod, responsible, selectedUnits, selectedOwners, dueDate ->
                     // Insert cost and debts using selectedCost info
 
                     sharedViewModel.insertDebtPerNewCost(
@@ -557,6 +558,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         period = period,
                         fundFlag = fundFlag,
                         paymentLevel = selectedCost.paymentLevel,
+                        calculateMethod = calculateMethod,
                         responsible = responsible,
                         dueDate = dueDate,
                         selectedUnitIds = selectedUnits.map { it },
@@ -883,7 +885,6 @@ class BuildingProfileActivity : ComponentActivity() {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
             ) {
                 items(owners) { owner ->
                     OwnerItem(
@@ -931,7 +932,8 @@ class BuildingProfileActivity : ComponentActivity() {
                         Log.d("selectedUnits", selectedUnits.toString())
                         sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
                         showOwnerDialog = false
-                    }
+                    },
+                    sharedViewModel = sharedViewModel
                 )
             }
         }
@@ -1091,7 +1093,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     buildingId = building.buildingId,
                     sharedViewModel = sharedViewModel,
                     onDismiss = { showAddCostDialog = false },
-                    onSave = { selectedCost, amount, period, fundFlag, responsible, selectedUnits, selectedOwners, dueDate ->
+                    onSave = { selectedCost, amount, period, fundFlag, calculateMethod, responsible, selectedUnits, selectedOwners, dueDate ->
                         // Insert cost and debts using selectedCost info
 
                         sharedViewModel.insertDebtPerNewCost(
@@ -1101,6 +1103,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             period = period,
                             dueDate = dueDate,
                             fundFlag = fundFlag,
+                            calculateMethod = calculateMethod,
                             paymentLevel = selectedCost.paymentLevel,
                             responsible = responsible,
                             selectedUnitIds = selectedUnits.map { it },
@@ -1416,7 +1419,7 @@ fun AddCostDialog(
     buildingId: Long,
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
-    onSave: (Costs, String, Period, FundFlag, Responsible, List<Long>, List<Long>, String) -> Unit
+    onSave: (Costs, String, Period, FundFlag, CalculateMethod, Responsible, List<Long>, List<Long>, String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -1431,12 +1434,25 @@ fun AddCostDialog(
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var selectedResponsible by remember { mutableStateOf(context.getString(R.string.owner)) }
+    var selectedCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
 
 
     val selectedUnits = remember { mutableStateListOf<Units>() }
     val selectedOwners = remember { mutableStateListOf<Owners>() }
     var dueDate by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+
+    val responsibleEnum = when (selectedResponsible) {
+        Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
+        Responsible.TENANT.getDisplayName(context) -> Responsible.TENANT
+        else -> Responsible.OWNER
+    }
+    val calculateMethod = when (selectedCalculateMethod) {
+        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
+        CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.DANG
+        CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
+        else -> CalculateMethod.FIXED
+    }
 
     // Add a dummy "Add New Cost" item for dropdown
     val costsWithAddNew = costs + listOf(
@@ -1453,218 +1469,238 @@ fun AddCostDialog(
         )
     )
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = context.getString(R.string.add_new_cost),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Cost Dropdown
-                ExposedDropdownMenuBoxExample(
-                    items = costsWithAddNew,
-                    selectedItem = selectedCost,
-                    onItemSelected = {
-                        if (it.id == -1L) {
-                            // "Add New Cost" selected
-                            showAddNewCostNameDialog = true
-                        } else {
-                            selectedCost = it
-                            totalAmount = it.tempAmount.toLong().toString()
-                            selectedPeriod = it.period
-                        }
-                    },
-                    label = context.getString(R.string.cost_name),
-                    modifier = Modifier.fillMaxWidth(),
-                    itemLabel = { it.costName }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Total Amount Input
-                OutlinedTextField(
-                    value = totalAmount,
-                    onValueChange = { totalAmount = it.filter { ch -> ch.isDigit() } },
-                    label = { Text(context.getString(R.string.amount)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Amount in words (optional)
-                val amountVal = totalAmount.toLongOrNull() ?: 0L
-                val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
-                Text(
-                    text = "$amountInWords ${context.getString(R.string.toman)}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Period Dropdown
-                ExposedDropdownMenuBoxExample(
-                    items = Period.entries,
-                    selectedItem = selectedPeriod,
-                    onItemSelected = { selectedPeriod = it },
-                    label = context.getString(R.string.period),
-                    modifier = Modifier.fillMaxWidth(),
-                    itemLabel = { it.getDisplayName(context) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                if (selectedPeriod == Period.NONE) {
-                    OutlinedTextField(
-                        value = dueDate ?: "",
-                        onValueChange = {},
-                        label = { Text(text = context.getString(R.string.due),
-                            style = MaterialTheme.typography.bodyLarge) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showDatePicker = true },
-                        enabled = false,
-                        readOnly = true
+    AlertDialog(onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = context.getString(R.string.add_new_cost),
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            LazyColumn {
+                item{
+// Cost Dropdown
+                    ExposedDropdownMenuBoxExample(
+                        items = costsWithAddNew,
+                        selectedItem = selectedCost,
+                        onItemSelected = {
+                            if (it.id == -1L) {
+                                // "Add New Cost" selected
+                                showAddNewCostNameDialog = true
+                            } else {
+                                selectedCost = it
+                                totalAmount = it.tempAmount.toLong().toString()
+                                selectedPeriod = it.period
+                            }
+                        },
+                        label = context.getString(R.string.cost_name),
+                        modifier = Modifier.fillMaxWidth(),
+                        itemLabel = { it.costName }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                }
 
-
-                // FundFlag Checkbox Row
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                ) {
-                    Checkbox(
-                        checked = fundFlagChecked,
-                        onCheckedChange = { fundFlagChecked = it }
+                    // Total Amount Input
+                    OutlinedTextField(
+                        value = totalAmount,
+                        onValueChange = { totalAmount = it.filter { ch -> ch.isDigit() } },
+                        label = { Text(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = context.getString(R.string.fund_flag_positive_effect))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Amount in words (optional)
+                    val amountVal = totalAmount.toLongOrNull() ?: 0L
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
+                    Text(
+                        text = "$amountInWords ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Period Dropdown
+                    ExposedDropdownMenuBoxExample(
+                        items = Period.entries,
+                        selectedItem = selectedPeriod,
+                        onItemSelected = { selectedPeriod = it },
+                        label = context.getString(R.string.period),
+                        modifier = Modifier.fillMaxWidth(),
+                        itemLabel = { it.getDisplayName(context) }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (selectedPeriod == Period.NONE) {
+                        OutlinedTextField(
+                            value = dueDate ?: "",
+                            onValueChange = {dueDate = it},
+                            label = { Text(text = context.getString(R.string.due),
+                                style = MaterialTheme.typography.bodyLarge) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) showDatePicker = true
+                                },
+//                        enabled = false,
+                            readOnly = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+
+                    // FundFlag Checkbox Row
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = fundFlagChecked,
+                            onCheckedChange = { fundFlagChecked = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = context.getString(R.string.fund_flag_positive_effect))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ChipGroupShared(
+                        selectedItems = listOf(selectedResponsible),
+                        onSelectionChange = { newSelection ->
+                            if (newSelection.isNotEmpty()) {
+                                selectedResponsible = newSelection.first()
+                            }
+                        },
+                        items = listOf(
+                            context.getString(R.string.owners),
+                            context.getString(R.string.tenants)
+                        ),
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.responsible),
+                        singleSelection = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Log.d("selectedResponsible", selectedResponsible)
+                    val responsibleEnum = when (selectedResponsible) {
+                        Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
+                        Responsible.TENANT.getDisplayName(context) -> Responsible.TENANT
+                        else -> Responsible.OWNER
+                    }
+                    val calculateMethod = when (selectedCalculateMethod) {
+                        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
+                        CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.DANG
+                        CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
+                        else -> CalculateMethod.FIXED
+                    }
+                    Log.d("responsibleEnum", responsibleEnum.toString())
+                    Log.d("Responsible.TENANT.getDisplayName(context)", Responsible.TENANT.getDisplayName(context))
+                    if (selectedResponsible == Responsible.TENANT.getDisplayName(context)) {
+                        ChipGroupUnits(
+                            selectedUnits = selectedUnits,
+                            onSelectionChange = { newSelection ->
+                                selectedUnits.clear()
+                                selectedUnits.addAll(newSelection)
+                                sharedViewModel.selectedUnits.clear()
+                                sharedViewModel.selectedUnits.addAll(newSelection)
+                            },
+                            units = activeUnits,
+                            label = context.getString(R.string.units)
+                        )
+                    }
+
+                    if (responsibleEnum.getDisplayName(context) == Responsible.OWNER.getDisplayName(context)) {
+                        ChipGroupOwners(
+                            selectedOwners = selectedOwners,
+                            onSelectionChange = { newSelection ->
+                                selectedOwners.clear()
+                                selectedOwners.addAll(newSelection)
+                                sharedViewModel.selectedOwners.clear()
+                                sharedViewModel.selectedOwners.addAll(newSelection)
+                            },
+                            owners = owners,
+                            label = context.getString(R.string.owners)
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        ChipGroupShared(
+                            selectedItems = listOf(selectedCalculateMethod),
+                            onSelectionChange = { newSelection ->
+                                if (newSelection.isNotEmpty()) {
+                                    selectedCalculateMethod = newSelection.first()
+                                }
+                            },
+                            items = listOf(
+                                context.getString(R.string.area),
+                                context.getString(R.string.dang),
+                                context.getString(R.string.fixed)
+                            ),
+                            modifier = Modifier
+                                .padding(vertical = 8.dp),
+                            label = context.getString(R.string.acount_base),
+                            singleSelection = true
+                        )
+                    }
+
+
+
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                ChipGroupShared(
-                    selectedItems = listOf(selectedResponsible),
-                    onSelectionChange = { newSelection ->
-                        if (newSelection.isNotEmpty()) {
-                            selectedResponsible = newSelection.first()
+            }
+            // Nested Add New Cost Name Dialog
+            if (showAddNewCostNameDialog) {
+                AddNewCostNameDialog(
+                    buildingId = buildingId,
+                    onDismiss = { showAddNewCostNameDialog = false },
+                    onSave = { newCostName ->
+                        coroutineScope.launch {
+                            val newCost = sharedViewModel.insertNewCostName(buildingId, newCostName)
+                            showAddNewCostNameDialog = false
+                            selectedCost = newCost
+                            totalAmount = newCost.tempAmount.toLong().toString()
+                            selectedPeriod = newCost.period
                         }
                     },
-                    items = listOf(
-                        context.getString(R.string.owners),
-                        context.getString(R.string.tenants)
-                    ),
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    label = context.getString(R.string.responsible),
-                    singleSelection = true
+                    checkCostNameExists = { bId, cName ->
+                        sharedViewModel.checkCostNameExists(bId, cName).first()
+                    }
                 )
-                Spacer(Modifier.height(8.dp))
-                Log.d("selectedResponsible", selectedResponsible)
-                val responsibleEnum = when (selectedResponsible) {
-                    Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
-                    Responsible.TENANT.getDisplayName(context) -> Responsible.TENANT
-                    else -> Responsible.OWNER
-                }
-                Log.d("responsibleEnum", responsibleEnum.toString())
-                Log.d("Responsible.TENANT.getDisplayName(context)", Responsible.TENANT.getDisplayName(context))
-                if (selectedResponsible == Responsible.TENANT.getDisplayName(context)) {
-                    ChipGroupUnits(
-                        selectedUnits = selectedUnits,
-                        onSelectionChange = { newSelection ->
-                            selectedUnits.clear()
-                            selectedUnits.addAll(newSelection)
-                            sharedViewModel.selectedUnits.clear()
-                            sharedViewModel.selectedUnits.addAll(newSelection)
-                        },
-                        units = activeUnits,
-                        label = context.getString(R.string.units)
-                    )
-                }
-
-                if (responsibleEnum.getDisplayName(context) == Responsible.OWNER.getDisplayName(context)) {
-                    ChipGroupOwners(
-                        selectedOwners = selectedOwners,
-                        onSelectionChange = { newSelection ->
-                            selectedOwners.clear()
-                            selectedOwners.addAll(newSelection)
-                            sharedViewModel.selectedOwners.clear()
-                            sharedViewModel.selectedOwners.addAll(newSelection)
-                        },
-                        owners = owners,
-                        label = context.getString(R.string.owners)
-                    )
-                }
-
-
-                // Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(onClick = onDismiss) {
-                        Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        val cost = selectedCost ?: return@Button
-                        val fundFlag = if (fundFlagChecked) FundFlag.POSITIVE_EFFECT else FundFlag.NO_EFFECT
-                        onSave(
-                            cost,
-                            totalAmount,
-                            selectedPeriod ?: Period.NONE,
-                            fundFlag,
-                            responsibleEnum,
-                            selectedUnits.map { it.unitId },
-                            selectedOwners.map { it.ownerId },
-                            dueDate ?: ""
-                        )
-                    }) {
-                        Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
             }
+            if (showDatePicker) {
+                PersianDatePickerDialogContent(
+                    onDateSelected = { selected ->
+                        dueDate = selected
+                        showDatePicker = false
+                    },
+                    onDismiss = { showDatePicker = false },
+                    context = context
+                )
+            }
+
+
+        },
+        confirmButton = {
+            Button(onClick = {
+                val cost = selectedCost ?: return@Button
+                val fundFlag = if (fundFlagChecked) FundFlag.POSITIVE_EFFECT else FundFlag.NO_EFFECT
+                onSave(
+                    cost,
+                    totalAmount,
+                    selectedPeriod ?: Period.NONE,
+                    fundFlag,
+                    calculateMethod,
+                    responsibleEnum,
+                    selectedUnits.map { it.unitId },
+                    selectedOwners.map { it.ownerId },
+                    dueDate ?: ""
+                )
+            }) {
+                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
         }
-    }
-    // Nested Add New Cost Name Dialog
-    if (showAddNewCostNameDialog) {
-        AddNewCostNameDialog(
-            buildingId = buildingId,
-            onDismiss = { showAddNewCostNameDialog = false },
-            onSave = { newCostName ->
-                coroutineScope.launch {
-                    val newCost = sharedViewModel.insertNewCostName(buildingId, newCostName)
-                    showAddNewCostNameDialog = false
-                    selectedCost = newCost
-                    totalAmount = newCost.tempAmount.toLong().toString()
-                    selectedPeriod = newCost.period
-                }
-            },
-            checkCostNameExists = { bId, cName ->
-                sharedViewModel.checkCostNameExists(bId, cName).first()
-            }
         )
-    }
-    if (showDatePicker) {
-        PersianDatePickerDialogContent(
-            onDateSelected = { selected ->
-                dueDate = selected
-                showDatePicker = false
-            },
-            onDismiss = { showDatePicker = false },
-            context = context
-        )
-    }
-
 
 }
 @Composable

@@ -51,8 +51,8 @@ interface DebtsDao {
     @Query("""
     SELECT debts.*
     FROM debts
-    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
     inner join costs on debts.costId = costs.id
+    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
     WHERE owners_units_cross_ref.ownerId = :ownerId 
     AND payment_flag = 1
     AND costs.responsible = :responsible

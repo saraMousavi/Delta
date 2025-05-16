@@ -56,7 +56,6 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
-import com.example.delta.enums.AppActivities
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.RolePermissionsManagerImpl
 import com.example.delta.interfaces.RolePermissionsManager
@@ -233,7 +232,7 @@ fun BuildingCard(
 
             Text(
                 text = "${LocalContext.current.getString(R.string.building_name)} : ${building.name}",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -246,12 +245,12 @@ fun BuildingCard(
             ) {
                 Text(
                     text = "${LocalContext.current.getString(R.string.building_type)}: ${buildingWithTypesAndUsages.buildingTypeName}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${LocalContext.current.getString(R.string.building_usage)}: ${buildingWithTypesAndUsages.buildingUsageName}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -263,12 +262,12 @@ fun BuildingCard(
             ) {
                 Text(
                     text = "${LocalContext.current.getString(R.string.number_of_units)}: ${units.size}", // Replace with actual unit count
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "${LocalContext.current.getString(R.string.number_of_owners)}: ${owners.size}", // Replace with actual owner count
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

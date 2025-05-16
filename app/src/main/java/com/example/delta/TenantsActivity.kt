@@ -42,6 +42,8 @@ class TenantsActivity : ComponentActivity() {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     var showTenantDialog by remember { mutableStateOf(false) }
+                    val units by sharedViewModel.getAllUnits().collectAsState(initial = emptyList())
+
                     Scaffold(
                         topBar = {
                             CenterAlignedTopAppBar(
@@ -76,13 +78,14 @@ class TenantsActivity : ComponentActivity() {
                         if (showTenantDialog) {
                             TenantDialog(
                                 sharedViewModel = sharedViewModel,
-                                units = sharedViewModel.unitsList, // or fetch units as needed
+                                units = units, // or fetch units as needed
                                 onDismiss = { showTenantDialog = false },
                                 onAddTenant = { newTenant, selectedUnit ->
                                     // Save tenant (and building if needed)
                                     sharedViewModel.saveTenantWithUnit(newTenant, selectedUnit)
                                     showTenantDialog = false
                                 }
+                                , isTenant = true
                             )
                         }
                     }
@@ -128,41 +131,51 @@ fun TenantWithUnitAndBuildingCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "${context.getString(R.string.first_name)}: ${tenant?.firstName}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "${context.getString(R.string.last_name)}: ${tenant?.lastName}",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                text = "${context.getString(R.string.email)}: ${tenant?.email}",
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(
+                    text = "${context.getString(R.string.first_name)}: ${tenant?.firstName}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${context.getString(R.string.last_name)}: ${tenant?.lastName}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+//            Text(
+//                text = "${context.getString(R.string.email)}: ${tenant?.email}",
+//                style = MaterialTheme.typography.bodyLarge
+//            )
             Text(
                 text = "${context.getString(R.string.phone_number)}: ${tenant?.phoneNumber}",
                 style = MaterialTheme.typography.bodyLarge
             )
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "${context.getString(R.string.mobile_number)}: ${tenant?.mobileNumber}",
                 style = MaterialTheme.typography.bodyLarge
             )
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "${context.getString(R.string.status)}: ${tenantUnit.status}",
                 style = MaterialTheme.typography.bodyLarge
             )
+            Spacer(Modifier.height(8.dp))
             if (unit != null) {
-                Text(
-                    text = "${context.getString(R.string.unit_number)}: ${unit?.unitNumber}, " +
-                            "${context.getString(R.string.area)}: ${unit?.area}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                val buildingData = building
-                if (buildingData != null) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    val buildingData = building
+                    if (buildingData != null) {
+                        Text(
+                            text = "${context.getString(R.string.building)}: ${buildingData.name}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "${context.getString(R.string.building)}: ${buildingData.name}",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "${context.getString(R.string.unit_number)}: ${unit?.unitNumber}, " +
+                                "${context.getString(R.string.area)}: ${unit?.area}",
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
             }

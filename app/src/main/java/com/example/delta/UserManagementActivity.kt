@@ -237,7 +237,7 @@ fun DetailRow(label: String, value: String) {
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyLarge)
         Text(value, style = MaterialTheme.typography.bodyLarge)
     }
 }

@@ -21,10 +21,13 @@ interface UnitsDao {
     suspend fun deleteUnit(unit: Units)
 
     @Query("SELECT * FROM units WHERE buildingId = :buildingId")
-    suspend fun getUnitsByBuildingId(buildingId: Long): List<Units>
+    suspend fun getUnitsByBuildingId(buildingId: Long?): List<Units>
+
+    @Query("SELECT * FROM units where buildingId = :buildingId")
+    suspend fun getUnits(buildingId: Long): List<Units>
 
     @Query("SELECT * FROM units")
-    suspend fun getUnits(): List<Units>
+    suspend fun getAllUnits(): List<Units>
 
 
     @Query("SELECT * FROM Units WHERE unitId IN (:unitIds)")

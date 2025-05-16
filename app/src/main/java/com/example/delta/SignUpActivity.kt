@@ -53,6 +53,7 @@ class SignUpActivity : ComponentActivity() {
                     SignUpScreen(
                         onSignUpSuccess = {
                             // Go to BuildingFormActivity after successful sign up
+                            saveLoginState(this, true)
                             val intent = Intent(this, BuildingFormActivity::class.java)
                             startActivity(intent)
                             finish()
@@ -135,7 +136,7 @@ fun SignUpScreen(
                 Text(
                     text = stringResource(R.string.invalid_mobile_number),
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.align(Alignment.Start)
                 )
             }
@@ -155,7 +156,7 @@ fun SignUpScreen(
                 Text(
                     text = stringResource(R.string.password_too_short),
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.align(Alignment.Start)
                 )
             }
@@ -179,7 +180,7 @@ fun SignUpScreen(
                         User(
                             mobileNumber = mobile,
                             password = password,
-                            roleId = selectedRole?.roleId ?: 0
+                            roleId = selectedRole?.roleId ?: 1L
                         )
                     )
                     onSignUpSuccess()

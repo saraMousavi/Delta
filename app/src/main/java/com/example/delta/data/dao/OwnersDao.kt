@@ -45,6 +45,7 @@ interface OwnersDao {
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
     suspend fun getOwnerById(ownerId: Long): Owners
 
+
     @Query("""
     SELECT units.*, owners_units_cross_ref.dang
     FROM units
@@ -59,7 +60,7 @@ interface OwnersDao {
     JOIN owners_with_building owb ON o.ownerId = owb.ownerId
     WHERE owb.buildingId = :buildingId
 """)
-    suspend fun getOwnersForBuilding(buildingId: Long): List<Owners>
+    suspend fun getOwnersForBuilding(buildingId: Long?): List<Owners>
 
     // Find owners linked to units
     @Query("SELECT ownerId FROM owners_units_cross_ref WHERE unitId IN (SELECT unitId FROM units WHERE buildingId = :buildingId)")

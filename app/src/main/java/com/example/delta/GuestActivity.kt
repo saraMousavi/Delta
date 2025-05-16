@@ -1,5 +1,6 @@
 package com.example.delta
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +32,29 @@ class GuestActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    GuestScreen()
+                    var context = LocalContext.current
+                    Scaffold(
+                       topBar = {
+                           CenterAlignedTopAppBar(
+                               title = {
+                                   Text(
+                                       text = getString(R.string.guest_display),
+                                       style = MaterialTheme.typography.bodyLarge
+                                   )
+                               },
+                               navigationIcon = {
+                                   IconButton(onClick = { startActivity(Intent(context, LoginPage::class.java)) }) {
+                                       Icon(
+                                           Icons.AutoMirrored.Filled.ArrowBack,
+                                           contentDescription = "Back"
+                                       )
+                                   }
+                               }
+                           )
+                       }
+                    ) { innerPadding ->
+                           GuestScreen(Modifier.padding(innerPadding))
+                       }
                 }
             }
         }
@@ -39,7 +63,7 @@ class GuestActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GuestScreen() {
+fun GuestScreen(modifier: Modifier) {
     var mobileNumber by remember { mutableStateOf("") }
     val context = LocalContext.current
 
@@ -49,7 +73,7 @@ fun GuestScreen() {
                 title = {
                     Text(
                         text = context.getString(R.string.guest_entrance),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -86,7 +110,7 @@ fun GuestScreen() {
             // Features section
             Text(
                 text = context.getString(R.string.features),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
 
@@ -118,7 +142,7 @@ fun GuestScreen() {
             // Guest message
             Text(
                 text = context.getString(R.string.guest_message),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(16.dp)
@@ -150,12 +174,9 @@ fun FeatureItem(icon: ImageVector, text: String, onClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
         }
     }
 }
-
-// Add to your strings.xml:
-// <string name="guest_message">Sign in to access all features and manage your properties</string>

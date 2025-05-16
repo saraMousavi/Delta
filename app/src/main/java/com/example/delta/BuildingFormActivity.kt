@@ -43,9 +43,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Owners
@@ -66,8 +68,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import java.text.NumberFormat
-import java.util.Locale
 import kotlin.math.round
 
 
@@ -129,6 +129,19 @@ fun BuildingFormScreen(
     var currentPage by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Show loading dialog when saving
+    if (sharedViewModel.isLoading) {
+        Dialog(onDismissRequest = {}) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .background(Color.White, shape = RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
     Column {
         if (currentPage == 0) {
             BuildingInfoPage(
@@ -162,14 +175,18 @@ fun BuildingFormScreen(
             )
 
         } else if (currentPage == 4) {
+
+
             CostPage(
                 sharedViewModel = sharedViewModel,
                 onSave = {
 
+                    Log.d("before r", "1")
+                    sharedViewModel.isLoading = true
                     lifecycleOwner.lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
 
-
+                            Log.d("befoe", "1")
                             sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
                                 tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations(),
                                 onSuccess = {
@@ -177,11 +194,14 @@ fun BuildingFormScreen(
                                     sharedViewModel.resetState()
                                     // Create an Intent to start HomePageActivity
                                     val intent = Intent(context, HomePageActivity::class.java)
-
+                                    sharedViewModel.isLoading = false
                                     // Start the activity
                                     context.startActivity(intent)
                                 },
                                 onError = { errorMessage ->
+                                    sharedViewModel.isLoading = false
+                                    Toast.makeText(context, context.getString(R.string.operation_problem),
+                                        Toast.LENGTH_LONG).show()
                                     // show a Toast, etc.
                                     Log.e("SaveError", "Error saving building: $errorMessage")
                                 }
@@ -227,7 +247,7 @@ fun BuildingInfoPage(
             },
             navigationIcon = {
                 IconButton(onClick = {
-                    (context as? BuildingFormActivity)?.finish()
+                    context.startActivity(Intent(context, HomePageActivity::class.java))
                 }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
@@ -253,7 +273,7 @@ fun BuildingInfoPage(
                     label = {
                         Text(
                             text = context.getString(R.string.building_name),
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -336,7 +356,7 @@ fun BuildingInfoPage(
                     label = {
                         Text(
                             text = context.getString(R.string.street),
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -356,7 +376,7 @@ fun BuildingInfoPage(
                     label = {
                         Text(
                             text = context.getString(R.string.post_code),
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -632,7 +652,9 @@ fun OwnersPage(
                 onAddOwner = { newOwner, selectedUnits ->
                     sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
                     showOwnerDialog = false
-                }
+                },
+                sharedViewModel = sharedViewModel,
+                isOwner = false
             )
         }
     }
@@ -746,26 +768,26 @@ fun OwnerItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = "${context.getString(R.string.address)}: ${owner.address}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${context.getString(R.string.email)}: ${owner.email}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${context.getString(R.string.phone_number)}: ${owner.phoneNumber}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${context.getString(R.string.mobile_number)}: ${owner.mobileNumber}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+//                Text(
+//                    text = "${context.getString(R.string.address)}: ${owner.address}",
+//                    style = MaterialTheme.typography.bodyLarge,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
+//                Text(
+//                    text = "${context.getString(R.string.email)}: ${owner.email}",
+//                    style = MaterialTheme.typography.bodyLarge,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
+//                Text(
+//                    text = "${context.getString(R.string.phone_number)}: ${owner.phoneNumber}",
+//                    style = MaterialTheme.typography.bodyLarge,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
+//                Text(
+//                    text = "${context.getString(R.string.mobile_number)}: ${owner.mobileNumber}",
+//                    style = MaterialTheme.typography.bodyLarge,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
                 if (unitsForOwner.isNotEmpty()) {
                     Text(
                         text = context.getString(R.string.units),
@@ -887,8 +909,12 @@ fun OwnerDialog(
     units: List<Units>,
     dangSums: Map<Long, Double>, // Map<Long, Double>
     onDismiss: () -> Unit,
-    onAddOwner: (Owners, List<OwnersUnitsCrossRef>) -> Unit
+    onAddOwner: (Owners, List<OwnersUnitsCrossRef>) -> Unit,
+    sharedViewModel: SharedViewModel,
+    isOwner: Boolean = false // New parameter to determine context
 ) {
+    // Add building-related state
+    var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
@@ -906,6 +932,8 @@ fun OwnerDialog(
             units.forEach { put(it.unitId, 0.0) }
         }
     }
+
+    val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
 
     // Helper: update local dang value
     fun updateLocalDang(unitId: Long, newDang: Double) {
@@ -926,6 +954,18 @@ fun OwnerDialog(
         },
         text = {
             Column {
+                // Add building selection row for owners
+                if (isOwner) {
+                    ExposedDropdownMenuBoxExample(
+                        items = buildings,
+                        selectedItem = selectedBuilding,
+                        onItemSelected = { selectedBuilding  = it },
+                        label = context.getString(R.string.building),
+                        modifier = Modifier.fillMaxWidth(),
+                        itemLabel = { building -> building.name.toString() }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
                 OutlinedTextField(
                     value = firstName,
                     onValueChange = { firstName = it },
@@ -984,7 +1024,7 @@ fun OwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_email),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
@@ -1009,7 +1049,7 @@ fun OwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_phone_number),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
@@ -1035,15 +1075,29 @@ fun OwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_mobile_number),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
                 Spacer(Modifier.height(8.dp))
 
                 // Unit selection with dang input
+                // Modify units list to use building-filtered units
+                val filteredUnits = if (isOwner && selectedBuilding != null) {
+                    Log.d("it.buildingId", selectedBuilding!!.buildingId.toString())
+                    units.filter { it.buildingId == selectedBuilding!!.buildingId }
+                } else {
+                    if(isOwner) {
+                        emptyList()
+                    } else {
+                        units
+                    }
+                }
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    items(units) { unit ->
+                    stickyHeader {
+                        HeaderRow()  // Create this composable
+                    }
+                    items(filteredUnits) { unit ->
                         val dang = localDangMap[unit.unitId] ?: 0.0
                         val otherOwnersDang = dangSums[unit.unitId] ?: 0.0
                         val maxAllowed = (6.0 - otherOwnersDang).coerceAtLeast(0.0)
@@ -1305,11 +1359,11 @@ fun TenantItem(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                Text(
-                    text = "${context.getString(R.string.email)}: ${tenants.email}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+//                Text(
+//                    text = "${context.getString(R.string.email)}: ${tenants.email}",
+//                    style = MaterialTheme.typography.bodyLarge,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
                 Text(
                     text = "${context.getString(R.string.phone_number)}: ${tenants.phoneNumber}",
                     style = MaterialTheme.typography.bodyLarge,
@@ -1409,7 +1463,8 @@ fun TenantDialog(
     sharedViewModel: SharedViewModel,
     units: List<Units>,
     onDismiss: () -> Unit,
-    onAddTenant: (Tenants, Units) -> Unit
+    onAddTenant: (Tenants, Units) -> Unit,
+    isTenant: Boolean = false
 ) {
     val context = LocalContext.current
     var firstName by remember { mutableStateOf("") }
@@ -1424,12 +1479,13 @@ fun TenantDialog(
     var selectedUnit by remember { mutableStateOf<Units?>(null) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
+    var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
 
     var emailError by remember { mutableStateOf(false) }
     var phoneError by remember { mutableStateOf(false) }
     var mobileError by remember { mutableStateOf(false) }
     var periodConflictError by remember { mutableStateOf(false) }
-
+    val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
 
     // Check if date pickers are shown and dismiss others
     val dismissDatePicker: () -> Unit = {
@@ -1510,7 +1566,7 @@ fun TenantDialog(
                         Text(
                             text = context.getString(R.string.invalid_email),
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(start = 16.dp)
                         )
                     }
@@ -1537,7 +1593,7 @@ fun TenantDialog(
                         Text(
                             text = context.getString(R.string.invalid_phone_number),
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(start = 16.dp)
                         )
                     }
@@ -1564,7 +1620,7 @@ fun TenantDialog(
                         Text(
                             text = context.getString(R.string.invalid_mobile_number),
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(start = 16.dp)
                         )
                     }
@@ -1617,10 +1673,36 @@ fun TenantDialog(
                         onStatusSelected = { selectedStatus = it }
                     )
                 }
+                if (isTenant){
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ExposedDropdownMenuBoxExample(
+                            items = buildings,
+                            selectedItem = selectedBuilding,
+                            onItemSelected = { building ->
+                                selectedBuilding = building
+                            },
+                            label = context.getString(R.string.building),
+                            modifier = Modifier
+                                .fillMaxWidth(1f),
+                            itemLabel = { building -> building.name.toString() }
+                        )
+                    }
+                }
+                val filteredUnits = if (isTenant && selectedBuilding != null) {
+                    Log.d("it.buildingId", selectedBuilding!!.buildingId.toString())
+                    units.filter { it.buildingId == selectedBuilding!!.buildingId }
+                } else {
+                    if(isTenant) {
+                        emptyList()
+                    } else {
+                        units
+                    }
+                }
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     ExposedDropdownMenuBoxExample(
-                        items = units,
+                        items = filteredUnits,
                         selectedItem = selectedUnit,
                         onItemSelected = { unit ->
                             selectedUnit = unit
@@ -1995,7 +2077,7 @@ fun AddNewUnitItem(onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = LocalContext.current.getString(R.string.add_new_unit),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
@@ -2314,7 +2396,7 @@ fun CostPage(
                                 Text(
                                     text = "$amountInWords  ${context.getString(R.string.toman)}",
                                     modifier = Modifier.padding(top = 8.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     color = Color(context.getColor(R.color.grey))
                                 )
 
@@ -2364,7 +2446,7 @@ fun CostPage(
                                 Text(
                                     text = "$chargeAmountInWords  ${context.getString(R.string.toman)}",
                                     modifier = Modifier.padding(top = 8.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     color = Color(context.getColor(R.color.grey))
                                 )
 
@@ -2504,7 +2586,10 @@ fun CostPage(
             }
 
             Button(
-                onClick = onSave,
+                onClick =  {
+                    Log.d("yesss", "e")
+                    onSave()
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
                 )
@@ -2627,7 +2712,7 @@ fun CostItem(
                     )
                     Text(
                         text = " ${amountInWords.value} ${context.getString(R.string.toman)}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = Color(context.getColor(R.color.grey)),
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -2745,7 +2830,7 @@ fun DebtItem(
                     )
                     Text(
                         text = " $amountInWords ${context.getString(R.string.toman)}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = Color(context.getColor(R.color.grey)),
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -2919,7 +3004,6 @@ fun EditOwnerDialog(
 
 
 
-    @SuppressLint("DefaultLocale")
     fun updateLocalDang(unitId: Long, newDang: Double) {
         val clamped = newDang.coerceIn(0.0, 6.0)
         val rounded = String.format("%.1f", clamped).toDouble()
@@ -2990,7 +3074,7 @@ fun EditOwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_email),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
@@ -3013,7 +3097,7 @@ fun EditOwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_phone_number),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
@@ -3036,7 +3120,7 @@ fun EditOwnerDialog(
                     Text(
                         text = context.getString(R.string.invalid_mobile_number),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
@@ -3049,6 +3133,9 @@ fun EditOwnerDialog(
                 )
 
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    stickyHeader {
+                        HeaderRow()  // Create this composable
+                    }
                     items(units) { unit ->
                         val dang = localDangMap[unit.unitId] ?: 0.0
                         val otherOwnersDang = dangSums[unit.unitId] ?: 0.0
@@ -3444,9 +3531,49 @@ fun NumberInputWithArrows(
         Text(
             text = errorMessage,
             color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
         )
+    }
+}
+
+// Add this composable function
+@Composable
+fun HeaderRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Unit Header
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = LocalContext.current.getString(R.string.units),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Dang Header
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = LocalContext.current.getString(R.string.dang),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -3490,6 +3617,7 @@ fun UnitDangRow(
         )
     }
 }
+
 
 fun Double.roundToOneDecimal(): Double {
     val factor = 10.0
