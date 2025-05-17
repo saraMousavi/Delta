@@ -26,22 +26,31 @@ import androidx.room.PrimaryKey
             parentColumns = ["buildingId"],
             childColumns = ["buildingId"],
             onDelete = CASCADE
+        ),
+        ForeignKey(
+            entity = Owners::class,
+            parentColumns = ["ownerId"],
+            childColumns = ["ownerId"],
+            onDelete = CASCADE
         )
     ],
     indices = [
         Index("costId"),
-        Index("unitId")
+        Index("unitId"),
+        Index("ownerId")
     ]
 )
 data class Debts(
     @PrimaryKey(autoGenerate = true)
     val debtId: Long = 0,
 
-    @ColumnInfo(name = "unitId") val unitId: Long,
+    @ColumnInfo(name = "unitId") val unitId: Long? = null,
 
     @ColumnInfo(name = "costId") val costId: Long, // Foreign key referencing Costs
 
     @ColumnInfo(name = "buildingId") val buildingId: Long, // Foreign Key referencing Buildings
+
+    @ColumnInfo(name = "ownerId") val ownerId: Long? = null, // Foreign Key referencing Owners
 
     @ColumnInfo(name = "description") val description: String, // Description of the debt
 

@@ -505,9 +505,9 @@ fun BuildingInfoPage(
                     onNext()
                 },
                 enabled = isValid,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.next),
@@ -617,9 +617,9 @@ fun OwnersPage(
         ) {
             Button(
                 onClick = onBack,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.back),
@@ -630,9 +630,9 @@ fun OwnersPage(
 
             Button(
                 onClick = onNext,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.next),
@@ -1140,9 +1140,9 @@ fun OwnerDialog(
                     Log.d("updatedCrossRefs", updatedCrossRefs.toString())
                     onAddOwner(newOwner, updatedCrossRefs)
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                ),
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                ),
                 enabled = isFormValid
             ) {
                 Text(
@@ -1154,9 +1154,9 @@ fun OwnerDialog(
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),
@@ -1232,9 +1232,9 @@ fun TenantsPage(
 
             Button(
                 onClick = onBack,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.back),
@@ -1245,9 +1245,9 @@ fun TenantsPage(
 
             Button(
                 onClick = onNext,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.next),
@@ -1769,9 +1769,9 @@ fun TenantDialog(
                     }
 
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                ),
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                ),
                 enabled = isFormValid
             ) {
                 if (periodConflictError) {
@@ -1791,9 +1791,9 @@ fun TenantDialog(
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),
@@ -1911,9 +1911,9 @@ fun UnitPage(
         ) {
             Button(
                 onClick = onBack,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.back),
@@ -1924,9 +1924,9 @@ fun UnitPage(
 
             Button(
                 onClick = onNext,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.next),
@@ -2180,9 +2180,9 @@ fun UnitDialog(
                     )
                     onAddUnit(newUnit)
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.insert),
@@ -2193,9 +2193,9 @@ fun UnitDialog(
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),
@@ -2281,10 +2281,10 @@ fun EditUnitDialog(
                     )
                     onUpdateUnit(updatedUnit)
                     onDismiss()
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+                }
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.update),
@@ -2294,10 +2294,10 @@ fun EditUnitDialog(
         },
         dismissButton = {
             Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+                onClick = onDismiss
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),
@@ -2341,7 +2341,7 @@ fun CostPage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(start = 8.dp, top = 8.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
@@ -2357,7 +2357,7 @@ fun CostPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
+                        .padding(start = 8.dp, end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
@@ -2374,7 +2374,7 @@ fun CostPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
+                        .padding(start = 8.dp, end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
@@ -2382,7 +2382,6 @@ fun CostPage(
                     if (!sharedViewModel.automaticCharge) {
                         Column(
                             modifier = Modifier
-                                .padding(bottom = 4.dp)
                         ) {
                             OutlinedTextField(
                                 value = sharedViewModel.fixedAmount,
@@ -2411,7 +2410,7 @@ fun CostPage(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(8.dp),
+                            .padding(start = 8.dp, end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ChipGroupShared(
@@ -2428,7 +2427,7 @@ fun CostPage(
                             label = context.getString(R.string.acount_base),
                             singleSelection = true
                         )
-                        Spacer(Modifier.width(8.dp))
+//                        Spacer(Modifier.width(8.dp))
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2457,7 +2456,7 @@ fun CostPage(
                 }
 
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, end = 8.dp)) {
                     Checkbox(
                         checked = sharedViewModel.chargeFundFlagChecked,
                         onCheckedChange = {
@@ -2473,7 +2472,7 @@ fun CostPage(
                     Text(text = context.getString(R.string.fund_flag_positive_effect))
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
 
                 Row(
@@ -2574,9 +2573,9 @@ fun CostPage(
         ) {
             Button(
                 onClick = onBack,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.back),
@@ -2590,9 +2589,9 @@ fun CostPage(
                     Log.d("yesss", "e")
                     onSave()
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.insert),
@@ -2601,7 +2600,7 @@ fun CostPage(
                 )
             }
         }
-        Spacer(Modifier.height(32.dp))
+//        Spacer(Modifier.height(32.dp))
 
         //Conditionally display unit cost dialog, UnitCostDialog will display and get value of each unit if it clicked
         showUnitCostDialog?.let { selectedUnit ->
@@ -2903,9 +2902,9 @@ fun UnitCostDialog(
                     onSave()
 //                    onAddDebt(unit.unitId, sharedViewModel.costsList.value)
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.insert),
@@ -3179,9 +3178,9 @@ fun EditOwnerDialog(
                     onSave(updatedOwner, updatedCrossRefs)
                 },
                 enabled = isFormValid,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.edit),
@@ -3192,9 +3191,9 @@ fun EditOwnerDialog(
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color))
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),
@@ -3428,9 +3427,10 @@ fun EditTenantDialog(
                         )
                     onSave(updatedTenant, selectedUnit)
                     onDismiss()
-                }, colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+                },
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     context.getString(R.string.edit),
@@ -3441,9 +3441,9 @@ fun EditTenantDialog(
         dismissButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.cancel),

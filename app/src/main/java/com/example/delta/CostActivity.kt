@@ -38,7 +38,7 @@ class CostActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val costs by viewModel.getAllCost().collectAsState(initial = emptyList())
+            val costs by viewModel.getAllMenuCost().collectAsState(initial = emptyList())
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(

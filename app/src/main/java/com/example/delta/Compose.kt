@@ -168,7 +168,7 @@ fun <VM : ViewModel> CostForm(
                 FloatingActionButton(
                     onClick = { showDialog = true },
                     modifier = Modifier.padding(16.dp),
-                    containerColor = Color(context.getColor(R.color.secondary_color))
+//                    containerColor = Color(context.getColor(R.color.secondary_color))
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "Add")
                 }
@@ -237,9 +237,9 @@ fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismis
                     onDismiss()
                     itemName = ""
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
-                )
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
+//                )
             ) {
                 Text(
                     text = context.getString(R.string.insert),
@@ -500,7 +500,7 @@ fun ChipGroupUnits(
                     }
                     onSelectionChange(newSelection)
                 },
-                label = { Text(unit.unitNumber.toString()) }
+                label = { Text(text = unit.unitNumber.toString(), style = MaterialTheme.typography.bodyLarge) }
             )
         }
     }
@@ -533,7 +533,7 @@ fun ChipGroupOwners(
                     }
                     onSelectionChange(newSelection)
                 },
-                label = { Text(text = "${owner.firstName} ${owner.lastName}") }
+                label = { Text(text = "${owner.firstName} ${owner.lastName}", style = MaterialTheme.typography.bodyLarge) }
             )
         }
     }
@@ -571,7 +571,7 @@ fun ChipGroupShared(
                         }
                         onSelectionChange(newSelection)
                     },
-                    label = { Text(item) }
+                    label = { Text(item, style = MaterialTheme.typography.bodyLarge) }
                 )
             }
         }

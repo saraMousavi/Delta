@@ -26,39 +26,31 @@ interface DebtsDao {
     @Query("""
     SELECT debts.*
     FROM debts
-    INNER JOIN costs ON debts.costId = costs.id
     WHERE debts.unitId = :unitId
       AND SUBSTR(debts.due_date, 1, 4) = :yearStr
       AND SUBSTR(debts.due_date, 6, 2) = :monthStr
       AND debts.payment_flag = 0
-      AND costs.responsible = :responsible
 """)
-    fun getDebtsForUnits(unitId: Long, yearStr: String, monthStr: String, responsible: Responsible): List<Debts>
+    fun getDebtsForUnits(unitId: Long, yearStr: String, monthStr: String): List<Debts>
 
     @Query("""
     SELECT debts.*
     FROM debts
-    INNER JOIN costs ON debts.costId = costs.id
-    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
-    WHERE owners_units_cross_ref.ownerId = :ownerId 
+    WHERE debts.ownerId = :ownerId 
     AND SUBSTR(due_date, 1, 4) = :yearStr 
     AND SUBSTR(due_date, 6, 2) = :monthStr
     AND payment_flag = 0
-    AND costs.responsible = :responsible
 """)
-    fun getDebtsForOwner(ownerId: Long, yearStr: String, monthStr: String, responsible: Responsible): List<Debts>
+    fun getDebtsForOwner(ownerId: Long, yearStr: String, monthStr: String): List<Debts>
 
     @Query("""
     SELECT debts.*
     FROM debts
-    inner join costs on debts.costId = costs.id
-    INNER JOIN owners_units_cross_ref ON debts.unitId = owners_units_cross_ref.unitId
-    WHERE owners_units_cross_ref.ownerId = :ownerId 
+    WHERE debts.ownerId = :ownerId 
     AND payment_flag = 1
-    AND costs.responsible = :responsible
     ORDER BY due_date ASC
 """)
-    fun getPaysForOwner(ownerId: Long, responsible: Responsible): List<Debts>
+    fun getPaysForOwner(ownerId: Long): List<Debts>
 
 
 
@@ -78,6 +70,21 @@ interface DebtsDao {
     ORDER BY due_date ASC
 """)
     fun getDebtsCurrentMonthAndPastUnpaid(buildingId: Long, costId: Long, unitId: Long, yearStr: String, monthStr: String): List<Debts>
+
+
+
+    @Query("""
+    SELECT * FROM debts
+    WHERE buildingId = :buildingId
+      AND costId = :costId
+      AND ownerId = :ownerId and (
+        (SUBSTR(due_date, 1, 4) = :yearStr AND SUBSTR(due_date, 6, 2) = :monthStr)
+        OR
+        ( due_date < (:yearStr || '/' || :monthStr || '/01') AND payment_flag = 0) 
+        )
+    ORDER BY due_date ASC
+""")
+    fun getDebtsForOwnerCostCurrentAndPreviousUnpaid(buildingId: Long, costId: Long, ownerId: Long, yearStr: String, monthStr: String): List<Debts>
 
 
 //    @Query("""

@@ -47,6 +47,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -92,6 +93,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Units
@@ -614,8 +616,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
-                containerColor = Color(context.getColor(R.color.secondary_color)),
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+//                containerColor = Color(context.getColor(R.color.secondary_color)),
+//                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ) {
                 Icon(Icons.Filled.Add, "Add")
             }
@@ -916,8 +918,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
-                containerColor = Color(context.getColor(R.color.secondary_color)),
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+//                containerColor = Color(context.getColor(R.color.secondary_color)),
+//                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ) {
                 Icon(Icons.Filled.Add, "Add")
             }
@@ -990,8 +992,8 @@ class BuildingProfileActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },
-                containerColor = Color(context.getColor(R.color.secondary_color)),
-                contentColor = Color(context.getColor(R.color.white))
+//                containerColor = Color(context.getColor(R.color.secondary_color)),
+//                contentColor = Color(context.getColor(R.color.white))
             )
         }
     }
@@ -1084,8 +1086,8 @@ class BuildingProfileActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },
-                containerColor = Color(context.getColor(R.color.secondary_color)),
-                contentColor = Color(context.getColor(R.color.white))
+//                containerColor = Color(context.getColor(R.color.secondary_color)),
+//                contentColor = Color(context.getColor(R.color.white))
             )
 
             if (showAddCostDialog) {
@@ -1118,24 +1120,99 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
 
-
     @Composable
     fun CostDetails(building: Buildings, cost: Costs, sharedViewModel: SharedViewModel) {
         val context = LocalContext.current
-        val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
-            .collectAsState(initial = emptyList())
-        Log.d("units", units.toString())
 
         var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
-        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth ) }
+        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
 
+        val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
+            .collectAsState(initial = emptyList())
+        val owners by sharedViewModel.getOwnersOfBuildingForCost(cost.id, building.buildingId)
+            .collectAsState(initial = emptyList())
         Column {
             if (units.isEmpty()) {
-                Text(
-                    text = context.getString(R.string.no_costs_recorded),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if(owners.isNotEmpty()) {
+
+
+                    Column {
+                        if (owners.isEmpty()) {
+                            Text(
+                                text = context.getString(R.string.no_costs_recorded),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            owners.forEach { owner ->
+                                val debts by sharedViewModel
+                                    .getDebtsForOwnerCostCurrentAndPreviousUnpaid(
+                                        buildingId = building.buildingId,
+                                        costId = cost.id,
+                                        ownerId = owner.ownerId,
+                                        yearStr = selectedYear.toString(),
+                                        monthStr = selectedMonth.toString().padStart(2, '0')
+                                    ).collectAsState(initial = emptyList())
+
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                    Text(
+                                        text = "${context.getString(R.string.unit)}: ${owner.firstName} ${owner.lastName}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Log.d("debts", debts.toString())
+                                    if (debts.isEmpty()) {
+                                        Text(
+                                            text = context.getString(R.string.no_costs_recorded),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else {
+                                        debts.forEach { debt ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Spacer(Modifier.height(16.dp))
+                                                Text(
+                                                    text = "${context.getString(R.string.amount)}: ${
+                                                        formatNumberWithCommas(
+                                                            debt.amount
+                                                        )
+                                                    }",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                                        context.getColor(R.color.Red)
+                                                    )
+                                                )
+                                                Text(
+                                                    text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                                        context.getColor(R.color.Red)
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    thickness = 2.dp, color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                        }
+                    }
+
+
+
+
+                } else {
+                        Text(
+                            text = context.getString(R.string.no_costs_recorded),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
             } else {
                 units.forEach { unit ->
                     val debts by sharedViewModel
@@ -1197,6 +1274,111 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    fun UnitDebtItem(
+        unit: Units,
+        buildingId: Long,
+        costId: Long,
+        selectedYear: Int,
+        selectedMonth: Int,
+        sharedViewModel: SharedViewModel,
+        context: android.content.Context
+    ) {
+        val debts by sharedViewModel.getDebtsForUnitCostCurrentAndPreviousUnpaid(
+            buildingId = buildingId,
+            costId = costId,
+            unitId = unit.unitId,
+            yearStr = selectedYear.toString(),
+            monthStr = selectedMonth.toString().padStart(2, '0')
+        ).collectAsState(initial = emptyList())
+
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Text(
+                text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            if (debts.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_costs_recorded),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                debts.forEach { debt ->
+                    DebtRow(debt = debt, context = context)
+                }
+            }
+        }
+        Divider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            thickness = 2.dp,
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+
+    @Composable
+    fun OwnerDebtItem(
+        owner: Owners,
+        buildingId: Long,
+        costId: Long,
+        selectedYear: Int,
+        selectedMonth: Int,
+        sharedViewModel: SharedViewModel,
+        context: android.content.Context
+    ) {
+        val ownersDebts by sharedViewModel.getDebtsForOwnerCostCurrentAndPreviousUnpaid(
+            buildingId = buildingId,
+            costId = costId,
+            ownerId = owner.ownerId,
+            yearStr = selectedYear.toString(),
+            monthStr = selectedMonth.toString().padStart(2, '0')
+        ).collectAsState(initial = emptyList())
+
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Text(
+                text = "${context.getString(R.string.owner)}: ${owner.firstName} ${owner.lastName}",
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            if (ownersDebts.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_costs_recorded),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                ownersDebts.forEach { debt ->
+                    DebtRow(debt = debt, context = context)
+                }
+            }
+        }
+        Divider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            thickness = 2.dp,
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+
+    @Composable
+    fun DebtRow(debt: Debts, context: android.content.Context) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "${context.getString(R.string.amount)}: ${formatNumberWithCommas(debt.amount)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (debt.paymentFlag) Color.Green else Color.Red
+            )
+            Text(
+                text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (debt.paymentFlag) Color.Green else Color.Red
+            )
+        }
+    }
 
 
     @Composable
