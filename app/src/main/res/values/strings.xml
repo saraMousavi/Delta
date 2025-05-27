@@ -99,7 +99,7 @@
     <string name="parking">پارکینگ</string>
     <string name="co_working_space">فضای اشتراکی</string>
     <string name="pool">استخر</string>
-    <string name="fund_lbl">بودجه</string>
+    <string name="fund_lbl">صندوق</string>
     <string name="login_user">ورود کاربر</string>
     <string name="auth_code">کد تایید</string>
     <string name="login">ورود</string>
@@ -263,7 +263,7 @@
     <string name="user_info">اطلاعات کاربر</string>
     <string name="permisions">دسترسی ها</string>
     <string name="role">نقش</string>
-    <string name="fund_flag_positive_effect">موثر در بودجه</string>
+    <string name="fund_flag_positive_effect">ثبت در صندوق(برداشت/واریز)</string>
     <string name="responsible">پرداخت کننده</string>
     <string name="cost_name_exists">هزینه وارد شده تکراری است.</string>
     <string name="invalid_email">فرمت ایمیل نادرست است.</string>
@@ -288,4 +288,8 @@
     <string name="operation_problem">عملیات با خطا مواجه شد</string>
     <string name="calculate_method">مبنای محاسبه</string>
     <string name="no">...</string>
+    <string name="manager_teams">هیئت مدیره</string>
+    <string name="fund_minus">پرداخت از صندوق</string>
+    <string name="all">همه</string>
+    <string name="due_minus">تاریخ کسر</string>
 </resources>

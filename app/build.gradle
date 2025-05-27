@@ -85,6 +85,7 @@ dependencies {
     implementation(libs.androidx.material.icons)
     implementation(libs.upload.care)
     implementation(libs.coil)
+    implementation(libs.volley)
     implementation libs.androidx.navigation.fragment.ktx
     implementation libs.androidx.navigation.ui.ktx
     ksp(libs.androidx.room.compiler)

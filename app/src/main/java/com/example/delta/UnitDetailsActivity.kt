@@ -148,7 +148,7 @@ class UnitDetailsActivity : ComponentActivity() {
                         buildingId = unit.buildingId ?: 0,
                         sharedViewModel = sharedViewModel,
                         onDismiss = { showAddCostDialog = false },
-                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, responsible, selectedUnits, selectedOwners, dueDate ->
+                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
                             // Insert cost and debts using selectedCost info
 
                             sharedViewModel.insertDebtPerNewCost(
@@ -160,8 +160,10 @@ class UnitDetailsActivity : ComponentActivity() {
                                 fundFlag = fundFlag,
                                 paymentLevel = PaymentLevel.UNIT,
                                 calculateMethod = calculatedMethod,
+                                calculatedUnitMethod = calculatedUnitMethod,
                                 responsible = Responsible.TENANT,
-                                selectedUnitIds = selectedUnits.map { it }
+                                selectedUnitIds = selectedUnits.map { it },
+                                fundMinus = fundMinus
                             )
 
                             showAddCostDialog = false

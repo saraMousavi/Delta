@@ -148,7 +148,7 @@ class MyApplication : Application() {
                     password = persianPassword,
                     roleId = ownerRole.roleId // Use roleId instead of role string
                 )
-                var userId = usersDao.insertUser(defaultUser)
+                val userId = usersDao.insertUser(defaultUser)
                 usersDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = ownerRole.roleId, userId = userId))
 
                 Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")

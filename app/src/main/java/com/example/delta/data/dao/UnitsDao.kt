@@ -63,14 +63,14 @@ interface UnitsDao {
     INNER JOIN owners_units_cross_ref ou ON u.unitId = ou.unitId
     WHERE ou.ownerId IN (:ownerIds)
 """)
-    suspend fun getUnitsByOwnerIds(ownerIds: List<Long>): List<Units>
+    fun getUnitsByOwnerIds(ownerIds: List<Long>): List<Units>
 
     @Query("""
     SELECT unitId, SUM(dang) as totalDang
     FROM owners_units_cross_ref
     GROUP BY unitId
 """)
-    suspend fun getDangSumsForAllUnits(): List<UnitDangSum>
+    fun getDangSumsForAllUnits(): List<UnitDangSum>
 
     data class UnitDangSum(val unitId: Long, val totalDang: Double)
 

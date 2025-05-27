@@ -21,11 +21,18 @@ import kotlinx.parcelize.Parcelize
             parentColumns = ["buildingUsageId"],
             childColumns = ["buildingUsageId"],
             onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = User::class,
+            parentColumns = ["userId"],
+            childColumns = ["userId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [
         Index("buildingTypeId"),
-        Index("buildingUsageId")
+        Index("buildingUsageId"),
+        Index("userId")
     ]
 )
 @Parcelize
@@ -41,5 +48,6 @@ data class Buildings(
     val buildingTypeId: Long? = null,
     val buildingUsageId: Long? = null,
     val fund: Double,
+    val userId: Long,
     val utilities: List<String>
 ) : Parcelable

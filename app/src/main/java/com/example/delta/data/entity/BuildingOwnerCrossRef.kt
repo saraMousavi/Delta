@@ -8,5 +8,6 @@ import androidx.room.Index
     , tableName = "building_owner_cross_ref")
 data class BuildingOwnerCrossRef(
     val buildingId: Long,
-    val ownerId: Long
+    val ownerId: Long,
+    val isManager: Boolean = false
 )

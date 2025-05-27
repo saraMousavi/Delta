@@ -97,14 +97,18 @@ class Calculation {
         areaByOwner: Map<Long, Double>, // ownerId to area
         ownersUnitsCrossRefs: List<OwnersUnitsCrossRef>
     ): Map<Long, Double> {
+        Log.d("cost.calculateMethod.name", cost.calculateMethod.name)
         return when (cost.calculateMethod.name) {
             CalculateMethod.DANG.name -> {
+                Log.d("CalculateMethod.DANG.name", CalculateMethod.DANG.name)
                 // Sum total dang for all owners
                 val totalDang = ownersUnitsCrossRefs.sumOf { it.dang }
                 // Group by owner and sum dang per owner
+                Log.d("totalDang", totalDang.toString())
                 val dangByOwner = ownersUnitsCrossRefs.groupBy { it.ownerId }
                     .mapValues { entry -> entry.value.sumOf { it.dang } }
                 // Calculate each owner's share
+                Log.d("dangByOwner", dangByOwner.toString())
                 dangByOwner.mapValues { (_, ownerDang) ->
                     if (totalDang > 0) (ownerDang / totalDang) * totalAmount else 0.0
                 }

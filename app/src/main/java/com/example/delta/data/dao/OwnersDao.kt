@@ -1,11 +1,10 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
-import com.example.delta.data.entity.OwnerWithBuildings
+import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.UnitWithDang
-import com.example.delta.data.entity.Units
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -14,7 +13,10 @@ interface OwnersDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOwners(owners: Owners) : Long
 
-    @Delete()
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBuildingOwner(buildingOwners: BuildingOwnerCrossRef) : Long
+
+    @Delete
     suspend fun deleteOwners(owners: Owners)
 
     // Delete tenants linked to building
@@ -31,11 +33,9 @@ interface OwnersDao {
     fun getAllMenuOwners(): Flow<List<Owners>>
 
     // Owner-Unit relationships
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOwnerUnitCrossRef(crossRef: OwnersUnitsCrossRef)
 
-    @Insert
-    suspend fun insertOwnerWithBuild(ownersWithBuildings: OwnerWithBuildings)
 
 
     @Query("SELECT * FROM Owners")
@@ -52,12 +52,12 @@ interface OwnersDao {
     INNER JOIN owners_units_cross_ref ON units.unitId = owners_units_cross_ref.unitId
     WHERE owners_units_cross_ref.ownerId = :ownerId
 """)
-    suspend fun getUnitsWithDangForOwner(ownerId: Long): List<UnitWithDang>
+    fun getUnitsWithDangForOwner(ownerId: Long): List<UnitWithDang>
 
 
     @Query("""
     SELECT o.* FROM Owners o
-    JOIN owners_with_building owb ON o.ownerId = owb.ownerId
+    JOIN building_owner_cross_ref owb ON o.ownerId = owb.ownerId
     WHERE owb.buildingId = :buildingId
 """)
     suspend fun getOwnersForBuilding(buildingId: Long?): List<Owners>
@@ -71,14 +71,17 @@ interface OwnersDao {
     suspend fun deleteOwnersForBuilding(buildingId: Long)
 
     @Query("SELECT * FROM owners_units_cross_ref WHERE ownerId = :ownerId")
-    suspend fun getOwnersWithUnits(ownerId: Long): List<OwnersUnitsCrossRef>
+    fun getOwnersWithUnits(ownerId: Long): List<OwnersUnitsCrossRef>
 
 
     @Query("SELECT * FROM owners_units_cross_ref WHERE ownerId in ( :ownerId )")
-    suspend fun getOwnersWithUnitsList(ownerId: List<Long>): List<OwnersUnitsCrossRef>
+    fun getOwnersWithUnitsList(ownerId: List<Long>): List<OwnersUnitsCrossRef>
 
+    @Transaction
     @Query("SELECT * FROM owners_units_cross_ref")
-    suspend fun getOwnersUnitsCrossRef(): List<OwnersUnitsCrossRef>
+    fun getOwnersUnitsCrossRef(): List<OwnersUnitsCrossRef>
+
+
 
 
 }

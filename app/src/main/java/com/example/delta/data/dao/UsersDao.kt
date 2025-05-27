@@ -7,10 +7,12 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UserWithRole
+import com.example.delta.data.entity.UsersBuildingsCrossRef
 
 @Dao
 interface UsersDao {    
@@ -20,6 +22,9 @@ interface UsersDao {
         @Insert
         suspend fun insertUserRoleCrossRef(crossRef: UserRoleCrossRef)
 
+        @Insert
+        suspend fun insertUserBuildingCrossRef(crossRef: UsersBuildingsCrossRef)
+
         @Update
         suspend fun updateUser(user: User)
 
@@ -28,9 +33,14 @@ interface UsersDao {
 
         @Query("SELECT * FROM user")
         suspend fun getUsers(): List<User>
+        @Query("""
+    SELECT role.* FROM user_role_cross_ref as ur 
+                INNER JOIN role on role.roleId = ur.roleId where userId = :userId
+""")
+        suspend fun getRoleByUserId(userId:Long): Role?
 
         @Transaction
-        @Query("SELECT * FROM user")
-        fun getUsersWithRoles(): List<UserWithRole>
+        @Query("SELECT * FROM user_role_cross_ref")
+        fun getUsersWithRoles(): List<UserRoleCrossRef>
 
 }

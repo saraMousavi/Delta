@@ -1,20 +1,17 @@
 package com.example.delta.data.entity
 
-import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
-import androidx.room.Junction
-import androidx.room.Relation
 
 @Entity(
-    primaryKeys = ["ownerId", "buildingId"],
-    tableName = "owners_with_building",
+    primaryKeys = ["userId", "buildingId"],
+    tableName = "users_buildings_cross_ref",
     foreignKeys = [
         ForeignKey(
-            entity = Owners::class,
-            parentColumns = ["ownerId"],
-            childColumns = ["ownerId"],
+            entity = User::class,
+            parentColumns = ["userId"],
+            childColumns = ["userId"],
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
@@ -24,13 +21,14 @@ import androidx.room.Relation
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [
-        Index("ownerId"),
-        Index("buildingId")
+       indices = [
+        Index("buildingId"),
+        Index("userId")
     ]
 )
-data class OwnerWithBuildings(
-    val ownerId: Long,
-    val buildingId: Long
+data class UsersBuildingsCrossRef(
+    val userId: Long,
+    val buildingId: Long,
+    val roleName: String
 )
 

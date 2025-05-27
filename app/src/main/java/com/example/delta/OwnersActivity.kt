@@ -82,8 +82,9 @@ class OwnersActivity : ComponentActivity() {
                                 units = units,
                                 onDismiss = { showOwnerDialog = false },
                                 dangSums = dangSumsMap,
-                                onAddOwner = { newOwner, selectedUnits ->
-                                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
+                                onAddOwner = { newOwner, selectedUnits, isManager ->
+//                                    //@TODO insert into buildingownercrossref
+                                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager)
                                     showOwnerDialog = false
                                 },
                                 sharedViewModel = sharedViewModel,

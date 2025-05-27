@@ -5,7 +5,8 @@ import com.example.delta.R
 
 enum class Responsible(@StringRes val resId: Int) {
     OWNER(R.string.owners),
-    TENANT(R.string.tenants);
+    TENANT(R.string.tenants),
+    ALL(R.string.all);
 
     fun getDisplayName(context: android.content.Context): String = context.getString(resId)
 }

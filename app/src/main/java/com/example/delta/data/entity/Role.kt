@@ -9,6 +9,6 @@ import androidx.room.PrimaryKey
 )
 data class Role(
     @PrimaryKey(autoGenerate = true) val roleId: Long = 0,
-    @ColumnInfo(name = "role_name") val roleName: String,
+    @ColumnInfo(name = "roleName") val roleName: String,
     @ColumnInfo(name = "role_description") val roleDescription: String,
 )

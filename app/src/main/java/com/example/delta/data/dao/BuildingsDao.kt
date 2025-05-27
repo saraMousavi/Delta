@@ -1,21 +1,15 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
-import com.example.delta.data.entity.BuildingOwnerCrossRef
-import com.example.delta.data.entity.BuildingTenantCrossRef
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
-import com.example.delta.data.entity.BuildingWithOwnersAndTenants
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
-import com.example.delta.data.entity.BuildingWithUploadedFiles
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.Owners
-import com.example.delta.data.entity.Tenants
-import com.example.delta.data.entity.UploadedFileEntity
+import com.example.delta.data.entity.UsersBuildingsCrossRef
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -31,6 +25,15 @@ interface BuildingsDao {
 
     @Query("SELECT * FROM buildings")
     fun getAllBuildingsList(): List<Buildings>
+
+    @Query("""
+    SELECT b.*, r.roleName FROM buildings b
+    INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
+    INNER JOIN user u ON ub.userId = u.userId
+    INNER JOIN role r ON u.roleId = r.roleId
+    WHERE u.userId = :userId
+""")
+    fun getBuildingsWithUserRole(userId: Long): List<UsersBuildingsCrossRef>
 
     @Query("DELETE FROM buildings WHERE buildingId = :buildingId")
     suspend fun deleteBuildingById(buildingId: Long)

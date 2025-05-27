@@ -187,10 +187,59 @@ fun BuildingFormScreen(
                         withContext(Dispatchers.IO) {
 
                             Log.d("befoe", "1")
+                            val tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations()
                             sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
-                                tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations(),
-                                onSuccess = {
+                                tenantsUnitsCrossRef = tenantsUnitsCrossRef,
+                                onSuccess = { building ->
                                     Log.d("buildingForm", true.toString())
+
+                                    Log.d("build result", building.toString())
+                                    Log.d("tenantsUnitsCrossRef", tenantsUnitsCrossRef.toString())
+//                                    sharedViewModel.insertBuildingToServer(
+//                                        context = context,
+//                                        building = building,
+//                                        tenantsUnitsCrossRef = tenantsUnitsCrossRef,
+//                                        onSuccess = { message ->
+//                                            Log.e(
+//                                                "SaveSuccess",
+//                                                "Error saving building on Server: ${message}"
+//                                            )
+//                                            sharedViewModel.resetState()
+//                                            // Create an Intent to start HomePageActivity
+//                                            val intent =
+//                                                Intent(context, HomePageActivity::class.java)
+//                                            sharedViewModel.isLoading = false
+//                                            // Start the activity
+//                                            context.startActivity(intent)
+//                                        },
+//                                        onError = { e ->
+//                                            Log.e(
+//                                                "SaveError",
+//                                                "Error saving building on Server: ${e.message}"
+//                                            )
+//                                            sharedViewModel.resetState()
+//                                            // Create an Intent to start HomePageActivity
+//                                            val intent =
+//                                                Intent(context, HomePageActivity::class.java)
+//                                            sharedViewModel.isLoading = false
+//                                            // Start the activity
+//                                            context.startActivity(intent)
+//                                        }
+//                                    )
+                                    sharedViewModel.resetState()
+                                            // Create an Intent to start HomePageActivity
+                                            val intent =
+                                                Intent(context, HomePageActivity::class.java)
+                                            sharedViewModel.isLoading = false
+                                            // Start the activity
+                                            context.startActivity(intent)
+                                },
+                                onError = { errorMessage ->
+                                    sharedViewModel.isLoading = false
+//                                    Toast.makeText(context, context.getString(R.string.operation_problem),
+//                                        Toast.LENGTH_LONG).show()
+                                    // show a Toast, etc.
+                                    Log.e("SaveError", "Error saving building: $errorMessage")
                                     sharedViewModel.resetState()
                                     // Create an Intent to start HomePageActivity
                                     val intent = Intent(context, HomePageActivity::class.java)
@@ -198,13 +247,7 @@ fun BuildingFormScreen(
                                     // Start the activity
                                     context.startActivity(intent)
                                 },
-                                onError = { errorMessage ->
-                                    sharedViewModel.isLoading = false
-                                    Toast.makeText(context, context.getString(R.string.operation_problem),
-                                        Toast.LENGTH_LONG).show()
-                                    // show a Toast, etc.
-                                    Log.e("SaveError", "Error saving building: $errorMessage")
-                                }
+                                context = context
                             )
                         }
 
@@ -478,7 +521,7 @@ fun BuildingInfoPage(
                     lifecycleOwner.lifecycleScope.launch {
                         if (sharedViewModel.sameArea && !sharedViewModel.unitsAdded) {
                             val numUnits = sharedViewModel.numberOfUnits.toInt()
-                            val area = sharedViewModel.unitArea.toString()
+                            val area = sharedViewModel.unitArea
                             for (i in 1..numUnits) {
                                 val newUnit = Units(
                                     unitNumber = i.toString(),
@@ -649,8 +692,9 @@ fun OwnersPage(
                 units = sharedViewModel.unitsList,
                 onDismiss = { showOwnerDialog = false },
                 dangSums = dangSumsMap,
-                onAddOwner = { newOwner, selectedUnits ->
-                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
+                onAddOwner = { newOwner, selectedUnits, isManager ->
+                    Log.d("selectedUnits", selectedUnits.toString())
+                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager)
                     showOwnerDialog = false
                 },
                 sharedViewModel = sharedViewModel,
@@ -707,6 +751,7 @@ fun OwnerItem(
     var showEditDialog by remember { mutableStateOf(false) }
     val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner.ownerId)
         .collectAsState(initial = emptyList())
+    Log.d("unitsForOwner", unitsForOwner.toString())
     // Suppose you have a suspend function to get sums from DB:
     val ownerUnitsState =
         sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
@@ -725,7 +770,6 @@ fun OwnerItem(
                     }
 
                     is BuildingProfileActivity -> {
-                        val context = context
                         val intent = Intent(context, OwnerDetailsActivity::class.java)
                         intent.putExtra("ownerId", owner.ownerId)
                         context.startActivity(intent)
@@ -909,7 +953,7 @@ fun OwnerDialog(
     units: List<Units>,
     dangSums: Map<Long, Double>, // Map<Long, Double>
     onDismiss: () -> Unit,
-    onAddOwner: (Owners, List<OwnersUnitsCrossRef>) -> Unit,
+    onAddOwner: (Owners, List<OwnersUnitsCrossRef>, Boolean) -> Unit,
     sharedViewModel: SharedViewModel,
     isOwner: Boolean = false // New parameter to determine context
 ) {
@@ -921,6 +965,7 @@ fun OwnerDialog(
     var email by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
+    var isManager by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var emailError by remember { mutableStateOf(false) }
     var phoneError by remember { mutableStateOf(false) }
@@ -959,7 +1004,7 @@ fun OwnerDialog(
                     ExposedDropdownMenuBoxExample(
                         items = buildings,
                         selectedItem = selectedBuilding,
-                        onItemSelected = { selectedBuilding  = it },
+                        onItemSelected = { selectedBuilding = it },
                         label = context.getString(R.string.building),
                         modifier = Modifier.fillMaxWidth(),
                         itemLabel = { building -> building.name.toString() }
@@ -1079,7 +1124,20 @@ fun OwnerDialog(
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isManager,
+                        onCheckedChange = { isManager = it }
+                    )
+                    Text(
+                        text = context.getString(R.string.manager_teams), // Add this string to your resources
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
 
                 // Unit selection with dang input
                 // Modify units list to use building-filtered units
@@ -1087,7 +1145,7 @@ fun OwnerDialog(
                     Log.d("it.buildingId", selectedBuilding!!.buildingId.toString())
                     units.filter { it.buildingId == selectedBuilding!!.buildingId }
                 } else {
-                    if(isOwner) {
+                    if (isOwner) {
                         emptyList()
                     } else {
                         units
@@ -1138,7 +1196,7 @@ fun OwnerDialog(
                         )
                     }
                     Log.d("updatedCrossRefs", updatedCrossRefs.toString())
-                    onAddOwner(newOwner, updatedCrossRefs)
+                    onAddOwner(newOwner, updatedCrossRefs, isManager)
                 },
 //                colors = ButtonDefaults.buttonColors(
 //                    containerColor = Color(context.getColor(R.color.secondary_color))
@@ -1195,7 +1253,7 @@ fun TenantsPage(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            items(sharedViewModel.tenantsList.value) { tenant ->
+            items(sharedViewModel.tenantsList) { tenant ->
                 TenantItem(
                     tenants = tenant,
                     sharedViewModel = sharedViewModel,
@@ -1658,7 +1716,8 @@ fun TenantDialog(
                         value = endDate,
                         onValueChange = {
                             endDate = it
-                            Log.d("it", it.toString())},
+                            Log.d("it", it.toString())
+                        },
                         label = { Text(context.getString(R.string.end_date)) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1673,7 +1732,7 @@ fun TenantDialog(
                         onStatusSelected = { selectedStatus = it }
                     )
                 }
-                if (isTenant){
+                if (isTenant) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                         ExposedDropdownMenuBoxExample(
@@ -1693,7 +1752,7 @@ fun TenantDialog(
                     Log.d("it.buildingId", selectedBuilding!!.buildingId.toString())
                     units.filter { it.buildingId == selectedBuilding!!.buildingId }
                 } else {
-                    if(isTenant) {
+                    if (isTenant) {
                         emptyList()
                     } else {
                         units
@@ -2324,7 +2383,11 @@ fun CostPage(
     val chargeAmount = sharedViewModel.chargeAmount.filter { it.isDigit() }.toLongOrNull() ?: 0L
     val chargeAmountInWords = NumberCommaTransformation().numberToWords(context, chargeAmount)
 
-    Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 10.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -2456,7 +2519,10 @@ fun CostPage(
                 }
 
 
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, end = 8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+                ) {
                     Checkbox(
                         checked = sharedViewModel.chargeFundFlagChecked,
                         onCheckedChange = {
@@ -2585,7 +2651,7 @@ fun CostPage(
             }
 
             Button(
-                onClick =  {
+                onClick = {
                     Log.d("yesss", "e")
                     onSave()
                 },

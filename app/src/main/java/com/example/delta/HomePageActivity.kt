@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +68,7 @@ class HomePageActivity : ComponentActivity() {
         BuildingsViewModelFactory(this.application)
     }
     val sharedViewModel: SharedViewModel by viewModels()
+
     // Create a mock RolePermissionsManager
     val permissionsManager = RolePermissionsManagerImpl(
         authorizationData = mutableListOf(),
@@ -105,11 +108,20 @@ class HomePageActivity : ComponentActivity() {
                             ) {
                                 composable(Screen.Home.route) {
                                     // List of buildings
-                                    BuildingList(viewModel = buildingViewModel, sharedViewModel = sharedViewModel, permissionsManager = permissionsManager)
+                                    BuildingList(
+                                        viewModel = buildingViewModel,
+                                        sharedViewModel = sharedViewModel,
+                                        permissionsManager = permissionsManager
+                                    )
 
                                 }
 
-                                composable(Screen.Settings.route) { SettingsScreen(LocalContext.current, permissionsManager = permissionsManager) }
+                                composable(Screen.Settings.route) {
+                                    SettingsScreen(
+                                        LocalContext.current,
+                                        permissionsManager = permissionsManager
+                                    )
+                                }
                             }
                         }
 
@@ -121,16 +133,23 @@ class HomePageActivity : ComponentActivity() {
 }
 
 
-
 @Composable
 fun BuildingList(
     viewModel: BuildingsViewModel,
     sharedViewModel: SharedViewModel,
     permissionsManager: RolePermissionsManager
 ) {
+
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        sharedViewModel.getUsersBuilding(context)
+    }
+
+//    val buildingsWithTypesAndUsages by sharedViewModel.buildingList.collectAsState()
     val buildingsWithTypesAndUsages by viewModel.getAllBuildingsWithTypeAndUsage()
         .collectAsState(initial = emptyList())
-    val context = LocalContext.current
+    Log.d("buildingsWithTypesAndUsages", buildingsWithTypesAndUsages.toString())
+    sharedViewModel.allUsers(context = context)
 //    val userRole = permissionsManager.getUserRole()
 //    val permissions = permissionsManager.getPermissionsForRole(userRole)
 
@@ -196,8 +215,11 @@ fun BuildingCard(
     onDelete: (Buildings) -> Unit // Pass a callback for deletion
 ) {
     // Load units and owners for this building
-    val units by sharedViewModel.getUnitsForBuilding(building.buildingId).collectAsState(initial = emptyList())
-    val owners by sharedViewModel.getOwnersForBuilding(building.buildingId).collectAsState(initial = emptyList())
+    val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+        .collectAsState(initial = emptyList())
+    val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
+        .collectAsState(initial = emptyList())
+    Log.d("owners_size", owners.toString())
 
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -205,8 +227,8 @@ fun BuildingCard(
 
     Card(
         modifier = Modifier
-            .fillMaxWidth().
-                padding(16.dp)
+            .fillMaxWidth()
+            .padding(16.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp), // Rounded corners
@@ -224,8 +246,12 @@ fun BuildingCard(
                 modifier = Modifier
                     .fillMaxWidth() // Match card width
                     .height(200.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp,  // Match card's top corners
-                        topEnd = 16.dp)) // Top corners only
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 16.dp,  // Match card's top corners
+                            topEnd = 16.dp
+                        )
+                    ) // Top corners only
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -240,7 +266,9 @@ fun BuildingCard(
             Spacer(Modifier.height(16.dp))
             // Display building type and usage
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
@@ -257,7 +285,9 @@ fun BuildingCard(
             Spacer(Modifier.height(16.dp))
             // Number of units and owners
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
@@ -289,8 +319,12 @@ fun BuildingCard(
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text(LocalContext.current.getString(R.string.delete),
-                            style = MaterialTheme.typography.bodyLarge) },
+                        text = {
+                            Text(
+                                LocalContext.current.getString(R.string.delete),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
                         onClick = {
                             showMenu = false
                             showDeleteDialog = true
@@ -303,22 +337,40 @@ fun BuildingCard(
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
-                title = { Text(text = LocalContext.current.getString(R.string.delete_building), style = MaterialTheme.typography.bodyLarge) },
-                text = { Text(text = LocalContext.current.getString(R.string.are_you_sure), style = MaterialTheme.typography.bodyLarge) },
+                title = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.delete_building),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                text = {
+                    Text(
+                        text = LocalContext.current.getString(R.string.are_you_sure),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
                 confirmButton = {
                     TextButton(
                         onClick = {
                             showDeleteDialog = false
                             onDelete(building)
                         }
-                    ) { Text(LocalContext.current.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge) }
+                    ) {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 },
                 dismissButton = {
                     TextButton(
                         onClick = { showDeleteDialog = false }
                     ) {
-                        Text(LocalContext.current.getString(R.string.cancel),
-                            style = MaterialTheme.typography.bodyLarge) }
+                        Text(
+                            LocalContext.current.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             )
         }

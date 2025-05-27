@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -41,6 +42,7 @@ import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
+import org.json.JSONObject
 import kotlin.getValue
 
 class SignUpActivity : ComponentActivity() {
@@ -51,9 +53,10 @@ class SignUpActivity : ComponentActivity() {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     SignUpScreen(
-                        onSignUpSuccess = {
+                        onSignUpSuccess = { user ->
                             // Go to BuildingFormActivity after successful sign up
-                            saveLoginState(this, true)
+                            Log.d("user.userId", user.userId.toString())
+                            saveLoginState(this, true, userId = user.userId, mobile = user.mobileNumber)
                             val intent = Intent(this, BuildingFormActivity::class.java)
                             startActivity(intent)
                             finish()
@@ -69,7 +72,7 @@ class SignUpActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignUpScreen(
-    onSignUpSuccess: () -> Unit,
+    onSignUpSuccess: (User) -> Unit,
     sharedViewModel: SharedViewModel
 ) {
     var mobile by remember { mutableStateOf("") }
@@ -176,14 +179,22 @@ fun SignUpScreen(
                     // Save user logic here (e.g., insert into database)
                     // Example:
                     // viewModel.insertUser(User(mobile = mobile, password = password))
-                    sharedViewModel.insertUser(
-                        User(
-                            mobileNumber = mobile,
-                            password = password,
-                            roleId = selectedRole?.roleId ?: 1L
-                        )
+                    val user = User(
+                        mobileNumber = mobile,
+                        password = password,
+                        roleId = selectedRole?.roleId ?: 1L
                     )
-                    onSignUpSuccess()
+                    val userJson = JSONObject().apply {
+                        put("mobileNumber", mobile)
+                        put("passwordHash", password)
+                        put("roleId", selectedRole?.roleId ?: 1L)
+                    }
+                    sharedViewModel.insertUser(context, user, userJson,
+                        onSuccess = {  userId ->
+                            user.userId = userId
+                            onSignUpSuccess(user)
+                        })
+
                 },
                 enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()

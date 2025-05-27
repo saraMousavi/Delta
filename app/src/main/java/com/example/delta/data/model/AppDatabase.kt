@@ -29,7 +29,6 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
-import com.example.delta.data.entity.OwnerWithBuildings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Role
@@ -41,6 +40,7 @@ import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
+import com.example.delta.data.entity.UsersBuildingsCrossRef
 import com.example.delta.init.Converter
 import java.security.acl.Owner
 
@@ -50,14 +50,14 @@ import java.security.acl.Owner
         Costs::class, Earnings::class, Units::class,
         Debts::class, Owners::class, Tenants::class,
         BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
-        OwnerWithBuildings::class,
         OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class,
         AuthorizationObject::class,
         AuthorizationField::class,
         RoleAuthorizationObjectCrossRef::class,
         RoleAuthorizationFieldCrossRef::class,
         User::class, Role::class, UserRoleCrossRef::class,
-        UploadedFileEntity::class, BuildingUploadedFileCrossRef::class],
+        UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
+        UsersBuildingsCrossRef::class],
     version = 1,
     exportSchema = true
 )

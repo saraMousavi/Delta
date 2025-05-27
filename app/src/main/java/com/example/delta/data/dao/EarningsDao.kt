@@ -29,5 +29,5 @@ interface EarningsDao {
     @Query("""
         SELECT SUM(amount) FROM earnings where buildingId = :buildingId
     """)
-    suspend fun sumPaidEarning(buildingId: Long): Double
+    fun sumPaidEarning(buildingId: Long): Flow<Double>
 }

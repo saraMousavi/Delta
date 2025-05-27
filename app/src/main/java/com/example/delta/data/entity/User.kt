@@ -17,7 +17,7 @@ import androidx.room.PrimaryKey
     indices = [Index(value = ["roleId"], unique = true)]
 )
 data class User(
-    @PrimaryKey(autoGenerate = true) val userId: Long = 0,
+    @PrimaryKey(autoGenerate = true) var userId: Long = 0,
     @ColumnInfo(name = "mobile_number") val mobileNumber: String,
     @ColumnInfo(name = "password") val password: String,
     @ColumnInfo(name = "roleId") val roleId: Long, // owner, tenant, manager, guest

@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.delta.data.entity.Debts
 import com.example.delta.enums.Responsible
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DebtsDao {
@@ -72,6 +73,19 @@ interface DebtsDao {
     fun getDebtsCurrentMonthAndPastUnpaid(buildingId: Long, costId: Long, unitId: Long, yearStr: String, monthStr: String): List<Debts>
 
 
+    @Query("""
+    SELECT * FROM debts
+    WHERE buildingId = :buildingId
+      AND costId = :costId
+      and (
+        (SUBSTR(due_date, 1, 4) = :yearStr AND SUBSTR(due_date, 6, 2) = :monthStr)
+        OR
+        ( due_date < (:yearStr || '/' || :monthStr || '/01') AND payment_flag = 0) 
+        )
+    ORDER BY due_date ASC
+""")
+    fun getDebtsFundMinus(buildingId: Long, costId: Long, yearStr: String, monthStr: String): List<Debts>
+
 
     @Query("""
     SELECT * FROM debts
@@ -125,7 +139,7 @@ interface DebtsDao {
           AND c.fund_flag = 1
           AND d.payment_flag = 1
     """)
-        suspend fun sumPaidFundFlagPositive(buildingId: Long): Double
+        fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double>
 
         // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
         @Query("""
@@ -135,6 +149,15 @@ interface DebtsDao {
           AND c.fund_flag = -1
           AND d.payment_flag = 0
     """)
-        suspend fun sumUnpaidFundFlagNegative(buildingId: Long): Double
+        fun sumUnpaidFundFlagNegative(buildingId: Long): Flow<Double>
+
+    // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
+    @Query("""
+        SELECT SUM(d.amount) FROM debts d
+        INNER JOIN costs c ON d.costId = c.id
+        WHERE d.buildingId = :buildingId 
+          AND c.responsible = :responsible
+    """)
+    fun sumFundMinus(buildingId: Long, responsible:Responsible): Flow<Double>
 
 }

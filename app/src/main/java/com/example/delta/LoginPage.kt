@@ -207,7 +207,7 @@ fun handleLogin(
     if (user != null) {
         // Save userId and roleId locally
         // After successful login
-        saveLoginState(context, true)
+        saveLoginState(context, true, user.userId, user.mobileNumber)
 
 
         // Navigate to HomePageActivity after login
@@ -266,14 +266,19 @@ fun handleLogin(
 //    }
 //}
 
-fun saveLoginState(context: Context, isLoggedIn: Boolean) {
+fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile:String) {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-    prefs.edit { putBoolean("is_logged_in", isLoggedIn) }
+    prefs.edit { putBoolean("is_logged_in", isLoggedIn)
+        putLong("user_id", userId)
+        putString("user_mobile", mobile)
+    }
 }
 
 fun isUserLoggedIn(context: Context): Boolean {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
     return prefs.getBoolean("is_logged_in", false)
 }
+
+
 
 

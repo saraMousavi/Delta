@@ -35,6 +35,6 @@ interface RoleDao {
     fun getRoleNameByMobileNumber(mobileNumber: String): Role?
 
 
-    @Query("SELECT * FROM role where role_name = :name")
+    @Query("SELECT * FROM role where roleName = :name")
     suspend fun getRoleByName(name: String): Role
 }

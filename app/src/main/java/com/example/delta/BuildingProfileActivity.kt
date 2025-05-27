@@ -233,7 +233,8 @@ class BuildingProfileActivity : ComponentActivity() {
         authDao: AuthorizationDao
     ) {
         val context = LocalContext.current
-        val fileList by sharedViewModel.getBuildingFiles(building.buildingId).collectAsState(initial = emptyList())
+        val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
+            .collectAsState(initial = emptyList())
         var selectedImagePath by remember { mutableStateOf<String?>(null) }
 
         LazyColumn(
@@ -444,12 +445,17 @@ class BuildingProfileActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun FundsTab(building: Buildings) {
-        var context = LocalContext.current
+        val context = LocalContext.current
         val buildingWithEarnings =
             earningsViewModel.fetchAndProcessEarnings(building.buildingId)
                 .collectAsState(initial = null)
 
-        val fundFlow = remember(building.buildingId) { calculateBuildingFundFlow(sharedViewModel, building.buildingId) }
+        val fundFlow = remember(building.buildingId) {
+            calculateBuildingFundFlow(
+                sharedViewModel,
+                building.buildingId
+            )
+        }
         val fund by fundFlow.collectAsState(initial = 0.0)
         val formatedFund = formatNumberWithCommas(fund)
 
@@ -550,7 +556,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                onSave = { selectedCost, amount, period, fundFlag, calculateMethod, responsible, selectedUnits, selectedOwners, dueDate ->
+                onSave = { selectedCost, amount, period, fundFlag, calculateMethod, calcaulatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
                     // Insert cost and debts using selectedCost info
 
                     sharedViewModel.insertDebtPerNewCost(
@@ -561,10 +567,12 @@ class BuildingProfileActivity : ComponentActivity() {
                         fundFlag = fundFlag,
                         paymentLevel = selectedCost.paymentLevel,
                         calculateMethod = calculateMethod,
+                        calculatedUnitMethod = calcaulatedUnitMethod,
                         responsible = responsible,
                         dueDate = dueDate,
                         selectedUnitIds = selectedUnits.map { it },
-                        selectedOwnerIds = selectedOwners.map { it }
+                        selectedOwnerIds = selectedOwners.map { it },
+                        fundMinus = fundMinus
                     )
 
                     buildingViewModel.hideDialogs()
@@ -877,8 +885,14 @@ class BuildingProfileActivity : ComponentActivity() {
             .collectAsState(initial = emptyList())
         val dangValues = remember { mutableStateMapOf<Long, Double>() }
         Log.d("owners in ownerstab", owners.toString())
-        val ownerUnitsState = sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
+        val ownerUnitsState =
+            sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
         val ownerUnits = ownerUnitsState.value
+        Log.d("ownerUnits", ownerUnits.toString())
+
+        val ownersUnitsCrossRefs by sharedViewModel.getAllOwnerUnitsCrossRefs()
+            .collectAsState(initial = emptyList())
+        Log.d("owns", ownersUnitsCrossRefs.toString())
 
 // Convert to map for fast lookup
         val dangSumsMap: Map<Long, Double> = ownerUnits.associate { it.unitId to it.totalDang }
@@ -889,6 +903,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     .fillMaxWidth()
             ) {
                 items(owners) { owner ->
+
                     OwnerItem(
                         owner = owner,
                         sharedViewModel = sharedViewModel,
@@ -928,11 +943,11 @@ class BuildingProfileActivity : ComponentActivity() {
                 OwnerDialog(
                     units = sharedViewModel.unitsList,
                     onDismiss = { showOwnerDialog = false },
-                    dangSums = dangSumsMap ,
-                    onAddOwner = { newOwner, selectedUnits ->
+                    dangSums = dangSumsMap,
+                    onAddOwner = { newOwner, selectedUnits, isManager ->
                         Log.d("newOwner", newOwner.toString())
                         Log.d("selectedUnits", selectedUnits.toString())
-                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits)
+                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager)
                         showOwnerDialog = false
                     },
                     sharedViewModel = sharedViewModel
@@ -998,7 +1013,6 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun CostSection(building: Buildings, sharedViewModel: SharedViewModel) {
@@ -1008,6 +1022,9 @@ class BuildingProfileActivity : ComponentActivity() {
         // Observe changes to costs using a Flow
         val costs by sharedViewModel.getCostsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
+
+        val allResponsibleDebts: List<Costs> = costs.filter { it.responsible == Responsible.ALL }
+
 
         Log.d("costs", costs.toString())
 
@@ -1095,7 +1112,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     buildingId = building.buildingId,
                     sharedViewModel = sharedViewModel,
                     onDismiss = { showAddCostDialog = false },
-                    onSave = { selectedCost, amount, period, fundFlag, calculateMethod, responsible, selectedUnits, selectedOwners, dueDate ->
+                    onSave = { selectedCost, amount, period, fundFlag, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
                         // Insert cost and debts using selectedCost info
 
                         sharedViewModel.insertDebtPerNewCost(
@@ -1106,10 +1123,12 @@ class BuildingProfileActivity : ComponentActivity() {
                             dueDate = dueDate,
                             fundFlag = fundFlag,
                             calculateMethod = calculateMethod,
+                            calculatedUnitMethod = calculatedUnitMethod,
                             paymentLevel = selectedCost.paymentLevel,
                             responsible = responsible,
                             selectedUnitIds = selectedUnits.map { it },
-                            selectedOwnerIds = selectedOwners.map { it }
+                            selectedOwnerIds = selectedOwners.map { it },
+                            fundMinus = fundMinus
                         )
 
                         showAddCostDialog = false
@@ -1132,143 +1151,194 @@ class BuildingProfileActivity : ComponentActivity() {
         val owners by sharedViewModel.getOwnersOfBuildingForCost(cost.id, building.buildingId)
             .collectAsState(initial = emptyList())
         Column {
-            if (units.isEmpty()) {
-                if(owners.isNotEmpty()) {
-
-
-                    Column {
-                        if (owners.isEmpty()) {
-                            Text(
-                                text = context.getString(R.string.no_costs_recorded),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (cost.responsible == Responsible.ALL) {
+                val debts by sharedViewModel
+                    .getDebtsFundMinus(
+                        buildingId = building.buildingId,
+                        costId = cost.id,
+                        yearStr = selectedYear.toString(),
+                        monthStr = selectedMonth.toString().padStart(2, '0')
+                    ).collectAsState(initial = emptyList())
+                debts.forEach { debt ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "${context.getString(R.string.amount)}: ${
+                                formatNumberWithCommas(
+                                    debt.amount
+                                )
+                            }",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                context.getColor(R.color.Red)
                             )
-                        } else {
-                            owners.forEach { owner ->
-                                val debts by sharedViewModel
-                                    .getDebtsForOwnerCostCurrentAndPreviousUnpaid(
-                                        buildingId = building.buildingId,
-                                        costId = cost.id,
-                                        ownerId = owner.ownerId,
-                                        yearStr = selectedYear.toString(),
-                                        monthStr = selectedMonth.toString().padStart(2, '0')
-                                    ).collectAsState(initial = emptyList())
+                        )
+                        Text(
+                            text = "${context.getString(R.string.due_minus)}: ${debt.dueDate}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
+                                context.getColor(R.color.Red)
+                            )
+                        )
+                    }
+                }
+            } else {
+                if (units.isEmpty()) {
+                    if (owners.isNotEmpty()) {
 
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    Text(
-                                        text = "${context.getString(R.string.unit)}: ${owner.firstName} ${owner.lastName}",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Log.d("debts", debts.toString())
-                                    if (debts.isEmpty()) {
+
+                        Column {
+                            if (owners.isEmpty()) {
+                                Text(
+                                    text = context.getString(R.string.no_costs_recorded),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                owners.forEach { owner ->
+                                    val debts by sharedViewModel
+                                        .getDebtsForOwnerCostCurrentAndPreviousUnpaid(
+                                            buildingId = building.buildingId,
+                                            costId = cost.id,
+                                            ownerId = owner.ownerId,
+                                            yearStr = selectedYear.toString(),
+                                            monthStr = selectedMonth.toString().padStart(2, '0')
+                                        ).collectAsState(initial = emptyList())
+
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
                                         Text(
-                                            text = context.getString(R.string.no_costs_recorded),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = "${context.getString(R.string.owner)}: ${owner.firstName} ${owner.lastName}",
+                                            style = MaterialTheme.typography.bodyLarge
                                         )
-                                    } else {
-                                        debts.forEach { debt ->
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Spacer(Modifier.height(16.dp))
-                                                Text(
-                                                    text = "${context.getString(R.string.amount)}: ${
-                                                        formatNumberWithCommas(
-                                                            debt.amount
+                                        Log.d("debts", debts.toString())
+                                        if (debts.isEmpty()) {
+                                            Text(
+                                                text = context.getString(R.string.no_costs_recorded),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        } else {
+                                            debts.forEach { debt ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Spacer(Modifier.height(16.dp))
+                                                    Text(
+                                                        text = "${context.getString(R.string.amount)}: ${
+                                                            formatNumberWithCommas(
+                                                                debt.amount
+                                                            )
+                                                        }",
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        color = if (debt.paymentFlag) Color(
+                                                            context.getColor(
+                                                                R.color.Green
+                                                            )
+                                                        ) else Color(
+                                                            context.getColor(R.color.Red)
                                                         )
-                                                    }",
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
-                                                        context.getColor(R.color.Red)
                                                     )
-                                                )
-                                                Text(
-                                                    text = "${context.getString(R.string.due)}: ${debt.dueDate}",
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
-                                                        context.getColor(R.color.Red)
+                                                    Text(
+                                                        text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        color = if (debt.paymentFlag) Color(
+                                                            context.getColor(
+                                                                R.color.Green
+                                                            )
+                                                        ) else Color(
+                                                            context.getColor(R.color.Red)
+                                                        )
                                                     )
-                                                )
+                                                }
                                             }
                                         }
                                     }
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        thickness = 2.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
                                 }
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 4.dp),
-                                    thickness = 2.dp, color = MaterialTheme.colorScheme.outlineVariant
-                                )
                             }
                         }
-                    }
 
 
-
-
-                } else {
+                    } else {
                         Text(
                             text = context.getString(R.string.no_costs_recorded),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-            } else {
-                units.forEach { unit ->
-                    val debts by sharedViewModel
-                        .getDebtsForUnitCostCurrentAndPreviousUnpaid(
-                            buildingId = building.buildingId,
-                            costId = cost.id,
-                            unitId = unit.unitId,
-                            yearStr = selectedYear.toString(),
-                            monthStr = selectedMonth.toString().padStart(2, '0')
-                        ).collectAsState(initial = emptyList())
+                } else {
+                    units.forEach { unit ->
+                        val debts by sharedViewModel
+                            .getDebtsForUnitCostCurrentAndPreviousUnpaid(
+                                buildingId = building.buildingId,
+                                costId = cost.id,
+                                unitId = unit.unitId,
+                                yearStr = selectedYear.toString(),
+                                monthStr = selectedMonth.toString().padStart(2, '0')
+                            ).collectAsState(initial = emptyList())
 
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        Text(
-                            text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Log.d("debts", debts.toString())
-                        if (debts.isEmpty()) {
+                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
                             Text(
-                                text = context.getString(R.string.no_costs_recorded),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "${context.getString(R.string.unit)}: ${unit.unitNumber}",
+                                style = MaterialTheme.typography.bodyLarge
                             )
-                        } else {
-                            debts.forEach { debt ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Spacer(Modifier.height(16.dp))
-                                    Text(
-                                        text = "${context.getString(R.string.amount)}: ${
-                                            formatNumberWithCommas(
-                                                debt.amount
+                            Log.d("debts", debts.toString())
+                            if (debts.isEmpty()) {
+                                Text(
+                                    text = context.getString(R.string.no_costs_recorded),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                debts.forEach { debt ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            text = "${context.getString(R.string.amount)}: ${
+                                                formatNumberWithCommas(
+                                                    debt.amount
+                                                )
+                                            }",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = if (debt.paymentFlag) Color(
+                                                context.getColor(
+                                                    R.color.Green
+                                                )
+                                            ) else Color(
+                                                context.getColor(R.color.Red)
                                             )
-                                        }",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
-                                            context.getColor(R.color.Red)
                                         )
-                                    )
-                                    Text(
-                                        text = "${context.getString(R.string.due)}: ${debt.dueDate}",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = if (debt.paymentFlag) Color(context.getColor(R.color.Green)) else Color(
-                                            context.getColor(R.color.Red)
+                                        Text(
+                                            text = "${context.getString(R.string.due)}: ${debt.dueDate}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = if (debt.paymentFlag) Color(
+                                                context.getColor(
+                                                    R.color.Green
+                                                )
+                                            ) else Color(
+                                                context.getColor(R.color.Red)
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                         }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            thickness = 2.dp, color = MaterialTheme.colorScheme.outlineVariant
+                        )
                     }
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        thickness = 2.dp, color = MaterialTheme.colorScheme.outlineVariant
-                    )
                 }
             }
         }
@@ -1399,7 +1469,11 @@ class BuildingProfileActivity : ComponentActivity() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "${context.getString(R.string.amount)}: ${formatNumberWithCommas(earnings.amount)}",
+                    text = "${context.getString(R.string.amount)}: ${
+                        formatNumberWithCommas(
+                            earnings.amount
+                        )
+                    }",
                     style = MaterialTheme.typography.bodyLarge
                 )
 
@@ -1470,7 +1544,7 @@ fun EarningsDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     ExposedDropdownMenuBoxExample(
-                        items = earningsList ,
+                        items = earningsList,
                         selectedItem = sharedViewModel.selectedEarnings,
                         onItemSelected = {
                             if (it.earningsName == context.getString(R.string.addNew)) {
@@ -1483,7 +1557,7 @@ fun EarningsDialog(
                         label = context.getString(R.string.earning_title),
                         modifier = Modifier
                             .fillMaxWidth(1f),
-                        itemLabel = { it.earningsName}
+                        itemLabel = { it.earningsName }
                     )
 
 //                OutlinedTextField(
@@ -1498,7 +1572,12 @@ fun EarningsDialog(
                     OutlinedTextField(
                         value = amount,
                         onValueChange = { amount = it },
-                        label = { Text(context.getString(R.string.amount), style = MaterialTheme.typography.bodyLarge) },
+                        label = {
+                            Text(
+                                context.getString(R.string.amount),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1572,7 +1651,8 @@ fun EarningsDialog(
                     val newEarning = Earnings(
                         buildingId = building.buildingId,
                         earningsName = sharedViewModel.selectedEarnings?.earningsName ?: "",
-                        amount = amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0,
+                        amount = amount.toString().persianToEnglishDigits().toDoubleOrNull()
+                            ?: 0.0,
                         period = selectedPeriod ?: Period.MONTHLY,
                         startDate = startDate,
                         endDate = endDate
@@ -1581,7 +1661,10 @@ fun EarningsDialog(
                 }
 //                        enabled = sharedViewModel.selectedEarnings?.earningsName ?: "".isNotBlank() && amount.isNotBlank() && startDate.isNotBlank() && endDate.isNotBlank() && selectedPeriod != null
             ) {
-                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = context.getString(R.string.insert),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
 
         },
@@ -1589,7 +1672,6 @@ fun EarningsDialog(
 
         })
 }
-
 
 
 fun formatNumberWithCommas(number: Double): String {
@@ -1601,14 +1683,16 @@ fun AddCostDialog(
     buildingId: Long,
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
-    onSave: (Costs, String, Period, FundFlag, CalculateMethod, Responsible, List<Long>, List<Long>, String) -> Unit
+    onSave: (Costs, String, Period, FundFlag, CalculateMethod, CalculateMethod, Responsible, List<Long>, List<Long>, String, FundFlag) -> Unit
 ) {
     val context = LocalContext.current
 
     val costs by sharedViewModel.getCostsForBuilding(buildingId)
         .collectAsState(initial = emptyList())
-    val activeUnits by sharedViewModel.getActiveUnits(buildingId).collectAsState(initial = emptyList())
-    val owners by sharedViewModel.getOwnersForBuilding(buildingId).collectAsState(initial = emptyList())
+    val activeUnits by sharedViewModel.getActiveUnits(buildingId)
+        .collectAsState(initial = emptyList())
+    val owners by sharedViewModel.getOwnersForBuilding(buildingId)
+        .collectAsState(initial = emptyList())
     var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var totalAmount by remember { mutableStateOf("") }
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
@@ -1617,6 +1701,7 @@ fun AddCostDialog(
     val coroutineScope = rememberCoroutineScope()
     var selectedResponsible by remember { mutableStateOf(context.getString(R.string.owner)) }
     var selectedCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
+    var selectedUnitCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
 
 
     val selectedUnits = remember { mutableStateListOf<Units>() }
@@ -1636,6 +1721,13 @@ fun AddCostDialog(
         else -> CalculateMethod.FIXED
     }
 
+    val calculateUnitMethod = when (selectedUnitCalculateMethod) {
+        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
+        CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.PEOPLE
+        CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
+        else -> CalculateMethod.FIXED
+    }
+
     // Add a dummy "Add New Cost" item for dropdown
     val costsWithAddNew = costs + listOf(
         Costs(
@@ -1651,7 +1743,8 @@ fun AddCostDialog(
         )
     )
 
-    AlertDialog(onDismissRequest = onDismiss,
+    AlertDialog(
+        onDismissRequest = onDismiss,
         title = {
             Text(
                 text = context.getString(R.string.add_new_cost),
@@ -1662,7 +1755,7 @@ fun AddCostDialog(
         },
         text = {
             LazyColumn {
-                item{
+                item {
 // Cost Dropdown
                     ExposedDropdownMenuBoxExample(
                         items = costsWithAddNew,
@@ -1696,7 +1789,8 @@ fun AddCostDialog(
 
                     // Amount in words (optional)
                     val amountVal = totalAmount.toLongOrNull() ?: 0L
-                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
+                    val amountInWords =
+                        NumberCommaTransformation().numberToWords(context, amountVal)
                     Text(
                         text = "$amountInWords ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
@@ -1716,9 +1810,13 @@ fun AddCostDialog(
                     if (selectedPeriod == Period.NONE) {
                         OutlinedTextField(
                             value = dueDate ?: "",
-                            onValueChange = {dueDate = it},
-                            label = { Text(text = context.getString(R.string.due),
-                                style = MaterialTheme.typography.bodyLarge) },
+                            onValueChange = { dueDate = it },
+                            label = {
+                                Text(
+                                    text = context.getString(R.string.due),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .onFocusChanged { focusState ->
@@ -1730,11 +1828,22 @@ fun AddCostDialog(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-
+// FundFlag Checkbox Row
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(0.dp)
+                    ) {
+                        Checkbox(
+                            checked = sharedViewModel.fundMinus,
+                            onCheckedChange = { sharedViewModel.fundMinus = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = context.getString(R.string.fund_minus))
+                    }
                     // FundFlag Checkbox Row
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(0.dp)
                     ) {
                         Checkbox(
                             checked = fundFlagChecked,
@@ -1744,84 +1853,104 @@ fun AddCostDialog(
                         Text(text = context.getString(R.string.fund_flag_positive_effect))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    ChipGroupShared(
-                        selectedItems = listOf(selectedResponsible),
-                        onSelectionChange = { newSelection ->
-                            if (newSelection.isNotEmpty()) {
-                                selectedResponsible = newSelection.first()
-                            }
-                        },
-                        items = listOf(
-                            context.getString(R.string.owners),
-                            context.getString(R.string.tenants)
-                        ),
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        label = context.getString(R.string.responsible),
-                        singleSelection = true
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Log.d("selectedResponsible", selectedResponsible)
-                    val responsibleEnum = when (selectedResponsible) {
-                        Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
-                        Responsible.TENANT.getDisplayName(context) -> Responsible.TENANT
-                        else -> Responsible.OWNER
-                    }
-                    val calculateMethod = when (selectedCalculateMethod) {
-                        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
-                        CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.DANG
-                        CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
-                        else -> CalculateMethod.FIXED
-                    }
-                    Log.d("responsibleEnum", responsibleEnum.toString())
-                    Log.d("Responsible.TENANT.getDisplayName(context)", Responsible.TENANT.getDisplayName(context))
-                    if (selectedResponsible == Responsible.TENANT.getDisplayName(context)) {
-                        ChipGroupUnits(
-                            selectedUnits = selectedUnits,
-                            onSelectionChange = { newSelection ->
-                                selectedUnits.clear()
-                                selectedUnits.addAll(newSelection)
-                                sharedViewModel.selectedUnits.clear()
-                                sharedViewModel.selectedUnits.addAll(newSelection)
-                            },
-                            units = activeUnits,
-                            label = context.getString(R.string.units)
-                        )
-                    }
-
-                    if (responsibleEnum.getDisplayName(context) == Responsible.OWNER.getDisplayName(context)) {
-                        ChipGroupOwners(
-                            selectedOwners = selectedOwners,
-                            onSelectionChange = { newSelection ->
-                                selectedOwners.clear()
-                                selectedOwners.addAll(newSelection)
-                                sharedViewModel.selectedOwners.clear()
-                                sharedViewModel.selectedOwners.addAll(newSelection)
-                            },
-                            owners = owners,
-                            label = context.getString(R.string.owners)
-                        )
-                        Spacer(Modifier.height(8.dp))
-
+                    if (!sharedViewModel.fundMinus) {
                         ChipGroupShared(
-                            selectedItems = listOf(selectedCalculateMethod),
+                            selectedItems = listOf(selectedResponsible),
                             onSelectionChange = { newSelection ->
                                 if (newSelection.isNotEmpty()) {
-                                    selectedCalculateMethod = newSelection.first()
+                                    selectedResponsible = newSelection.first()
                                 }
                             },
                             items = listOf(
-                                context.getString(R.string.area),
-                                context.getString(R.string.dang),
-                                context.getString(R.string.fixed)
+                                context.getString(R.string.owners),
+                                context.getString(R.string.tenants)
                             ),
-                            modifier = Modifier
-                                .padding(vertical = 8.dp),
-                            label = context.getString(R.string.acount_base),
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            label = context.getString(R.string.responsible),
                             singleSelection = true
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Log.d("selectedResponsible", selectedResponsible)
+                        val responseEnum = when (selectedResponsible) {
+                            Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
+                            Responsible.TENANT.getDisplayName(context) -> Responsible.TENANT
+                            else -> Responsible.OWNER
+                        }
+                        Log.d("responsibleEnum", responsibleEnum.toString())
+                        Log.d(
+                            "Responsible.TENANT.getDisplayName(context)",
+                            Responsible.TENANT.getDisplayName(context)
+                        )
+                        if (selectedResponsible == Responsible.TENANT.getDisplayName(context)) {
+                            ChipGroupUnits(
+                                selectedUnits = selectedUnits,
+                                onSelectionChange = { newSelection ->
+                                    selectedUnits.clear()
+                                    selectedUnits.addAll(newSelection)
+                                    sharedViewModel.selectedUnits.clear()
+                                    sharedViewModel.selectedUnits.addAll(newSelection)
+                                },
+                                units = activeUnits,
+                                label = context.getString(R.string.units)
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            ChipGroupShared(
+                                selectedItems = listOf(selectedUnitCalculateMethod),
+                                onSelectionChange = { newSelection ->
+                                    if (newSelection.isNotEmpty()) {
+                                        selectedUnitCalculateMethod = newSelection.first()
+                                    }
+                                },
+                                items = listOf(
+                                    context.getString(R.string.area),
+                                    context.getString(R.string.people),
+                                    context.getString(R.string.fixed)
+                                ),
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp),
+                                label = context.getString(R.string.acount_base),
+                                singleSelection = true
+                            )
+                        }
+
+                        if (responseEnum.getDisplayName(context) == Responsible.OWNER.getDisplayName(
+                                context
+                            )
+                        ) {
+                            ChipGroupOwners(
+                                selectedOwners = selectedOwners,
+                                onSelectionChange = { newSelection ->
+                                    selectedOwners.clear()
+                                    selectedOwners.addAll(newSelection)
+                                    sharedViewModel.selectedOwners.clear()
+                                    sharedViewModel.selectedOwners.addAll(newSelection)
+                                },
+                                owners = owners,
+                                label = context.getString(R.string.owners)
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            ChipGroupShared(
+                                selectedItems = listOf(selectedCalculateMethod),
+                                onSelectionChange = { newSelection ->
+                                    if (newSelection.isNotEmpty()) {
+                                        selectedCalculateMethod = newSelection.first()
+                                    }
+                                },
+                                items = listOf(
+                                    context.getString(R.string.area),
+                                    context.getString(R.string.dang),
+                                    context.getString(R.string.fixed)
+                                ),
+                                modifier = Modifier
+                                    .padding(vertical = 8.dp),
+                                label = context.getString(R.string.acount_base),
+                                singleSelection = true
+                            )
+                        }
+
                     }
-
-
 
                 }
             }
@@ -1832,7 +1961,8 @@ fun AddCostDialog(
                     onDismiss = { showAddNewCostNameDialog = false },
                     onSave = { newCostName ->
                         coroutineScope.launch {
-                            val newCost = sharedViewModel.insertNewCostName(buildingId, newCostName)
+                            val newCost =
+                                sharedViewModel.insertNewCostName(buildingId, newCostName)
                             showAddNewCostNameDialog = false
                             selectedCost = newCost
                             totalAmount = newCost.tempAmount.toLong().toString()
@@ -1860,31 +1990,43 @@ fun AddCostDialog(
         confirmButton = {
             Button(onClick = {
                 val cost = selectedCost ?: return@Button
-                val fundFlag = if (fundFlagChecked) FundFlag.POSITIVE_EFFECT else FundFlag.NO_EFFECT
+                val fundFlag =
+                    if (fundFlagChecked) FundFlag.NEGATIVE_EFFECT else FundFlag.NO_EFFECT
+                val fundMinus =
+                    if (sharedViewModel.fundMinus) FundFlag.NEGATIVE_EFFECT else FundFlag.NO_EFFECT
                 onSave(
                     cost,
                     totalAmount,
                     selectedPeriod ?: Period.NONE,
                     fundFlag,
                     calculateMethod,
+                    calculateUnitMethod,
                     responsibleEnum,
                     selectedUnits.map { it.unitId },
                     selectedOwners.map { it.ownerId },
-                    dueDate ?: ""
+                    dueDate ?: "",
+                    fundMinus
                 )
             }) {
-                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = context.getString(R.string.insert),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
             Spacer(modifier = Modifier.width(8.dp))
         }
-        )
+    )
 
 }
+
 @Composable
 fun AddNewCostNameDialog(
     buildingId: Long,
@@ -1959,21 +2101,29 @@ fun AddNewCostNameDialog(
 }
 
 
-
 fun calculateBuildingFundFlow(
     sharedViewModel: SharedViewModel,
     buildingId: Long
 ): Flow<Double> {
     val sumPositiveFlow = sharedViewModel.sumPaidFundFlagPositive(buildingId)
-        .map { it  }
+        .map { it }
     val sumNegativeFlow = sharedViewModel.sumUnpaidFundFlagNegative(buildingId)
-        .map { it  }
+        .map { it }
     val sumEarning = sharedViewModel.sumPaidEarnings(buildingId)
-        .map { it  }
+        .map { it }
     val unitCountFlow = sharedViewModel.countUnits(buildingId)
         .map { it.toDouble() }
 
-    return combine(sumPositiveFlow, sumNegativeFlow, unitCountFlow, sumEarning) { sumPositive, sumNegative, unitCount, earnig ->
-        (sumPositive + earnig) - sumNegative
+    val sumFundMinus = sharedViewModel.sumFundMinus(buildingId)
+        .map { it.toDouble() }
+
+    return combine(
+        sumPositiveFlow,
+        sumNegativeFlow,
+        unitCountFlow,
+        sumEarning,
+        sumFundMinus
+    ) { sumPositive, sumNegative, unitCount, earning, fundMinus ->
+        (sumPositive + earning) - (sumNegative + fundMinus)
     }
 }
