@@ -139,7 +139,7 @@
     <string name="today">امروز</string>
     <string name="building">ساختمان</string>
     <string name="unit">واحد</string>
-    <string name="fixed">ثابت</string>
+    <string name="fixed">مساوی</string>
     <string name="tenant">ساکن</string>
     <string name="title_activity_main">MainActivity</string>
     <string name="title_home">Home</string>
@@ -275,7 +275,7 @@
     <string name="sign_up">ثبت نام</string>
     <string name="password">رمز</string>
     <string name="password_too_short">پیچیدگی پسورد کم</string>
-    <string name="manager">مدیر ساختمان</string>
+    <string name="manager">مدیر</string>
     <string name="dang">دانگ</string>
     <string name="invalid_dang">مقدار وارد شده نامعتبر است.</string>
     <string name="loading">در حال بارگذاری</string>

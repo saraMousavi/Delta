@@ -82,9 +82,9 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
         buildingsDao.deleteBuildings(buildings)
     }
 
-    fun getAllBuildingsWithTypeAndUsage(): Flow<List<BuildingWithTypesAndUsages>> {
-        return buildingsDao.getAllBuildingsWithTypesAndUsages()
-    }
+//    fun getAllBuildingsWithTypeAndUsage(): Flow<List<BuildingWithTypesAndUsages>> {
+//        return buildingsDao.getAllBuildingsWithTypesAndUsages()
+//    }
     fun getAllBuildingsList(): List<Buildings> {
         return buildingsDao.getAllBuildingsList()
     }

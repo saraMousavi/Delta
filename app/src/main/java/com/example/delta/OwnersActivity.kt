@@ -3,6 +3,7 @@ package com.example.delta
 import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -78,17 +79,20 @@ class OwnersActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         )
                         if (showOwnerDialog) {
+                            Log.d("units", units.toString())
                             OwnerDialog(
                                 units = units,
                                 onDismiss = { showOwnerDialog = false },
                                 dangSums = dangSumsMap,
-                                onAddOwner = { newOwner, selectedUnits, isManager ->
-//                                    //@TODO insert into buildingownercrossref
-                                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager)
+                                onAddOwner = { newOwner, selectedUnits, isManager, selectedBuilding ->
+//
+                                    sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager, true, selectedBuilding!!.buildingId)
+
                                     showOwnerDialog = false
                                 },
                                 sharedViewModel = sharedViewModel,
-                                isOwner = true
+                                isOwner = true,
+                                building = null
                             )
                         }
                     }

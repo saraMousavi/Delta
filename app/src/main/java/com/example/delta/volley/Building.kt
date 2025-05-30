@@ -233,7 +233,8 @@ class Building {
                         val buildingWithTypesAndUsages = BuildingWithTypesAndUsages(
                             building = building,
                             buildingTypeName = buildingTypeName,
-                            buildingUsageName = buildingUsageName
+                            buildingUsageName = buildingUsageName,
+                            roleName = ""
                         )
 
                         buildingsList.add(buildingWithTypesAndUsages)

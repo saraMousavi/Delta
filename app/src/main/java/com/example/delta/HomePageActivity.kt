@@ -59,6 +59,7 @@ import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.factory.BuildingsViewModelFactory
+import com.example.delta.init.Preference
 import com.example.delta.init.RolePermissionsManagerImpl
 import com.example.delta.interfaces.RolePermissionsManager
 
@@ -142,11 +143,13 @@ fun BuildingList(
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        sharedViewModel.getUsersBuilding(context)
+        //sharedViewModel.getUsersBuilding(context)
     }
 
+    val userId = Preference().getUserId(context = context)
+    Log.d("userId", userId.toString())
 //    val buildingsWithTypesAndUsages by sharedViewModel.buildingList.collectAsState()
-    val buildingsWithTypesAndUsages by viewModel.getAllBuildingsWithTypeAndUsage()
+    val buildingsWithTypesAndUsages by sharedViewModel.getBuildingsWithUserRole(userId)//getAllBuildingsWithTypeAndUsage()
         .collectAsState(initial = emptyList())
     Log.d("buildingsWithTypesAndUsages", buildingsWithTypesAndUsages.toString())
     sharedViewModel.allUsers(context = context)

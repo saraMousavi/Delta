@@ -109,9 +109,9 @@ class MyApplication : Application() {
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.AREA, responsible = Responsible.TENANT, tempAmount = 0.0),
-                    Costs(costName = getString(R.string.mortgage), period = Period.YEARLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
-                    Costs(costName = getString(R.string.rent), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.POSITIVE_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(costName = getString(R.string.charge), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.AREA, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(costName = getString(R.string.mortgage), period = Period.YEARLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(costName = getString(R.string.rent), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
                 )
                 defaultCosts.forEach {
                     costsDao.insertCost(it)
@@ -135,24 +135,24 @@ class MyApplication : Application() {
 
             // Insert Default Admin User
             val users = usersDao.getUsers().firstOrNull()
-            if (users == null) {
-                val ownerRole = roleDao.getRoleByName("Admin")
+//            if (users == null) {
+//                val ownerRole = roleDao.getRoleByName("Admin")
+//
+//                val phoneNumber = "09103009458"
+//                val persianPhoneNumber = convertToPersianDigits(phoneNumber)
+//                val password = "1234"
+//                val persianPassword = convertToPersianDigits(password)
+//
+//                val defaultUser = User(
+//                    mobileNumber = persianPhoneNumber,
+//                    password = persianPassword,
+//                    roleId = ownerRole.roleId // Use roleId instead of role string
+//                )
+//                val userId = usersDao.insertUser(defaultUser)
+//                usersDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = ownerRole.roleId, userId = userId))
 
-                val phoneNumber = "09103009458"
-                val persianPhoneNumber = convertToPersianDigits(phoneNumber)
-                val password = "1234"
-                val persianPassword = convertToPersianDigits(password)
-
-                val defaultUser = User(
-                    mobileNumber = persianPhoneNumber,
-                    password = persianPassword,
-                    roleId = ownerRole.roleId // Use roleId instead of role string
-                )
-                val userId = usersDao.insertUser(defaultUser)
-                usersDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = ownerRole.roleId, userId = userId))
-
-                Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")
-            }
+//                Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")
+//            }
         }
     }
 

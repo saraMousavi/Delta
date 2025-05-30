@@ -201,13 +201,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateDebt(debt: Debts) {
         viewModelScope.launch(Dispatchers.IO) {
-            Log.d("debt updated", debt.toString())
             debtsDao.updateDebt(debt)
         }
     }
 
     fun getUnitsOfBuildingForCost(costId: Long, buildingId: Long): Flow<List<Units>> = flow {
         val units = costsDao.getUnitsOfBuildingFromCost(costId, buildingId)
+        emit(units)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getBuildingsWithUserRole(userId: Long): Flow<List<BuildingWithTypesAndUsages>> = flow {
+        val units = buildingDao.getBuildingsWithUserRole(userId)
         emit(units)
     }.flowOn(Dispatchers.IO)
 
@@ -421,10 +426,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(role)
     }.flowOn(Dispatchers.IO)
 
-    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = flow {
-        val tenants = tenantsDao.getTenantsForBuilding(buildingId)
-        emit(tenants)
-    }.flowOn(Dispatchers.IO)
+//    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = flow {
+//        val tenants = tenantsDao.getTenantsForBuilding(buildingId)
+//        emit(tenants)
+//    }.flowOn(Dispatchers.IO)
+
+    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = tenantsDao.getTenantsForBuilding(buildingId)
 
     fun getActiveUnits(buildingId: Long): Flow<List<Units>> = flow {
         val units = unitsDao.getActiveUnits(buildingId)
@@ -462,6 +469,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
+    fun getBuildingOwnerCrossRef(): Flow<List<BuildingOwnerCrossRef>> = flow {
+        val owners = ownersDao.getAllBuildingsOwnerCrossRef()
+        emit(owners)
+    }.flowOn(Dispatchers.IO)
+
+    fun isOwnerManager(ownerId: Long, buildingId: Long): Flow<Boolean> = flow {
+        Log.d("ownerId", ownerId.toString())
+        Log.d("buildingId", buildingId.toString())
+        val crossRef = ownersDao.getBuildingOwnerCrossRef(ownerId, buildingId)
+        if(crossRef.isManager) {
+            emit(true)
+        } else {
+            emit(false)
+        }
+    }
+
+
 
     fun loadBuildingsWithTypesAndUsages() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -486,7 +510,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 BuildingWithTypesAndUsages(
                     building = building,
                     buildingTypeName = buildingTypes[building.buildingTypeId] ?: "",
-                    buildingUsageName = buildingUsages[building.buildingUsageId] ?: ""
+                    buildingUsageName = buildingUsages[building.buildingUsageId] ?: "",
+                    roleName = ""
                 )
             }
 
@@ -511,8 +536,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     }
 
-    fun insertUser(context: Context, user: User, userJson: JSONObject, onSuccess: (Long) -> Unit) {
+    fun insertUser(context: Context, user: User, onSuccess: (Long) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
+            val userJson = JSONObject().apply {
+                put("mobileNumber", user.mobileNumber)
+                put("passwordHash", user.password)
+                put("roleId", user.roleId)
+            }
             val userId = userDao.insertUser(user)
             Log.d("user.roleId", user.roleId.toString())
             Log.d("userId", userId.toString())
@@ -789,18 +819,31 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun saveOwnerWithUnits(
         owner: Owners,
         ownerUnits: List<OwnersUnitsCrossRef>,
-        isManager: Boolean
+        isManager: Boolean,
+        isNotForm: Boolean,
+        buildingId: Long
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Insert owner and get the new ownerId
                 val newOwnerId = ownersDao.insertOwners(owner)
-                ownerManagerMap[owner] = isManager
+                val updatedOwner = owner.copy(ownerId = newOwnerId)
+                ownerManagerMap[updatedOwner] = isManager
+
 
                 ownerUnits.forEach { oUnit ->
                     // Make sure dang is clamped between 0.0 and 6.0
 //                    val clampedDang = oUnit.dang.coerceIn(0.0, 6.0)
                     if (oUnit.dang != 0.0) {
+                        if(isNotForm){
+                            ownersDao.insertBuildingOwner(
+                                BuildingOwnerCrossRef(
+                                    ownerId = newOwnerId,
+                                    buildingId = buildingId,
+                                    isManager = isManager
+                                )
+                            )
+                        }
                         ownersDao.insertOwnerUnitCrossRef(
                             OwnersUnitsCrossRef(
                                 ownerId = newOwnerId,
@@ -811,7 +854,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
 
-                val updatedOwner = owner.copy(ownerId = newOwnerId)
                 ownersList.add(updatedOwner)
                 addOwnerUnits(updatedOwner, ownerUnits)
             } catch (e: Exception) {
@@ -915,9 +957,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                Log.d("SaveBuilding", "Start saving")
                 withContext(Dispatchers.IO) {
-                    Log.d("SaveBuilding", "Before DB operations")
                     // Insert Building
                     val userId = Preference().getUserId(context = context)
                     val role = userDao.getRoleByUserId(userId)
@@ -1064,10 +1104,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     else -> {
-                                        // Find matching debt in unitDebtsList by unitId and costId
-                                        Log.d("insertedUnit", insertedUnit.toString())
-                                        Log.d("cost.id", cost.id.toString())
-                                        // Find the cost in costsList by costName
                                         val matchedCost =
                                             costsList.value.find { it.costName == cost.costName }
 
@@ -1155,10 +1191,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     // Save Owners
                     ownersList.forEach { owner ->
                         val ownerId = ownersDao.insertOwners(owner)
-                        Log.d("ownerId", ownerId.toString())
+
                         val ownerUnits = ownerUnitMap[owner] ?: emptyList()
-                        Log.d("ownerUnits", ownerUnits.toString())
-//                        ownersList[index] = owner.copy(ownerId = ownerId)
                         val isManager: Boolean = ownerManagerMap[owner] ?: false
                         ownersDao.insertBuildingOwner(
                             BuildingOwnerCrossRef(
@@ -1168,7 +1202,37 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         )
                         Log.d("isManager", isManager.toString())
-
+                        if(isManager){
+                            val userOwnerID = userDao.insertUser(
+                                User(
+                                    mobileNumber = owner.mobileNumber,
+                                    password = "123456",
+                                    roleId = 4L
+                                )
+                            )
+                            userDao.insertUserBuildingCrossRef(
+                                UsersBuildingsCrossRef(
+                                    userId = userOwnerID,
+                                    buildingId = buildingId,
+                                    roleName = "Manager"
+                                )
+                            )
+                        } else {
+                            val userOwnerID = userDao.insertUser(
+                                User(
+                                    mobileNumber = owner.mobileNumber,
+                                    password = "123456",
+                                    roleId = 2L
+                                )
+                            )
+                            userDao.insertUserBuildingCrossRef(
+                                UsersBuildingsCrossRef(
+                                    userId = userOwnerID,
+                                    buildingId = buildingId,
+                                    roleName = "Owner"
+                                )
+                            )
+                        }
                         ownerUnits.forEach { unit ->
                             // Get the dang value for this owner-unit pair, default to 0.0 if not present
                             val cross = OwnersUnitsCrossRef(
@@ -1197,8 +1261,24 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 tenant.status
                             )
                         )
+                        val userTenantID = userDao.insertUser(
+                            User(
+                                mobileNumber = tenant.mobileNumber,
+                                password = "123456",
+                                roleId = 3L
+                            )
+                        )
+                        userDao.insertUserBuildingCrossRef(
+                            UsersBuildingsCrossRef(
+                                userId = userTenantID,
+                                buildingId = buildingId,
+                                roleName = "Tenant"
+                            )
+                        )
+
                     }
                     Log.d("SaveBuilding", "After DB operations")
+                    Log.d("users", userDao.getUsers().toString())
                 }
                 Log.d("SaveBuilding", "Before onSuccess")
 // Insert Building
@@ -1287,10 +1367,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-
-    fun getUnitForTenant(tenant: Tenants): Units? {
-        return tenantUnitMap[tenant]
-    }
 
     fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
         val tenant = tenantsDao.getUnitForTenant(tenantId)
@@ -1400,7 +1476,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     // Update these functions to add units to the maps
-    fun addOwnerUnits(owner: Owners, ownerUnits: List<OwnersUnitsCrossRef>) {
+    private fun addOwnerUnits(owner: Owners, ownerUnits: List<OwnersUnitsCrossRef>) {
         ownerUnitMap[owner] = ownerUnits
     }
 
@@ -1521,8 +1597,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateDebtPaymentFlag(debt: Debts, newAmount: Boolean) {
         unpaidDebtList.value = unpaidDebtList.value.map {
-            Log.d("it.debtId", it.debtId.toString())
-            Log.d("debt.debtId", debt.debtId.toString())
             if (it.debtId == debt.debtId) {
                 it.copy(paymentFlag = newAmount)
             } else it
@@ -1821,10 +1895,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Handle the userList (e.g., update your ViewModel, display in UI)
                 //Example:
                 //  userViewModel.updateUsers(userList)
-                Log.d("userList", userList.toString())
             },
             onError = { error ->
-                Log.d("error", error.toString())
+                Log.e("error", error.toString())
                 // Handle the error (e.g., show a toast, log the error)
                 // Example:
                 // Toast.makeText(context, "Error fetching users: ${error.message}", Toast.LENGTH_SHORT).show()
@@ -1842,11 +1915,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 // Handle the userList (e.g., update your ViewModel, display in UI)
                 //Example:
                 //  userViewModel.updateUsers(userList)
-                Log.d("buildingList", buildingList.toString())
                 _buildingList.value = buildings
             },
             onError = { error ->
-                Log.d("error", error.toString())
+                Log.e("error", error.toString())
                 // Handle the error (e.g., show a toast, log the error)
                 // Example:
                 // Toast.makeText(context, "Error fetching users: ${error.message}", Toast.LENGTH_SHORT).show()

@@ -506,7 +506,6 @@ fun ChipGroupUnits(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChipGroupOwners(
     selectedOwners: List<Owners>,
@@ -540,7 +539,6 @@ fun ChipGroupOwners(
 }
 
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChipGroupShared(
     modifier: Modifier = Modifier,

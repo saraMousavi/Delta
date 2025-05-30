@@ -49,6 +49,7 @@ class LoginPage : ComponentActivity() {
                 AppTheme {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         val users by sharedViewModel.getUsers().collectAsState(initial = emptyList())
+                        Log.d("users", users.toString())
                         LoginPageForm(users, viewModel)
                     }
                 }
@@ -73,23 +74,9 @@ class LoginPage : ComponentActivity() {
 //}
 
 fun login(users: List<User>, username: String, password: String): User? {
-    // Simulate backend authentication
-//    val phoneNumber = "09103009458"
-//    val persianPhoneNumber = convertToPersianDigits(phoneNumber)
-//
-//    val pass = "1234"
-//    val persianPassword = convertToPersianDigits(pass)
-
-
-//    val users = listOf(
-//        User(userId = 1L, mobileNumber = persianPhoneNumber, password = persianPassword, roleId = 1L), // Admin
-//        User(userId = 2L, mobileNumber = "09103009458", password = "1234", roleId = 2L), // owner
-//        User(userId = 2L, mobileNumber = convertToPersianDigits("09123456789"), password = "password", roleId = 2L), // owner
-//        User(userId = 3L, mobileNumber = convertToPersianDigits("09134567890"), password = "password", roleId = 3L), // manager
-//        User(userId = 4L, mobileNumber = convertToPersianDigits("09145678901"), password = "password", roleId = 4L)  // tenant
-//    )
-
-
+    Log.d("users", users.toString())
+    Log.d("username", username)
+    Log.d("password", password)
     return users.find { it.mobileNumber == username && it.password == password }
 }
 
@@ -145,7 +132,9 @@ fun LoginPageForm(users: List<User>, buildingsViewModel: BuildingsViewModel) {
             Button(
                 onClick = {
                     scope.launch(Dispatchers.IO) {
-                        handleLogin(context, users , username, password, buildingsViewModel)
+                        handleLogin(context, users ,
+                            username, password,
+                            buildingsViewModel)
                     }
                 },
                 modifier = Modifier

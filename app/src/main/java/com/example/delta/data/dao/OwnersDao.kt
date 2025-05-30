@@ -41,6 +41,15 @@ interface OwnersDao {
     @Query("SELECT * FROM Owners")
     suspend fun getOwners(): List<Owners>
 
+    @Query("SELECT * FROM building_owner_cross_ref where ownerId =:ownerId")
+    suspend fun getBuildingsOwnerCrossRef(ownerId: Long): List<BuildingOwnerCrossRef>
+
+    @Query("SELECT * FROM building_owner_cross_ref")
+    suspend fun getAllBuildingsOwnerCrossRef(): List<BuildingOwnerCrossRef>
+
+    @Query("SELECT * FROM building_owner_cross_ref where ownerId =:ownerId and buildingId =:buildingId")
+    suspend fun getBuildingOwnerCrossRef(ownerId: Long, buildingId: Long): BuildingOwnerCrossRef
+
     // Helper function to get owner details
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
     suspend fun getOwnerById(ownerId: Long): Owners

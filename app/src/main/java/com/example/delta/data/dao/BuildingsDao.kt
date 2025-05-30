@@ -27,13 +27,23 @@ interface BuildingsDao {
     fun getAllBuildingsList(): List<Buildings>
 
     @Query("""
-    SELECT b.*, r.roleName FROM buildings b
-    INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
-    INNER JOIN user u ON ub.userId = u.userId
-    INNER JOIN role r ON u.roleId = r.roleId
-    WHERE u.userId = :userId
+    SELECT b.*, r.roleName,    
+            bt.building_type_name AS buildingTypeName, 
+            bu.building_usage_name AS buildingUsageName
+        FROM buildings b
+            LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
+                LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
+            INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
+            INNER JOIN user u ON ub.userId = u.userId
+            INNER JOIN role r ON u.roleId = r.roleId
+            WHERE u.userId = :userId
 """)
-    fun getBuildingsWithUserRole(userId: Long): List<UsersBuildingsCrossRef>
+    fun getBuildingsWithUserRole(userId: Long): List<BuildingWithTypesAndUsages>
+
+    @Query("""
+    SELECT * FROM  users_buildings_cross_ref ub 
+""")
+    fun getBuildingsWithUserRoles(): List<UsersBuildingsCrossRef>
 
     @Query("DELETE FROM buildings WHERE buildingId = :buildingId")
     suspend fun deleteBuildingById(buildingId: Long)
@@ -65,16 +75,16 @@ interface BuildingsDao {
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
     fun getBuilding(buildingId: Long): Buildings
 
-    @Query("""
-        SELECT 
-            b.*, 
-            bt.building_type_name AS buildingTypeName, 
-            bu.building_usage_name AS buildingUsageName
-        FROM buildings b
-        LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
-        LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
-    """)
-    fun getAllBuildingsWithTypesAndUsages(): Flow<List<BuildingWithTypesAndUsages>>
+//    @Query("""
+//        SELECT
+//            b.*,
+//            bt.building_type_name AS buildingTypeName,
+//            bu.building_usage_name AS buildingUsageName
+//        FROM buildings b
+//        LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
+//        LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
+//    """)
+//    fun getAllBuildingsWithTypesAndUsages(): Flow<List<BuildingWithTypesAndUsages>>
 
     @Query("SELECT bt.building_type_name FROM building_types bt WHERE bt.buildingTypeId = :buildingTypeId")
     suspend fun getBuildingTypeName(buildingTypeId: Long?): String

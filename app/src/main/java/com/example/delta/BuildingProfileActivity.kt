@@ -631,9 +631,11 @@ class BuildingProfileActivity : ComponentActivity() {
             }
 
             if (showTenantDialog) {
+                val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+                    .collectAsState(initial = emptyList())
                 TenantDialog(
                     sharedViewModel = sharedViewModel,
-                    units = sharedViewModel.unitsList,
+                    units = units,
                     onDismiss = { showTenantDialog = false },
                     onAddTenant = { newTenant, selectedUnit ->
                         sharedViewModel.saveTenantWithUnit(newTenant, selectedUnit)
@@ -923,7 +925,8 @@ class BuildingProfileActivity : ComponentActivity() {
                                 }
                             )
                         },
-                        activity = context.findActivity()
+                        activity = context.findActivity(),
+                        buildingId = building.buildingId
                     )
                 }
             }
@@ -940,17 +943,20 @@ class BuildingProfileActivity : ComponentActivity() {
             }
 
             if (showOwnerDialog) {
+                val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+                    .collectAsState(initial = emptyList())
                 OwnerDialog(
-                    units = sharedViewModel.unitsList,
+                    units = units,
                     onDismiss = { showOwnerDialog = false },
                     dangSums = dangSumsMap,
-                    onAddOwner = { newOwner, selectedUnits, isManager ->
+                    onAddOwner = { newOwner, selectedUnits, isManager, selectedBuilding ->
                         Log.d("newOwner", newOwner.toString())
                         Log.d("selectedUnits", selectedUnits.toString())
-                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager)
+                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager, true, building.buildingId)
                         showOwnerDialog = false
                     },
-                    sharedViewModel = sharedViewModel
+                    sharedViewModel = sharedViewModel,
+                    building = building
                 )
             }
         }
@@ -1696,10 +1702,12 @@ fun AddCostDialog(
     var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var totalAmount by remember { mutableStateOf("") }
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
-    var fundFlagChecked by remember { mutableStateOf(false) }
+//    var fundFlagChecked by remember { mutableStateOf(false) }
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    var selectedResponsible by remember { mutableStateOf(context.getString(R.string.owner)) }
+    var selectedResponsible by remember {
+        mutableStateOf(Responsible.OWNER.getDisplayName(context)) // Default to "Owners"
+    }
     var selectedCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     var selectedUnitCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
 
@@ -1841,17 +1849,17 @@ fun AddCostDialog(
                         Text(text = context.getString(R.string.fund_minus))
                     }
                     // FundFlag Checkbox Row
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(0.dp)
-                    ) {
-                        Checkbox(
-                            checked = fundFlagChecked,
-                            onCheckedChange = { fundFlagChecked = it }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = context.getString(R.string.fund_flag_positive_effect))
-                    }
+//                    Row(
+//                        verticalAlignment = Alignment.CenterVertically,
+//                        modifier = Modifier.padding(0.dp)
+//                    ) {
+//                        Checkbox(
+//                            checked = fundFlagChecked,
+//                            onCheckedChange = { fundFlagChecked = it }
+//                        )
+//                        Spacer(modifier = Modifier.width(8.dp))
+//                        Text(text = context.getString(R.string.fund_flag_positive_effect))
+//                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     if (!sharedViewModel.fundMinus) {
                         ChipGroupShared(
@@ -1990,15 +1998,15 @@ fun AddCostDialog(
         confirmButton = {
             Button(onClick = {
                 val cost = selectedCost ?: return@Button
-                val fundFlag =
-                    if (fundFlagChecked) FundFlag.NEGATIVE_EFFECT else FundFlag.NO_EFFECT
+//                val fundFlag =
+//                    if (fundFlagChecked) FundFlag.NEGATIVE_EFFECT else FundFlag.NO_EFFECT
                 val fundMinus =
                     if (sharedViewModel.fundMinus) FundFlag.NEGATIVE_EFFECT else FundFlag.NO_EFFECT
                 onSave(
                     cost,
                     totalAmount,
                     selectedPeriod ?: Period.NONE,
-                    fundFlag,
+                    FundFlag.NEGATIVE_EFFECT,
                     calculateMethod,
                     calculateUnitMethod,
                     responsibleEnum,

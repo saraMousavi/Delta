@@ -80,13 +80,13 @@ fun SignUpScreen(
     var mobileError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val userRoles = listOf(
-        Role(2L, context.getString(R.string.owner), ""),      // Owner
-        Role(3L, context.getString(R.string.tenant), ""),    // Tenant
-        Role(4L, context.getString(R.string.manager), "")       // Manager
-    )
+//    val userRoles = listOf(
+//        Role(2L, context.getString(R.string.owner), ""),      // Owner
+//        Role(3L, context.getString(R.string.tenant), ""),    // Tenant
+//        Role(4L, context.getString(R.string.manager), "")       // Manager
+//    )
 
-    var selectedRole by remember { mutableStateOf<Role?>(null) }
+//    var selectedRole by remember { mutableStateOf<Role?>(null) }
 
 
     Column(
@@ -163,15 +163,15 @@ fun SignUpScreen(
                     modifier = Modifier.align(Alignment.Start)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            ExposedDropdownMenuBoxExample(
-                items = userRoles,
-                selectedItem = selectedRole,
-                onItemSelected = { role -> selectedRole = role },
-                label = context.getString(R.string.role), // Add this to your strings.xml
-                modifier = Modifier.fillMaxWidth(),
-                itemLabel = { role -> role.roleName }
-            )
+//            Spacer(modifier = Modifier.height(8.dp))
+//            ExposedDropdownMenuBoxExample(
+//                items = userRoles,
+//                selectedItem = selectedRole,
+//                onItemSelected = { role -> selectedRole = role },
+//                label = context.getString(R.string.role), // Add this to your strings.xml
+//                modifier = Modifier.fillMaxWidth(),
+//                itemLabel = { role -> role.roleName }
+//            )
 
             Spacer(modifier = Modifier.height(24.dp))
             Button(
@@ -182,14 +182,10 @@ fun SignUpScreen(
                     val user = User(
                         mobileNumber = mobile,
                         password = password,
-                        roleId = selectedRole?.roleId ?: 1L
+                        roleId = 1L
                     )
-                    val userJson = JSONObject().apply {
-                        put("mobileNumber", mobile)
-                        put("passwordHash", password)
-                        put("roleId", selectedRole?.roleId ?: 1L)
-                    }
-                    sharedViewModel.insertUser(context, user, userJson,
+
+                    sharedViewModel.insertUser(context, user,
                         onSuccess = {  userId ->
                             user.userId = userId
                             onSignUpSuccess(user)
