@@ -1,12 +1,10 @@
 package com.example.delta.interfaces
 
-import com.example.delta.data.entity.RoleAuthorization
-
 interface RolePermissionsManager {
-    fun getPermissionsForRole(role: String): RoleAuthorization?
-    fun getAllPermissions(): List<RoleAuthorization>
-    fun createRolePermission(permissions: RoleAuthorization)
-    fun updateRolePermission(permissions: RoleAuthorization)
-    fun deleteRolePermission(roleName: String)
-    fun getUserRole(): String
+//    fun getPermissionsForRole(role: String): RoleAuthorization?
+//    fun getAllPermissions(): List<RoleAuthorization>
+//    fun createRolePermission(permissions: RoleAuthorization)
+//    fun updateRolePermission(permissions: RoleAuthorization)
+//    fun deleteRolePermission(roleName: String)
+//    fun getUserRole(): String
 }

@@ -1,5 +1,6 @@
 package com.example.delta.init
 
+import android.util.Log
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.BuildingFormFields
@@ -39,6 +40,8 @@ object AuthFieldDatabaseInitializer {
                     )
                 )
             }
+            Log.d("authDao.getAllAuthorizationObjects()", authDao.getAllAuthorizationObjects().toString())
+            Log.d("---", authDao.getAllAuthorizationFields().toString())
             // Repeat for other screen enums if needed
         }
     }

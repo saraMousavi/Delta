@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.util.Log
 import com.example.delta.R
+import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.EarningsDao
@@ -15,8 +16,6 @@ import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Role
-import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
@@ -38,6 +37,7 @@ class MyApplication : Application() {
     private lateinit var costsDao: CostDao
     private lateinit var usersDao: UsersDao
     private lateinit var roleDao: RoleDao // Add Role DAO
+    private lateinit var authorizationDao: AuthorizationDao
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +50,7 @@ class MyApplication : Application() {
         costsDao = database.costDao()
         usersDao = database.usersDao()
         roleDao = database.roleDao() // Initialize Role DAO
+        authorizationDao = database.authorizationDao() // Initialize Role DAO
 
         CoroutineScope(Dispatchers.IO).launch {
             AppDatabase.getDatabase(this@MyApplication).let { db ->
@@ -75,6 +76,7 @@ class MyApplication : Application() {
                 defaultRoles.forEach { role ->
                     roleDao.insertRole(role)
                 }
+
                 Log.d("MyApplication", "Default roles inserted")
             } else {
                 Log.d("MyApplication", "Roles already exist")
@@ -133,33 +135,7 @@ class MyApplication : Application() {
                 }
             }
 
-            // Insert Default Admin User
-            val users = usersDao.getUsers().firstOrNull()
-//            if (users == null) {
-//                val ownerRole = roleDao.getRoleByName("Admin")
-//
-//                val phoneNumber = "09103009458"
-//                val persianPhoneNumber = convertToPersianDigits(phoneNumber)
-//                val password = "1234"
-//                val persianPassword = convertToPersianDigits(password)
-//
-//                val defaultUser = User(
-//                    mobileNumber = persianPhoneNumber,
-//                    password = persianPassword,
-//                    roleId = ownerRole.roleId // Use roleId instead of role string
-//                )
-//                val userId = usersDao.insertUser(defaultUser)
-//                usersDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = ownerRole.roleId, userId = userId))
-
-//                Log.d("MyApplication", "Default admin user inserted with role ID: ${ownerRole.roleId}")
-//            }
         }
     }
 
-    fun convertToPersianDigits(input: String): String {
-        val persianDigits = listOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
-        return input.map { char ->
-            if (char.isDigit()) persianDigits[char.toString().toInt()] else char
-        }.joinToString("")
-    }
 }

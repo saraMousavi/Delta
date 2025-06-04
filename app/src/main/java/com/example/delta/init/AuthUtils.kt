@@ -18,32 +18,32 @@ object AuthUtils {
     }
 
     // Check if the current role has permission for the field
-    suspend fun hasFieldPermission(
-        authDao: AuthorizationDao,
-        roleId: Long,
-        objectId: Long,
-        fieldName: Int,
-        required: PermissionLevel = PermissionLevel.READ
-    ): Boolean = withContext(Dispatchers.IO) {
-        val field = authDao.getFieldByName(objectId, fieldName)
-        val fieldPerm = field?.let { authDao.getFieldPermission(roleId, it.fieldId) }
-        val objectPerm = authDao.getObjectPermission(roleId, objectId)
-        val effectivePerm = fieldPerm ?: objectPerm
-        effectivePerm != null && effectivePerm >= required.value
-    }
+//    suspend fun hasFieldPermission(
+//        authDao: AuthorizationDao,
+//        roleId: Long,
+//        objectId: Long,
+//        fieldName: Int,
+//        required: PermissionLevel = PermissionLevel.READ
+//    ): Boolean = withContext(Dispatchers.IO) {
+//        val field = authDao.getFieldByName(objectId, fieldName)
+//        val fieldPerm = field?.let { authDao.getFieldPermission(roleId, it.fieldId) }
+//        val objectPerm = authDao.getObjectPermission(roleId, objectId)
+//        val effectivePerm = fieldPerm ?: objectPerm
+//        effectivePerm != null && effectivePerm >= required.value
+//    }
 
     // Optional: check permission for an activity/object
-    suspend fun checkActivityPermission(
-        context: Context,
-        activityClass: Class<*>,
-        requiredLevel: PermissionLevel
-    ): Boolean = withContext(Dispatchers.IO) {
-        val db = AppDatabase.getDatabase(context)
-        val authObject = AuthObject.entries.find { it.name == activityClass.simpleName.uppercase() }
-        val roleId = getCurrentRoleId(context)
-        if (authObject != null) {
-            val perm = db.authorizationDao().getObjectPermission(roleId, authObject.id)
-            perm != null && perm >= requiredLevel.value
-        } else false
-    }
+//    suspend fun checkActivityPermission(
+//        context: Context,
+//        activityClass: Class<*>,
+//        requiredLevel: PermissionLevel
+//    ): Boolean = withContext(Dispatchers.IO) {
+//        val db = AppDatabase.getDatabase(context)
+//        val authObject = AuthObject.entries.find { it.name == activityClass.simpleName.uppercase() }
+//        val roleId = getCurrentRoleId(context)
+//        if (authObject != null) {
+//            val perm = db.authorizationDao().getObjectPermission(roleId, authObject.id)
+//            perm != null && perm >= requiredLevel.value
+//        } else false
+//    }
 }

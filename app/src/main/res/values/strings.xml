@@ -292,4 +292,16 @@
     <string name="fund_minus">پرداخت از صندوق</string>
     <string name="all">همه</string>
     <string name="due_minus">تاریخ کسر</string>
+    <string name="permission_read">نمایشی</string>
+    <string name="permission_write">ویرایش</string>
+    <string name="permission_delete">حذف</string>
+    <string name="permission_full">کامل</string>
+    <string name="edit_auth">ویرایش دسترسی</string>
+    <string name="auth_object">گروه دسترسی</string>
+    <string name="all_owners">لیست کلی مالکین</string>
+    <string name="users_owners">لیست مالکین مربوط به کاربر</string>
+    <string name="all_units">لیست کلی واحدها</string>
+    <string name="users_units">لیست واحدهای مربوط به کاربر</string>
+    <string name="all_tenants">لیست کلی ساکنین</string>
+    <string name="users_tenant">لیست ساکنین مربوط به کاربر</string>
 </resources>

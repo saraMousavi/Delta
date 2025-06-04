@@ -1,15 +1,12 @@
 package com.example.delta
 
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,31 +14,31 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.flow.flowOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
-import com.example.delta.data.entity.AuthorizationField
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.entity.AuthorizationObject
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.viewmodel.SharedViewModel
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 class UserManagementActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
 
@@ -59,25 +56,32 @@ class UserManagementActivity : ComponentActivity() {
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserManagementScreen(viewModel: SharedViewModel) {
-    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val tabTitles = listOf(context.getString(R.string.user_info), context.getString(R.string.permisions))
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var expanded by remember { mutableStateOf(false) }
 
-    // User input states
     val mobileNumberState = remember { mutableStateOf(TextFieldValue()) }
-
     val mobileNumber = mobileNumberState.value.text
+
     val userWithRole by viewModel.getUserWithRoleByMobile(mobileNumber).collectAsState(initial = null)
     val roles by viewModel.getRoles().collectAsState(initial = emptyList())
     var selectedRole by remember { mutableStateOf<Role?>(null) }
+    val userByMobile by viewModel.getUserByMobile(mobileNumber).collectAsState(initial = null)
+
+    var showAuthDialog by remember { mutableStateOf(false) }
+    var editObject by remember { mutableStateOf<AuthorizationObject?>(null) }
+    var editFields by remember { mutableStateOf<List<AuthorizationDao.FieldWithPermission>>(emptyList()) }
+    val selectedRoleId = selectedRole?.roleId ?: 0L
 
     LaunchedEffect(userWithRole) {
-        selectedRole = userWithRole
+        userWithRole?.let {
+            selectedRole = it
+            viewModel.currentRoleId = it.roleId
+        } ?: run {
+            selectedRole = null
+        }
     }
 
     Scaffold(
@@ -85,7 +89,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = LocalContext.current.getString(R.string.user_management),
+                        text = context.getString(R.string.user_management),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },
@@ -97,32 +101,25 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
             )
         },
         floatingActionButton = {
-            if (selectedTab == 1) {
-                var showAddAuthDialog by remember { mutableStateOf(false) }
+            ExtendedFloatingActionButton(
+                onClick = {
+                    editObject = null
+                    editFields = emptyList()
+                    showAuthDialog = true
+                },
+                icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
+                text = { Text(text = context.getString(R.string.add_auth), style = MaterialTheme.typography.bodyLarge) }
+            )
 
-                ExtendedFloatingActionButton(
-                    onClick = { showAddAuthDialog = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
-                    text = { Text(text = context.getString(R.string.add_auth), style = MaterialTheme.typography.bodyLarge) }
+            if (showAuthDialog) {
+                AddAuthorizationDialog(
+                    onDismiss = { showAuthDialog = false },
+                    onAddComplete = { showAuthDialog = false },
+                    viewModel = viewModel,
+                    selectedRoleId = selectedRoleId,
+                    editObject = editObject,
+                    editFields = editFields
                 )
-
-                if (showAddAuthDialog) {
-                    AddAuthorizationDialog(
-                        onDismiss = { showAddAuthDialog = false },
-                        onAdd = { objectSelected, fieldSelected, permissionSelected ->
-                            coroutineScope.launch {
-                                viewModel.insertRoleAuthorizationObjectCrossRef(
-                                    roleId = viewModel.currentRoleId,
-                                    objectId = objectSelected.objectId,
-                                    permissionLevel = permissionSelected.value
-                                )
-                                // Optionally handle fieldSelected if you have field-level cross refs
-                            }
-                            showAddAuthDialog = false
-                        }
-                    )
-                }
-
             }
         }
     ) { padding ->
@@ -134,23 +131,14 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
         ) {
             OutlinedTextField(
                 value = mobileNumberState.value,
-                onValueChange = {
-                    mobileNumberState.value = it
-//                    coroutineScope.launch {
-//                        val userRoleName = viewModel.getUserRole(it.text)
-//                        val foundRole = roles.find { role -> role.roleName == userRoleName }
-//                        if (foundRole != null) selectedRole = foundRole  // <-- fix here: was `c`
-//                    }
-                },
+                onValueChange = { mobileNumberState.value = it },
                 label = { Text(text = context.getString(R.string.mobile_number), style = MaterialTheme.typography.bodyLarge) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
 
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Role Selection Dropdown using ExposedDropdownMenuBoxExample
             ExposedDropdownMenuBoxExample(
                 items = roles,
                 selectedItem = selectedRole,
@@ -160,240 +148,246 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
                 modifier = Modifier.fillMaxWidth()
             )
 
-
             Spacer(modifier = Modifier.height(24.dp))
 
-
-            // Tabs
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                edgePadding = 0.dp,
-                indicator = { tabPositions ->
-                    TabRowDefaults.Indicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        height = 4.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+            AuthorizationObjectsList(
+                viewModel = viewModel,
+                user = userByMobile,
+                onEdit = { obj, fields ->
+                    editObject = obj
+                    editFields = fields
+                    showAuthDialog = true
                 }
-            ) {
-                tabTitles.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(text = title,
-                                style = MaterialTheme.typography.bodyLarge) }
-                    )
-                }
-            }
-
-            // Tab Content
-            when (selectedTab) {
-                0 -> UserInfoTab(viewModel)
-                1 -> AuthorizationObjectsTab(viewModel)
-            }
+            )
         }
     }
 }
 
 @Composable
-fun UserInfoTab(viewModel: SharedViewModel) {
-    val users by viewModel.getUsers().collectAsState(initial = emptyList())
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            items(users) { user ->
-                UserDetailCard(user)
+fun AuthorizationObjectsList(
+    viewModel: SharedViewModel,
+    user: User?,
+    onEdit: (AuthorizationObject, List<AuthorizationDao.FieldWithPermission>) -> Unit
+) {
+    if (user != null) {
+        val fields by viewModel.getAuthorizationDetailsForUser(user.userId).collectAsStateWithLifecycle(initialValue = emptyList())
+        val groupedFields = remember(fields) { fields.groupBy { it.objectName } }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            groupedFields.forEach { (objectNameResId, fields) ->
+                item {
+                    ExpandableAuthObjectCard(
+                        objectName = LocalContext.current.getString(objectNameResId),
+                        fields = fields,
+                        onEdit = {
+                            onEdit(fields.firstOrNull()?.field?.let {
+                                AuthorizationObject(it.objectId, objectNameResId, 0)
+                            } ?: AuthorizationObject(0, objectNameResId, 0), fields)
+                        },
+                        onDeleteObject = {
+                            val roleId = viewModel.currentRoleId
+                            val objectId = fields.firstOrNull()?.field?.objectId ?: 0L
+                            viewModel.deleteObjectAuthorization(roleId, objectId)
+                        },
+                        onDeleteField = { fieldWithPermission ->
+                            viewModel.deleteFieldAuthorization(fieldWithPermission.crossRef)
+                        }
+                    )
+                }
             }
         }
     }
 }
 
+
+
 @Composable
-fun UserDetailCard(user: User) {
+fun ExpandableAuthObjectCard(
+    objectName: String,
+    fields: List<AuthorizationDao.FieldWithPermission>,
+    onEdit: () -> Unit,
+    onDeleteObject: () -> Unit,
+    onDeleteField: (AuthorizationDao.FieldWithPermission) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .animateContentSize(),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Spacer(Modifier.height(8.dp))
-            DetailRow(LocalContext.current.getString(R.string.mobile_number), user.mobileNumber)
-            DetailRow(LocalContext.current.getString(R.string.role), user.roleId.toString())
-            // Add more fields as needed
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = objectName,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+                }
+                IconButton(onClick = onDeleteObject) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete Object")
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand"
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    fields.forEach { field ->
+                        FieldPermissionRow(
+                            field = field,
+                            onDeleteField = { onDeleteField(field) }
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+
 @Composable
-fun DetailRow(label: String, value: String) {
+fun FieldPermissionRow(
+    field: AuthorizationDao.FieldWithPermission,
+    onDeleteField: () -> Unit
+) {
+    val context = LocalContext.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@Composable
-fun AuthorizationObjectsTab(viewModel: SharedViewModel) {
-    val authObjects by viewModel.authObjects.collectAsState()
-
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(authObjects) { authObject ->
-            ExpandableAuthObjectCard(authObject, viewModel)
-        }
-    }
-}
-
-@Composable
-fun ExpandableAuthObjectCard(authObject: AuthorizationObject, viewModel: SharedViewModel) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
-        onClick = { expanded = !expanded }
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = LocalContext.current.getString(authObject.name),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(Modifier.weight(1f))
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null
-                )
-            }
-
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-//                    authObject.fields.forEach { field ->
-//                        FieldRow(field, viewModel)
-//                    }
-                }
-            }
+        Text(
+            text = context.getString(field.field.name),
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = context.getString(field.crossRef.permissionLevelEnum.labelRes),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(120.dp),
+            textAlign = TextAlign.Center
+        )
+        IconButton(onClick = onDeleteField) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete Field")
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun AddAuthorizationDialog(
     onDismiss: () -> Unit,
-    onAdd: (AuthorizationObject, AuthorizationField, PermissionLevel) -> Unit,
-    viewModel: SharedViewModel = viewModel()
+    onAddComplete: () -> Unit,
+    viewModel: SharedViewModel,
+    selectedRoleId: Long,
+    editObject: AuthorizationObject? = null,
+    editFields: List<AuthorizationDao.FieldWithPermission> = emptyList()
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
-    val authObjects by viewModel.getAllAuthorizationObjects().collectAsState(initial = emptyList())
-    var selectedAuthObject by remember { mutableStateOf<AuthorizationObject?>(null) }
-    val fieldsFlow = remember(selectedAuthObject) {
-        selectedAuthObject?.let { viewModel.getFieldsForAuthorizationObject(it.objectId) } ?: flowOf(emptyList())
+    var selectedObject by remember { mutableStateOf(editObject) }
+    val allAuthObjects by viewModel.getAllAuthorizationObjects().collectAsState(initial = emptyList())
+    val fields by viewModel.getFieldsForObject(selectedObject?.objectId ?: 0L).collectAsState(initial = emptyList())
+
+    var selectedFields by remember { mutableStateOf(editFields.map { it.field }.toSet()) }
+    var selectedPermissions by remember {
+        mutableStateOf(editFields.associate { it.field.fieldId to it.crossRef.permissionLevelEnum })
     }
-    val fieldsForSelectedObject by fieldsFlow.collectAsState(initial = emptyList())
-
-
-    var selectedField by remember { mutableStateOf<AuthorizationField?>(null) }
-
-    val permissionLevels = PermissionLevel.values().toList()
-    var selectedPermission by remember { mutableStateOf<PermissionLevel?>(null) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (selectedAuthObject != null && selectedField != null && selectedPermission != null) {
-                        onAdd(selectedAuthObject!!, selectedField!!, selectedPermission!!)
-                    }
-                }
-            ) {
-                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
-            }
+        title = {
+            Text(if (editObject == null) context.getString(R.string.add_auth) else context.getString(R.string.edit_auth))
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
-            }
-        },
-        title = { Text(text = context.getString(R.string.add_auth), style = MaterialTheme.typography.bodyLarge) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column {
                 ExposedDropdownMenuBoxExample(
-                    items = authObjects,
-                    selectedItem = selectedAuthObject,
+                    items = allAuthObjects,
+                    selectedItem = selectedObject,
                     onItemSelected = {
-                        selectedAuthObject = it
-                        selectedField = null // Reset field selection on new object
+                        selectedObject = it
+                        selectedFields = emptySet()
+                        selectedPermissions = emptyMap()
                     },
-                    label = context.getString(R.string.first_level),
+                    label = context.getString(R.string.auth_object),
                     itemLabel = { context.getString(it.name) },
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
-
-                ExposedDropdownMenuBoxExample(
-                    items = fieldsForSelectedObject,
-                    selectedItem = selectedField,
-                    onItemSelected = { selectedField = it },
-                    label = context.getString(R.string.second_level),
-                    itemLabel = { context.getString(it.name)},
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ExposedDropdownMenuBoxExample(
-                    items = permissionLevels,
-                    selectedItem = selectedPermission,
-                    onItemSelected = { selectedPermission = it },
-                    label = context.getString(R.string.permision_type),
-                    itemLabel = { it.name },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
+                    items(fields) { field ->
+                        val permission = selectedPermissions[field.fieldId] ?: PermissionLevel.READ
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedFields = if (field in selectedFields) {
+                                        selectedFields - field
+                                    } else {
+                                        selectedFields + field
+                                    }
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Checkbox(
+                                checked = field in selectedFields,
+                                onCheckedChange = null
+                            )
+                            Text(
+                                text = context.getString(field.name),
+                                modifier = Modifier.weight(1f).padding(start = 8.dp)
+                            )
+                            ExposedDropdownMenuBoxExample(
+                                items = PermissionLevel.entries,
+                                selectedItem = permission,
+                                onItemSelected = { newPerm ->
+                                    selectedPermissions = selectedPermissions.toMutableMap().apply {
+                                        put(field.fieldId, newPerm)
+                                    }
+                                },
+                                label = "",
+                                itemLabel = { context.getString(it.labelRes) },
+                                modifier = Modifier.width(120.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    selectedObject?.let { obj ->
+                        viewModel.viewModelScope.launch {
+                            selectedFields.forEach { field ->
+                                val perm = selectedPermissions[field.fieldId] ?: PermissionLevel.READ
+                                viewModel.insertRoleAuthorizationFieldCrossRef(
+                                    roleId = selectedRoleId,
+                                    objectId = obj.objectId,
+                                    fields = listOf(field),
+                                    permissionLevel = perm.value
+                                )
+                            }
+                            onAddComplete()
+                        }
+                    }
+                },
+                enabled = selectedObject != null && selectedFields.isNotEmpty()
+            ) {
+                Text(if (editObject == null) context.getString(R.string.insert) else context.getString(R.string.edit))
             }
         }
     )
-}
-
-
-@Composable
-fun FieldRow(field: AuthorizationField, viewModel: SharedViewModel) {
-    var selectedPermission by remember { mutableStateOf(field.fieldType) } // Or use permissionLevel if you have it
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(LocalContext.current.getString(field.name), modifier = Modifier.weight(1f))
-
-        // You can add a dropdown for permission selection here if needed
-//        OutlinedTextField(
-//            value = selectedPermission.toString(),
-//            onValueChange = { selectedPermission = it },
-//            readOnly = true,
-//            modifier = Modifier.width(120.dp),
-//            colors = Color(LocalContext.current.getColor(R.color.grey))
-//        )
-    }
 }

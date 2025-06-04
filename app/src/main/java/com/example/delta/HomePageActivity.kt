@@ -60,7 +60,6 @@ import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.Preference
-import com.example.delta.init.RolePermissionsManagerImpl
 import com.example.delta.interfaces.RolePermissionsManager
 
 
@@ -71,10 +70,10 @@ class HomePageActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
 
     // Create a mock RolePermissionsManager
-    val permissionsManager = RolePermissionsManagerImpl(
-        authorizationData = mutableListOf(),
-        currentUserRole = "admin"
-    )
+//    val permissionsManager = RolePermissionsManagerImpl(
+//        authorizationData = mutableListOf(),
+//        currentUserRole = "admin"
+//    )
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,16 +110,14 @@ class HomePageActivity : ComponentActivity() {
                                     // List of buildings
                                     BuildingList(
                                         viewModel = buildingViewModel,
-                                        sharedViewModel = sharedViewModel,
-                                        permissionsManager = permissionsManager
+                                        sharedViewModel = sharedViewModel
                                     )
 
                                 }
 
                                 composable(Screen.Settings.route) {
                                     SettingsScreen(
-                                        LocalContext.current,
-                                        permissionsManager = permissionsManager
+                                        LocalContext.current
                                     )
                                 }
                             }
@@ -137,8 +134,7 @@ class HomePageActivity : ComponentActivity() {
 @Composable
 fun BuildingList(
     viewModel: BuildingsViewModel,
-    sharedViewModel: SharedViewModel,
-    permissionsManager: RolePermissionsManager
+    sharedViewModel: SharedViewModel
 ) {
 
     val context = LocalContext.current

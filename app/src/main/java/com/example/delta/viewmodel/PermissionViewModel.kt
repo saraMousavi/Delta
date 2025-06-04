@@ -14,25 +14,25 @@ class PermissionViewModel (application: Application) : AndroidViewModel(applicat
     private val authDao = database.authorizationDao()
 
 
-    suspend fun checkUserAccess(
-        roleId: Long,
-        objectId: Long,
-        requiredAction: PermissionLevel
-    ): Boolean {
-        return authDao.hasPermission(roleId, objectId, requiredAction)
-    }
-
-    fun updatePermissions(
-        roleId: Long,
-        objectIds: List<Long>,
-        newLevel: PermissionLevel
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            objectIds.forEach { objectId ->
-                authDao.updatePermission(roleId, objectId, newLevel)
-            }
-        }
-    }
+//    suspend fun checkUserAccess(
+//        roleId: Long,
+//        objectId: Long,
+//        requiredAction: PermissionLevel
+//    ): Boolean {
+//        return authDao.hasPermission(roleId, objectId, requiredAction)
+//    }
+//
+//    fun updatePermissions(
+//        roleId: Long,
+//        objectIds: List<Long>,
+//        newLevel: PermissionLevel
+//    ) {
+//        viewModelScope.launch(Dispatchers.IO) {
+//            objectIds.forEach { objectId ->
+//                authDao.updatePermission(roleId, objectId, newLevel)
+//            }
+//        }
+//    }
 
 
 }

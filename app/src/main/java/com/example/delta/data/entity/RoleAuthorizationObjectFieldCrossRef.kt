@@ -6,13 +6,19 @@ import androidx.room.Index
 import com.example.delta.enums.PermissionLevel
 
 @Entity(
-    primaryKeys = ["roleId", "objectId"],
-    tableName = "role_authorization_object",
+    primaryKeys = ["roleId", "fieldId"],
+    tableName = "role_authorization_object_field_cross_ref",
     foreignKeys = [
         ForeignKey(
             entity = Role::class,
             parentColumns = ["roleId"],
             childColumns = ["roleId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = AuthorizationField::class,
+            parentColumns = ["fieldId"],
+            childColumns = ["fieldId"],
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
@@ -24,12 +30,14 @@ import com.example.delta.enums.PermissionLevel
     ],
     indices = [
         Index("roleId"),
+        Index("fieldId"),
         Index("objectId")
     ]
 )
-data class RoleAuthorizationObjectCrossRef(
+data class RoleAuthorizationObjectFieldCrossRef(
     val roleId: Long,
     val objectId: Long,
+    val fieldId: Long,
     val permissionLevel: Int // 0=read, 1=write, 2= delete 3=full
 ){
     // Helper property (not stored in DB)

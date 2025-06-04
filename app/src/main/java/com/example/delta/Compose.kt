@@ -105,7 +105,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.delta.data.dao.AuthorizationDao
-import com.example.delta.data.entity.RoleAuthorization
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.NavItem
 import com.example.delta.interfaces.RolePermissionsManager
@@ -690,20 +689,19 @@ private fun currentRoute(navController: NavHostController): String? {
 
 
 @Composable
-fun AuthScreen(permissionsManager: RolePermissionsManager) {
+fun AuthScreen() {
     val context = LocalContext.current
-    val userRole = permissionsManager.getUserRole()
+//    val userRole = permissionsManager.getUserRole()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Log.d("userRole", userRole.toString())
-        if (userRole == "admin") {
+        if (false) {
             Text("Admin Settings", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            RoleManagementSection(permissionsManager = permissionsManager)
+//            RoleManagementSection(permissionsManager = permissionsManager)
         } else {
             // Show an error message if not an admin
             Toast.makeText(
@@ -718,35 +716,33 @@ fun AuthScreen(permissionsManager: RolePermissionsManager) {
         }
     }
 }
+//
+//@Composable
+//fun RoleManagementSection(permissionsManager: RolePermissionsManager) {
+//    // State to hold all permissions
+//    val allPermissions = remember { mutableStateListOf<RoleAuthorization>() }
+//
+//    // Load permissions on initial composition
+//    LaunchedEffect(Unit) {
+//        allPermissions.addAll(permissionsManager.getAllPermissions())
+//    }
+//
+//    Column {
+//        Text("Manage Roles and Permissions", style = MaterialTheme.typography.titleMedium)
+//        Spacer(modifier = Modifier.height(8.dp))
+//
+//        // List all roles
+//        allPermissions.forEach { permission ->
+//            Text("Role: ${permission.role}")
+//            // Add options to edit/delete the role
+//        }
+//    }
+//}
 
-@Composable
-fun RoleManagementSection(permissionsManager: RolePermissionsManager) {
-    // State to hold all permissions
-    val allPermissions = remember { mutableStateListOf<RoleAuthorization>() }
-
-    // Load permissions on initial composition
-    LaunchedEffect(Unit) {
-        allPermissions.addAll(permissionsManager.getAllPermissions())
-    }
-
-    Column {
-        Text("Manage Roles and Permissions", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // List all roles
-        allPermissions.forEach { permission ->
-            Text("Role: ${permission.role}")
-            // Add options to edit/delete the role
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     context: Context,
-    modifier: Modifier = Modifier,
-    permissionsManager: RolePermissionsManager
+    modifier: Modifier = Modifier
 ) {
     var showAuthScreen by remember { mutableStateOf(false) }
     val items = listOf(
@@ -812,7 +808,7 @@ fun SettingsScreen(
 
     }
     if (showAuthScreen) {
-        AuthScreen(permissionsManager = permissionsManager)
+        AuthScreen()
     }
 }
 
@@ -1362,228 +1358,6 @@ fun PermissionLevelSelector(
     }
 }
 
-@Composable
-fun PermissionedOutlinedTextField(
-    fieldName: Int,
-    objectId: Long,
-    sharedViewModel: SharedViewModel,
-    authDao: AuthorizationDao,
-    roleId: Long,
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var canEdit by remember { mutableStateOf(false) }
-
-    LaunchedEffect(fieldName, objectId, roleId) {
-        canEdit = hasFieldPermission(
-            dao = authDao,
-            roleId = roleId,
-            objectId = objectId,
-            fieldName = fieldName,
-            required = PermissionLevel.WRITE
-        )
-    }
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = { if (canEdit) onValueChange(it) },
-        label = { Text(label) },
-        modifier = modifier,
-        enabled = canEdit
-    )
-}
-
-suspend fun hasFieldPermission(
-    dao: AuthorizationDao,
-    roleId: Long,
-    objectId: Long,
-    fieldName: Int,
-    required: PermissionLevel = PermissionLevel.READ
-): Boolean {
-    val field = dao.getFieldByName(objectId, fieldName) ?: return false
-    val fieldPerm = dao.getFieldPermission(roleId, field.fieldId)
-    val objectPerm = dao.getObjectPermission(roleId, objectId)
-
-    // Prefer field-level, fallback to object-level
-    val effectivePerm = fieldPerm ?: objectPerm
-    return effectivePerm != null && effectivePerm >= required.value
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
-@Composable
-fun AnimatedLoginScreen(
-    onLoginClick: (username: String, password: String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // States for inputs and UI
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var loginSuccess by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val focusManager = LocalFocusManager.current
-    val coroutineScope = rememberCoroutineScope()
-
-
-    // Animate button width and color on loading
-    val buttonWidth by animateDpAsState(targetValue = if (isLoading) 60.dp else 280.dp)
-    val buttonColor by animateColorAsState(
-        targetValue = if (loginSuccess) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
-    )
-
-    // Animate login success message visibility
-    AnimatedVisibility(
-        visible = loginSuccess,
-        enter = fadeIn(animationSpec = tween(700)) + slideInVertically(),
-        exit = fadeOut(animationSpec = tween(700)) + slideOutVertically()
-    ) {
-        Text(
-            text = "ورود موفقیت‌آمیز بود!",
-            color = Color(0xFF4CAF50),
-            fontSize = 20.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            textAlign = TextAlign.Center
-        )
-    }
-
-    // Main Column
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFF2196F3), Color(0xFF21CBF3))
-                )
-            )
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Title
-        Text(
-            text = "خوش آمدید",
-            style = MaterialTheme.typography.headlineLarge.copy(color = Color.White),
-            modifier = Modifier.padding(bottom = 40.dp)
-        )
-
-        // Username TextField
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("نام کاربری") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User Icon") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.White,
-                unfocusedIndicatorColor = Color.White.copy(alpha = 0.5f),
-                cursorColor = Color.White,
-                focusedLabelColor = Color.White,
-                unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
-            ),
-
-            )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Password TextField
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("رمز عبور") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
-            trailingIcon = {
-                val image = if (passwordVisible)
-                    Icons.Filled.Person else Icons.Filled.Lock
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Person else Icons.Default.Lock,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                        tint = Color.White
-                    )
-                }
-            },
-            singleLine = true,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.White,
-                unfocusedIndicatorColor = Color.White.copy(alpha = 0.5f),
-                cursorColor = Color.White,
-                focusedLabelColor = Color.White,
-                unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
-            ),
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Error message
-        errorMessage?.let {
-            Text(
-                text = it,
-                color = Color(0xFFFF5252),
-                modifier = Modifier.padding(bottom = 16.dp),
-                textAlign = TextAlign.Center
-            )
-        }
-
-        // Login Button with animation
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .width(buttonWidth)
-                .height(56.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(buttonColor)
-                .clickable(enabled = !isLoading) {
-                    focusManager.clearFocus()
-                    errorMessage = null
-                    if (username.isBlank() || password.isBlank()) {
-                        errorMessage = "لطفا نام کاربری و رمز عبور را وارد کنید"
-                        return@clickable
-                    }
-                    isLoading = true
-                    coroutineScope.launch {
-                        delay(2000)
-                        if (username == "admin" && password == "1234") {
-                            loginSuccess = true
-                            errorMessage = null
-                        } else {
-                            errorMessage = "نام کاربری یا رمز عبور اشتباه است"
-                            loginSuccess = false
-                        }
-                        isLoading = false
-                    }
-                }
-
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 3.dp,
-                    modifier = Modifier.size(28.dp)
-                )
-            } else {
-                Text(
-                    text = "ورود",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        }
-    }
-}
 
 @Composable
 fun FundInfoBox(formattedFund: String, context: Context) {

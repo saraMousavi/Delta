@@ -32,8 +32,7 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Role
-import com.example.delta.data.entity.RoleAuthorizationFieldCrossRef
-import com.example.delta.data.entity.RoleAuthorizationObjectCrossRef
+import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
@@ -42,7 +41,6 @@ import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
 import com.example.delta.init.Converter
-import java.security.acl.Owner
 
 @Database(
     entities = [BuildingTypes::class,
@@ -53,8 +51,7 @@ import java.security.acl.Owner
         OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class,
         AuthorizationObject::class,
         AuthorizationField::class,
-        RoleAuthorizationObjectCrossRef::class,
-        RoleAuthorizationFieldCrossRef::class,
+        RoleAuthorizationObjectFieldCrossRef::class,
         User::class, Role::class, UserRoleCrossRef::class,
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
         UsersBuildingsCrossRef::class],

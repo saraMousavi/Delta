@@ -11,7 +11,6 @@ import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
-import com.example.delta.data.entity.UserWithRole
 import com.example.delta.data.entity.UsersBuildingsCrossRef
 
 @Dao
@@ -33,6 +32,11 @@ interface UsersDao {
 
         @Query("SELECT * FROM user")
         suspend fun getUsers(): List<User>
+
+        @Query("SELECT * FROM user WHERE mobile_number = :mobile LIMIT 1")
+        fun getUserByMobile(mobile: String): User?
+
+
         @Query("""
     SELECT role.* FROM user_role_cross_ref as ur 
                 INNER JOIN role on role.roleId = ur.roleId where userId = :userId

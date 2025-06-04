@@ -8,7 +8,6 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.delta.data.entity.Role
-import com.example.delta.data.entity.UserWithRole
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -23,7 +22,7 @@ interface RoleDao {
     suspend fun deleteRole(role: Role)
 
     @Query("SELECT * FROM role")
-    suspend fun getRoles(): List<Role>
+    fun getRoles(): List<Role>
 
     @Transaction
     @Query("""

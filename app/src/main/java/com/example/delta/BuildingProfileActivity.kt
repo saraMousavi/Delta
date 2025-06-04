@@ -90,7 +90,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
-import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
@@ -98,7 +97,7 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Units
 import com.example.delta.data.model.AppDatabase
-import com.example.delta.enums.AuthObject
+import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
 import com.example.delta.enums.PaymentLevel
@@ -169,13 +168,43 @@ class BuildingProfileActivity : ComponentActivity() {
         var context = LocalContext.current
         val currentRoleId = AuthUtils.getCurrentRoleId(context) // From session/prefs
         val authDao = AppDatabase.getDatabase(application).authorizationDao()
+
+        val canWriteFundsTab by sharedViewModel.getFieldPermissionFlow(
+            roleId = currentRoleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.FUNDS_TAB.fieldNameRes,
+            required = PermissionLevel.FULL
+        ).collectAsState(initial = false)
+
+        val canWriteOwnersTab by sharedViewModel.getFieldPermissionFlow(
+            roleId = currentRoleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.OWNERS_TAB.fieldNameRes,
+            required = PermissionLevel.FULL
+        ).collectAsState(initial = false)
+
+        val canWriteUnitsTab by sharedViewModel.getFieldPermissionFlow(
+            roleId = currentRoleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.UNITS_TAB.fieldNameRes,
+            required = PermissionLevel.FULL
+        ).collectAsState(initial = false)
+
+        val canWriteTenantTab by sharedViewModel.getFieldPermissionFlow(
+            roleId = currentRoleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.TENANTS_TAB.fieldNameRes,
+            required = PermissionLevel.FULL
+        ).collectAsState(initial = false)
+
+
         val tabTitles = listOf(
             context.getString(R.string.overview),
-            context.getString(R.string.owners),
-            context.getString(R.string.units),
-            context.getString(R.string.tenants),
-            context.getString(R.string.funds),
-            context.getString(R.string.reports)
+            if (canWriteOwnersTab) context.getString(R.string.owners) else null,
+            if (canWriteUnitsTab)  context.getString(R.string.units) else null,
+            if (canWriteTenantTab) context.getString(R.string.tenants) else null,
+            if (canWriteFundsTab) context.getString(R.string.funds) else null,
+            if (canWriteTenantTab) context.getString(R.string.reports) else null
         )
         var selectedTab by remember { mutableIntStateOf(0) }
         Scaffold(
@@ -198,22 +227,24 @@ class BuildingProfileActivity : ComponentActivity() {
             Column(modifier = Modifier.padding(innerPadding)) {
                 ScrollableTabRow(selectedTabIndex = selectedTab) {
                     tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        )
+                        if ( title != null) {
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                text = {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedTab) {
-                    0 -> OverviewTab(sharedViewModel, building, currentRoleId, authDao)
+                    0 -> OverviewTab(sharedViewModel, building, currentRoleId)
                     1 -> OwnersTab(building, sharedViewModel)
                     2 -> UnitsTab(building, sharedViewModel)
                     3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
@@ -229,13 +260,37 @@ class BuildingProfileActivity : ComponentActivity() {
     fun OverviewTab(
         sharedViewModel: SharedViewModel,
         building: Buildings,
-        roleId: Long,
-        authDao: AuthorizationDao
+        roleId: Long
     ) {
         val context = LocalContext.current
         val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
             .collectAsState(initial = emptyList())
         var selectedImagePath by remember { mutableStateOf<String?>(null) }
+
+        // Check WRITE permission
+        val canWriteBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
+            roleId = roleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
+            required = PermissionLevel.WRITE
+        )
+
+// Check DELETE permission
+        val canDeleteBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
+            roleId = roleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
+            required = PermissionLevel.DELETE
+        )
+
+// Check FULL permission
+        val canFullBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
+            roleId = roleId,
+            objectId = 3L,
+            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
+            required = PermissionLevel.FULL
+        )
+
 
         LazyColumn(
             modifier = Modifier
@@ -257,13 +312,13 @@ class BuildingProfileActivity : ComponentActivity() {
                     Column(modifier = Modifier.padding(16.dp)) {
                         val buildingNameVisible = remember { mutableStateOf(false) }
                         LaunchedEffect(key1 = buildingNameVisible) {
-                            buildingNameVisible.value = AuthUtils.hasFieldPermission(
-                                authDao = authDao,
-                                roleId = roleId,
-                                objectId = AuthObject.BUILDING_PROFILE.id, // replace with your object Id
-                                fieldName = R.string.building_name,
-                                required = PermissionLevel.READ
-                            )
+//                            buildingNameVisible.value = AuthUtils.hasFieldPermission(
+//                                authDao = authDao,
+//                                roleId = roleId,
+//                                objectId = AuthObject.BUILDING_PROFILE.id, // replace with your object Id
+//                                fieldName = R.string.building_name,
+//                                required = PermissionLevel.READ
+//                            )
                         }
                         Log.d("R.string.building_name", R.string.building_name.toString())
                         Log.d("buildingNameVisible.value", buildingNameVisible.value.toString())
@@ -886,15 +941,11 @@ class BuildingProfileActivity : ComponentActivity() {
         val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
         val dangValues = remember { mutableStateMapOf<Long, Double>() }
-        Log.d("owners in ownerstab", owners.toString())
         val ownerUnitsState =
             sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
         val ownerUnits = ownerUnitsState.value
-        Log.d("ownerUnits", ownerUnits.toString())
-
         val ownersUnitsCrossRefs by sharedViewModel.getAllOwnerUnitsCrossRefs()
             .collectAsState(initial = emptyList())
-        Log.d("owns", ownersUnitsCrossRefs.toString())
 
 // Convert to map for fast lookup
         val dangSumsMap: Map<Long, Double> = ownerUnits.associate { it.unitId to it.totalDang }

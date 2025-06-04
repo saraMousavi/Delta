@@ -38,17 +38,34 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.example.delta.data.entity.Role
+import com.example.delta.data.dao.AuthorizationDao
+import com.example.delta.data.dao.RoleDao
+import com.example.delta.data.entity.AuthorizationField
+import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
 import com.example.delta.data.entity.User
+import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.AuthObject
+import com.example.delta.enums.BuildingProfileFields
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
-import org.json.JSONObject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.getValue
+
+
+private lateinit var roleDao: RoleDao // Add Role DAO
+private lateinit var authorizationDao: AuthorizationDao
 
 class SignUpActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val database = AppDatabase.getDatabase(this)
+
+        roleDao = database.roleDao() // Initialize Role DAO
+        authorizationDao = database.authorizationDao() // Initialize Role DAO
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -57,6 +74,7 @@ class SignUpActivity : ComponentActivity() {
                             // Go to BuildingFormActivity after successful sign up
                             Log.d("user.userId", user.userId.toString())
                             saveLoginState(this, true, userId = user.userId, mobile = user.mobileNumber)
+                            Log.d("BuildingFormActivity", "true")
                             val intent = Intent(this, BuildingFormActivity::class.java)
                             startActivity(intent)
                             finish()
@@ -188,8 +206,11 @@ fun SignUpScreen(
                     sharedViewModel.insertUser(context, user,
                         onSuccess = {  userId ->
                             user.userId = userId
+                            insertDefaultAuthorizationData()
                             onSignUpSuccess(user)
                         })
+
+
 
                 },
                 enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank(),
@@ -199,5 +220,64 @@ fun SignUpScreen(
             }
         }
     }
+
+
 }
 
+private fun insertDefaultAuthorizationData() {
+    CoroutineScope(Dispatchers.IO).launch {
+        val rolesList = roleDao.getRoles()
+        val roleMap = rolesList.associateBy { it.roleName }
+
+        suspend fun insertCrossRefs(roleId: Long, objectId: Long, fields: List<AuthorizationField>, permission: PermissionLevel) {
+            Log.d("fields", fields.toString())
+            fields.forEach { field ->
+                authorizationDao.insertRoleAuthorizationFieldCrossRef(
+                    RoleAuthorizationObjectFieldCrossRef(
+                        roleId = roleId,
+                        objectId = objectId,
+                        fieldId = field.fieldId,
+                        permissionLevel = permission.value
+                    )
+                )
+            }
+        }
+
+        // Admin and Manager: all auth objects and all fields with FULL permission
+        val adminManagerRoles = listOf("Admin", "Manager")
+        adminManagerRoles.forEach { roleName ->
+            val role = roleMap[roleName] ?: return@forEach
+            AuthObject.getAll().forEach { authObject ->
+                val fields = authorizationDao.getFieldsForObject(authObject.id)
+                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
+            }
+        }
+
+        // Tenant role: get fields from Room for objectId = 3 (BuildingProfile)
+        roleMap["Tenant"]?.let { tenantRole ->
+            val tenantFieldNames = listOf(
+                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+                BuildingProfileFields.TENANTS_TAB.fieldNameRes
+            )
+            val allFields = authorizationDao.getFieldsForObject(3L)
+            val tenantFields = allFields.filter { it.name in tenantFieldNames }
+            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
+        }
+
+        // Owner role: similar to tenant plus owners tab fields
+        roleMap["Owner"]?.let { ownerRole ->
+            val ownerFieldNames = listOf(
+                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
+                BuildingProfileFields.OWNERS_TAB.fieldNameRes
+            )
+            val allFields = authorizationDao.getFieldsForObject(3L)
+            val ownerFields = allFields.filter { it.name in ownerFieldNames }
+            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
+        }
+    }
+}

@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
 import com.example.delta.data.dao.UnitsDao.UnitDangSum
 import com.example.delta.data.entity.*
 import com.example.delta.data.model.AppDatabase
@@ -21,6 +22,7 @@ import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Responsible
 import com.example.delta.init.Calculation
 import com.example.delta.init.Preference
@@ -50,7 +52,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val costsDao = AppDatabase.getDatabase(application).costDao()
     private val debtsDao = AppDatabase.getDatabase(application).debtsDao()
     private val earningsDao = AppDatabase.getDatabase(application).earningsDao()
-    private val authorizationDoa = AppDatabase.getDatabase(application).authorizationDao()
+    private val authorizationDao = AppDatabase.getDatabase(application).authorizationDao()
     private val buildingTypesDao = AppDatabase.getDatabase(application).buildingTypeDao()
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
     private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
@@ -117,7 +119,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var rentMortgageFundFlagChecked by mutableStateOf(false)
     var sameCosts by mutableStateOf(true)
     var fundMinus by mutableStateOf(false)
-    var currentRoleId by mutableStateOf(0L)
+    var currentRoleId by mutableLongStateOf(0L)
 
     var fixedAmount by mutableStateOf("")
         private set // Prevent external direct modification
@@ -157,13 +159,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     fun getAllAuthorizationObjects(): Flow<List<AuthorizationObject>> = flow {
-        val obj = authorizationDoa.getAllAuthorizationObjects()
+        val obj = authorizationDao.getAllAuthorizationObjects()
         emit(obj)
     }.flowOn(Dispatchers.IO)
 
 
     fun getFieldsForAuthorizationObject(objId: Long): Flow<List<AuthorizationField>> = flow {
-        val obj = authorizationDoa.getFieldsForObject(objId)
+        val obj = authorizationDao.getFieldsForObject(objId)
         emit(obj)
     }.flowOn(Dispatchers.IO)
 
@@ -215,6 +217,44 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         val units = buildingDao.getBuildingsWithUserRole(userId)
         emit(units)
     }.flowOn(Dispatchers.IO)
+
+    fun canShowTab(
+        roleId: Long,
+        objectId: Long,
+        fieldIds: List<Long>,
+        minPermissionLevel: Int = 0
+    ): Flow<Boolean> {
+        return authorizationDao.hasAuthorizationForFields(roleId, objectId, fieldIds, minPermissionLevel)
+    }
+
+    fun hasFieldPermission(
+        roleId: Long,
+        objectId: Long,
+        fieldId: Long,
+        required: PermissionLevel
+    ): Flow<Boolean> = flow {
+        val level = authorizationDao.getPermissionLevel(roleId, objectId, fieldId)
+        emit(level != null && level >= required.value)
+    }.flowOn(Dispatchers.IO)
+
+    fun getFieldPermissionFlow(
+        roleId: Long,
+        objectId: Long,
+        fieldNameRes: Int,
+        required: PermissionLevel = PermissionLevel.READ
+    ): Flow<Boolean> = flow {
+        val fieldId = authorizationDao.getFieldIdByName(objectId, fieldNameRes)
+        if (fieldId == null || fieldId == 0L) {
+            emit(false)
+        } else {
+            // Collect permission level from DAO
+            val hasPermission = authorizationDao.getPermissionLevel(roleId, objectId, fieldId)?.let {
+                it >= required.value
+            } ?: false
+            emit(hasPermission)
+        }
+    }.flowOn(Dispatchers.IO)
+
 
 
     fun getOwnersOfBuildingForCost(costId: Long, buildingId: Long): Flow<List<Owners>> = flow {
@@ -410,6 +450,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
 
+    fun getUserByMobile(mobile: String): Flow<User?> = flow {
+        Log.d("mobile", mobile.toString())
+        emit(userDao.getUserByMobile(mobile))
+    }.flowOn(Dispatchers.IO)
+
+
     fun getRoleByUserId(userId: Long): Flow<Role?> = flow {
         val user = userDao.getRoleByUserId(userId)
         emit(user)
@@ -431,7 +477,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 //        emit(tenants)
 //    }.flowOn(Dispatchers.IO)
 
-    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> = tenantsDao.getTenantsForBuilding(buildingId)
+    fun getTenantsForBuilding(buildingId: Long): Flow<List<Tenants>> =
+        tenantsDao.getTenantsForBuilding(buildingId)
 
     fun getActiveUnits(buildingId: Long): Flow<List<Units>> = flow {
         val units = unitsDao.getActiveUnits(buildingId)
@@ -478,13 +525,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         Log.d("ownerId", ownerId.toString())
         Log.d("buildingId", buildingId.toString())
         val crossRef = ownersDao.getBuildingOwnerCrossRef(ownerId, buildingId)
-        if(crossRef.isManager) {
+        if (crossRef.isManager) {
             emit(true)
         } else {
             emit(false)
         }
     }
-
 
 
     fun loadBuildingsWithTypesAndUsages() {
@@ -523,18 +569,45 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    val buildingsWithTypesAndUsagesList = mutableStateOf(listOf<BuildingWithTypesAndUsages>())
-    fun insertRoleAuthorizationObjectCrossRef(roleId: Long, objectId: Long, permissionLevel: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val crossRef = RoleAuthorizationObjectCrossRef(
-                roleId = roleId,
-                objectId = objectId,
-                permissionLevel = permissionLevel
-            )
-            authorizationDoa.insertRoleAuthorizationObjectCrossRef(crossRef)
-        }
+    private val buildingsWithTypesAndUsagesList =
+        mutableStateOf(listOf<BuildingWithTypesAndUsages>())
 
+    fun insertRoleAuthorizationFieldCrossRef(roleId: Long, objectId: Long, fields: List<AuthorizationField>, permissionLevel: Int) {
+        viewModelScope.launch {
+            fields.forEach { field ->
+                authorizationDao.insertRoleAuthorizationFieldCrossRef(
+                    RoleAuthorizationObjectFieldCrossRef(
+                        roleId = roleId,
+                        objectId = objectId,
+                        fieldId = field.fieldId,
+                        permissionLevel = permissionLevel
+                    )
+                )
+            }
+        }
     }
+
+//    fun getAuthorizationDetailsForRole(userId: Long): Flow<List<RoleAuthorizationObjectCrossRefWithDetails>> = flow {
+//        val auth = authorizationDoa.getAuthorizationDetailsForRole(userId)
+//        emit(auth)
+//    }.flowOn(Dispatchers.IO)
+
+    fun getAuthorizationDetailsForUser(userId: Long): Flow<List<FieldWithPermission>> =
+        authorizationDao.getFieldsWithPermissionsForUser(userId)
+
+    fun deleteFieldAuthorization(crossRef: RoleAuthorizationObjectFieldCrossRef) {
+        viewModelScope.launch {
+            authorizationDao.deleteRoleAuthorizationFieldCrossRef(crossRef)
+        }
+    }
+
+    fun deleteObjectAuthorization(roleId: Long, objectId: Long) {
+        viewModelScope.launch {
+            authorizationDao.deleteRoleAuthorizationObjectCrossRefs(roleId, objectId)
+        }
+    }
+
+
 
     fun insertUser(context: Context, user: User, onSuccess: (Long) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -835,7 +908,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     // Make sure dang is clamped between 0.0 and 6.0
 //                    val clampedDang = oUnit.dang.coerceIn(0.0, 6.0)
                     if (oUnit.dang != 0.0) {
-                        if(isNotForm){
+                        if (isNotForm) {
                             ownersDao.insertBuildingOwner(
                                 BuildingOwnerCrossRef(
                                     ownerId = newOwnerId,
@@ -1202,12 +1275,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         )
                         Log.d("isManager", isManager.toString())
-                        if(isManager){
+                        if (isManager) {
                             val userOwnerID = userDao.insertUser(
                                 User(
                                     mobileNumber = owner.mobileNumber,
                                     password = "123456",
-                                    roleId = 4L
+                                    roleId = 3L
                                 )
                             )
                             userDao.insertUserBuildingCrossRef(
@@ -1215,6 +1288,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                     userId = userOwnerID,
                                     buildingId = buildingId,
                                     roleName = "Manager"
+                                )
+                            )
+                            userDao.insertUserRoleCrossRef(
+                                UserRoleCrossRef(
+                                    roleId = 3L,
+                                    userId = userOwnerID
                                 )
                             )
                         } else {
@@ -1230,6 +1309,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                     userId = userOwnerID,
                                     buildingId = buildingId,
                                     roleName = "Owner"
+                                )
+                            )
+                            userDao.insertUserRoleCrossRef(
+                                UserRoleCrossRef(
+                                    roleId = 2L,
+                                    userId = userOwnerID
                                 )
                             )
                         }
@@ -1265,7 +1350,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             User(
                                 mobileNumber = tenant.mobileNumber,
                                 password = "123456",
-                                roleId = 3L
+                                roleId = 4L
                             )
                         )
                         userDao.insertUserBuildingCrossRef(
@@ -1273,6 +1358,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 userId = userTenantID,
                                 buildingId = buildingId,
                                 roleName = "Tenant"
+                            )
+                        )
+                        userDao.insertUserRoleCrossRef(
+                            UserRoleCrossRef(
+                                roleId = 4L,
+                                userId = userTenantID
                             )
                         )
 
@@ -1367,6 +1458,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    fun getFieldsForObject(objectId: Long): Flow<List<AuthorizationField>> = flow {
+        Log.d("objectId", objectId.toString())
+        val auth = authorizationDao.getFieldsForObject(objectId)
+        emit(auth)
+    }.flowOn(Dispatchers.IO)
 
     fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
         val tenant = tenantsDao.getUnitForTenant(tenantId)

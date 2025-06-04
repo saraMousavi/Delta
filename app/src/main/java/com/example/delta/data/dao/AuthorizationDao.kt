@@ -1,14 +1,17 @@
 package com.example.delta.data.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.AuthorizationObject
-import com.example.delta.data.entity.RoleAuthorizationObjectCrossRef
-import com.example.delta.enums.PermissionLevel
+import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AuthorizationDao {
@@ -18,6 +21,9 @@ interface AuthorizationDao {
 
     @Query("SELECT * FROM authorization_objects")
     fun getAllAuthorizationObjects(): List<AuthorizationObject>
+
+    @Query("SELECT * FROM authorization_fields")
+    fun getAllAuthorizationFields(): List<AuthorizationField>
 
     @Query("SELECT COUNT(*) FROM authorization_fields")
     suspend fun getFieldCount(): Int
@@ -30,87 +36,95 @@ interface AuthorizationDao {
     fun getFieldsForObject(objectId: Long): List<AuthorizationField>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertRoleAuthorizationObjectCrossRef(crossRef: RoleAuthorizationObjectCrossRef)
+    suspend fun insertRoleAuthorizationFieldCrossRef(crossRef: RoleAuthorizationObjectFieldCrossRef)
 
-    // Role-Object Relationships
-    @Insert
-    suspend fun insertRoleObjectCrossRef(crossRef: RoleAuthorizationObjectCrossRef)
-
-    @Transaction
-    @Query("SELECT * FROM authorization_objects WHERE objectId IN " +
-            "(SELECT objectId FROM role_authorization_object WHERE roleId = :roleId)")
-    suspend fun getAuthorizedObjectsForRole(roleId: Long): List<AuthorizationObject>
-
-    // Field Permissions (indirect through objects)
-    @Transaction
-    @Query("SELECT * FROM authorization_fields WHERE objectId IN " +
-            "(SELECT objectId FROM role_authorization_object WHERE roleId = :roleId)")
-    suspend fun getAuthorizedFieldsForRole(roleId: Long): List<AuthorizationField>
-
-    @Query("SELECT * FROM role_authorization_object WHERE roleId = :roleId")
-    suspend fun getPermissionsForRole(roleId: Long): List<RoleAuthorizationObjectCrossRef>
-
-    @Transaction
-    suspend fun updatePermission(
-        roleId: Long,
-        objectId: Long,
-        level: PermissionLevel
-    ) {
-        insertRoleObjectCrossRef(
-            RoleAuthorizationObjectCrossRef(
-                roleId = roleId,
-                objectId = objectId,
-                permissionLevel = level.value
-            )
-        )
-    }
-
-    // Object-level permission
-    @Query("""
-        SELECT permissionLevel FROM role_authorization_object
-        WHERE roleId = :roleId AND objectId = :objectId
-        LIMIT 1
-    """)
-    suspend fun getObjectPermission(roleId: Long, objectId: Long): Int?
-
-    // Field-level permission (optional, for overrides)
-    @Query("""
-        SELECT permissionLevel FROM role_authorization_field
-        WHERE roleId = :roleId AND fieldId = :fieldId
-        LIMIT 1
-    """)
-    suspend fun getFieldPermission(roleId: Long, fieldId: Long): Int?
 
     // Get field entity by name and objectId
-    @Query("""
+    @Query(
+        """
         SELECT * FROM authorization_fields
         WHERE objectId = :objectId AND name = :fieldName
         LIMIT 1
-    """)
+    """
+    )
     suspend fun getFieldByName(objectId: Long, fieldName: Int): AuthorizationField?
 
-    @Transaction
-    suspend fun hasPermission(
+    @Query("""
+        SELECT permissionLevel FROM role_authorization_object_field_cross_ref
+        WHERE roleId = :roleId AND objectId = :objectId AND fieldId = :fieldId
+        LIMIT 1
+    """)
+    suspend fun getPermissionLevel(
         roleId: Long,
         objectId: Long,
-        requiredLevel: PermissionLevel
-    ): Boolean {
-        val permission = getPermission(roleId, objectId)
-        return when {
-            permission == null -> false
-            permission.permissionLevelEnum == PermissionLevel.FULL -> true
-            else -> permission.permissionLevelEnum.value >= requiredLevel.value
-        }
-    }
+        fieldId: Long
+    ): Int?
+
+    @Query("SELECT fieldId FROM authorization_fields WHERE objectId = :objectId AND name = :fieldNameRes LIMIT 1")
+    suspend fun getFieldIdByName(objectId: Long, fieldNameRes: Int): Long?
+
+
 
     // Add to AuthorizationDao
     @Query("SELECT COUNT(*) FROM authorization_objects")
     suspend fun getCount(): Int
 
+    @Transaction
+    @Query(
+        """
+SELECT 
+    af.*,
+    raf.permissionLevel AS cross_ref_permissionLevel,
+    raf.roleId AS cross_ref_roleId,
+    raf.objectId AS cross_ref_objectId,
+    raf.fieldId AS cross_ref_fieldId,
+    ao.name AS objectName 
+FROM user_role_cross_ref urc
+JOIN role_authorization_object_field_cross_ref raf 
+    ON urc.roleId = raf.roleId
+JOIN authorization_fields af 
+    ON raf.fieldId = af.fieldId
+JOIN authorization_objects ao 
+    ON af.objectId = ao.objectId
+WHERE urc.userId = :userId
+"""
+    )
+    fun getFieldsWithPermissionsForUser(userId: Long): Flow<List<FieldWithPermission>>
+
+    @Delete
+    suspend fun deleteRoleAuthorizationFieldCrossRef(crossRef: RoleAuthorizationObjectFieldCrossRef)
+
+    @Query("DELETE FROM role_authorization_object_field_cross_ref WHERE roleId = :roleId AND objectId = :objectId")
+    suspend fun deleteRoleAuthorizationObjectCrossRefs(roleId: Long, objectId: Long)
+
     @Query("""
-        SELECT * FROM role_authorization_object 
-        WHERE roleId = :roleId AND objectId = :objectId
-        LIMIT 1
+        SELECT EXISTS(
+            SELECT 1 FROM role_authorization_object_field_cross_ref AS raf
+            WHERE raf.roleId = :roleId
+              AND raf.objectId = :objectId
+              AND raf.fieldId IN (:fieldIds)
+              AND raf.permissionLevel >= :minPermissionLevel
+            LIMIT 1
+        )
     """)
-    suspend fun getPermission(roleId: Long, objectId: Long): RoleAuthorizationObjectCrossRef?
+    fun hasAuthorizationForFields(
+        roleId: Long,
+        objectId: Long,
+        fieldIds: List<Long>,
+        minPermissionLevel: Int = 0 // e.g., 0 = read permission minimum
+    ): Flow<Boolean>
+
+
+    data class FieldWithPermission(
+        @Embedded val field: AuthorizationField,
+
+        @Embedded(prefix = "cross_ref_") // Add prefix to all crossRef columns
+        val crossRef: RoleAuthorizationObjectFieldCrossRef,
+
+        @ColumnInfo(name = "objectName")
+        val objectName: Int
+    )
+
+
 }
+
