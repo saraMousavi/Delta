@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "5384c678c91d64913584b27840e83df6",
+    "identityHash": "f2349374c7836219f0625ab30d0e7cd8",
     "entities": [
       {
         "tableName": "building_types",
@@ -1129,107 +1129,6 @@
         ]
       },
       {
-        "tableName": "role_authorization_object_field_cross_ref",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`roleId` INTEGER NOT NULL, `objectId` INTEGER NOT NULL, `fieldId` INTEGER NOT NULL, `permissionLevel` INTEGER NOT NULL, PRIMARY KEY(`roleId`, `fieldId`), FOREIGN KEY(`roleId`) REFERENCES `role`(`roleId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`fieldId`) REFERENCES `authorization_fields`(`fieldId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`objectId`) REFERENCES `authorization_objects`(`objectId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "roleId",
-            "columnName": "roleId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "objectId",
-            "columnName": "objectId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "fieldId",
-            "columnName": "fieldId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "permissionLevel",
-            "columnName": "permissionLevel",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "roleId",
-            "fieldId"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_role_authorization_object_field_cross_ref_roleId",
-            "unique": false,
-            "columnNames": [
-              "roleId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_role_authorization_object_field_cross_ref_roleId` ON `${TABLE_NAME}` (`roleId`)"
-          },
-          {
-            "name": "index_role_authorization_object_field_cross_ref_fieldId",
-            "unique": false,
-            "columnNames": [
-              "fieldId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_role_authorization_object_field_cross_ref_fieldId` ON `${TABLE_NAME}` (`fieldId`)"
-          },
-          {
-            "name": "index_role_authorization_object_field_cross_ref_objectId",
-            "unique": false,
-            "columnNames": [
-              "objectId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_role_authorization_object_field_cross_ref_objectId` ON `${TABLE_NAME}` (`objectId`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "role",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "roleId"
-            ],
-            "referencedColumns": [
-              "roleId"
-            ]
-          },
-          {
-            "table": "authorization_fields",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "fieldId"
-            ],
-            "referencedColumns": [
-              "fieldId"
-            ]
-          },
-          {
-            "table": "authorization_objects",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "objectId"
-            ],
-            "referencedColumns": [
-              "objectId"
-            ]
-          }
-        ]
-      },
-      {
         "tableName": "user",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mobile_number` TEXT NOT NULL, `password` TEXT NOT NULL, `roleId` INTEGER NOT NULL, FOREIGN KEY(`roleId`) REFERENCES `role`(`roleId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1267,12 +1166,12 @@
         "indices": [
           {
             "name": "index_user_roleId",
-            "unique": true,
+            "unique": false,
             "columnNames": [
               "roleId"
             ],
             "orders": [],
-            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_user_roleId` ON `${TABLE_NAME}` (`roleId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_roleId` ON `${TABLE_NAME}` (`roleId`)"
           }
         ],
         "foreignKeys": [
@@ -1559,7 +1458,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5384c678c91d64913584b27840e83df6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f2349374c7836219f0625ab30d0e7cd8')"
     ]
   }
 }

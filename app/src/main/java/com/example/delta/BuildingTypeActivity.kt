@@ -65,7 +65,6 @@ class BuildingTypeActivity : ComponentActivity() {
                         },
                         listContent = { vm ->
                             GenericList(
-                                viewModel = vm,
                                 items = buildingTypes,
                                 itemContent = { item ->
                                     GenericItem(
@@ -77,8 +76,7 @@ class BuildingTypeActivity : ComponentActivity() {
                                 }
                             )
                         },
-                        contextString = R.string.building_type_list,
-                        onFabClick = {}
+                        contextString = R.string.building_type_list
                     )
                 }
             }

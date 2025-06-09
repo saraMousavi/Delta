@@ -1,6 +1,7 @@
 package com.example.delta
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -172,6 +173,7 @@ fun AuthorizationObjectsList(
     if (user != null) {
         val fields by viewModel.getAuthorizationDetailsForUser(user.userId).collectAsStateWithLifecycle(initialValue = emptyList())
         val groupedFields = remember(fields) { fields.groupBy { it.objectName } }
+        Log.d("groupedFields", groupedFields.toString())
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             groupedFields.forEach { (objectNameResId, fields) ->
                 item {

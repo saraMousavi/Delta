@@ -68,7 +68,6 @@ class CostActivity : ComponentActivity() {
                         },
                         listContent = { vm ->
                             GenericList(
-                                viewModel = vm,
                                 items = costs,
                                 itemContent = { item ->
                                     GenericItem(item = item, itemName = { (it).costName })
@@ -78,8 +77,7 @@ class CostActivity : ComponentActivity() {
                                 }
                             )
                         },
-                        contextString = R.string.cost_list,
-                        onFabClick = {}
+                        contextString = R.string.cost_list
                     )
                 }
             }

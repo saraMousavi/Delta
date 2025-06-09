@@ -7,15 +7,19 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.HomeWork
-import androidx.compose.material.icons.filled.House
 import androidx.compose.material.icons.filled.MobileFriendly
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -29,17 +33,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.Debts
-import com.example.delta.data.entity.Owners
-import com.example.delta.data.entity.OwnersUnitsCrossRef
-import com.example.delta.data.entity.Units
-import com.example.delta.enums.CalculateMethod
 import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
-import kotlin.collections.find
-import kotlin.collections.set
 
 
 class OwnerDetailsActivity : ComponentActivity() {
@@ -154,13 +150,13 @@ fun OwnerOverviewTab(
         Card(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(8.dp),
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(containerColor = Color(context.getColor(R.color.primary_color)))
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(16.dp)
                     .fillMaxWidth()
             ) {
                 if (owner == null) {
@@ -392,116 +388,95 @@ fun OwnerOverviewTab(
     }
 }
 
-
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
-    var context = LocalContext.current
-    var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
-    var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
+    val context = LocalContext.current
+    var selectedYear by rememberSaveable { mutableStateOf<Int?>(PersianCalendar().persianYear) }
+    var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth) }
     var showDebtDialog by remember { mutableStateOf(false) }
-    Log.d("ownerId", ownerId.toString())
+    var showSumDialog by remember { mutableStateOf(false) }
+
+    val yearFilter = if (selectedYear == -1) null else selectedYear.toString()
+    val monthFilter = if (selectedMonth == -1) null else selectedMonth.toString().padStart(2, '0')
+
     val debts by sharedViewModel.getDebtsForOwner(
-        ownerId, selectedYear.toString(),
-        selectedMonth.toString().padStart(2, '0')
+        ownerId,
+        yearFilter,
+        monthFilter
     ).collectAsState(initial = emptyList())
-    Log.d("debts pay", debts.toString())
-
-    val buildingsId = debts.firstOrNull()?.buildingId
-
-//    val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
-//        .collectAsState(initial = emptyList())
-//    val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
-//        .collectAsState(initial = emptyList())
-//    val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
-//        .collectAsState(initial = emptyList())
-
-    // Fetch all costs at once (ideally from ViewModel, not in a loop)
-//    val costIds = debts.map { it.costId }.distinct()
-//    Log.d("costIds pay", costIds.toString())
-//    val costs by sharedViewModel.getCostsByIds(costIds)
-//        .collectAsState(initial = emptyList())
-//    Log.d("costs pay", costs.toString())
-
-//    val costsMap = remember(costs) { costs.associateBy { it.id } }
-//    Log.d("costsMap pay", costsMap.toString())
-//
-//    val areaByOwner = remember(owners, units, crossRef) {
-//        calculateAreaByOwners(owners, units, crossRef)
-//    }
-//    val payments = remember(debts, areaByOwner, crossRef, costsMap) {
-//        calculateOwnerPaymentsPerCost(debts, areaByOwner, crossRef, costsMap)
-//    }
 
     LaunchedEffect(debts) {
-//        // Calculate payments per costId for this owner
-//        Log.d("payments", payments.toString())
-//        // Convert to a list of Debts or your UI model to add to unpaid debt list
-//        val unpaidDebts = payments.mapNotNull { (costId, amount) ->
-//            // Find a representative debt to get buildingId, description, dueDate for this costId
-//            Log.d("amount", amount.toString())
-//            val representativeDebt =
-//                debts.find { it.costId == costId } ?: return@mapNotNull null
-//            Debts(
-//                debtId = representativeDebt.debtId,
-//                costId = costId,
-//                unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
-//                buildingId = representativeDebt.buildingId,
-//                description = representativeDebt.description,
-//                dueDate = representativeDebt.dueDate,
-//                amount = amount,
-//                paymentFlag = false
-//            )
-//        }
-//        Log.d("unpaidDebts", unpaidDebts.toString())
-//
         sharedViewModel.addUnpaidDebtListList(debts)
     }
+
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showDebtDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.padding(16.dp)
+        bottomBar = {
+            Button(
+                onClick = { showSumDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                Text(
+                    text = context.getString(R.string.full_payment),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
     ) { innerPadding ->
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // debt items
-            YearMonthSelector(
-                selectedYear = selectedYear,
-                onYearChange = { selectedYear = it },
-                selectedMonth = selectedMonth,
-                onMonthChange = { selectedMonth = it }
-            )
-            Log.d(
-                "sharedViewModel.unpaidDebtList.value",
-                sharedViewModel.unpaidDebtList.value.toString()
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                // Limit YearMonthSelector width so it doesn't take full width
+                Box(modifier = Modifier.weight(1f)) {
+                    YearMonthSelector(
+                        selectedYear = selectedYear,
+                        onYearChange = { selectedYear = it },
+                        selectedMonth = selectedMonth,
+                        onMonthChange = { selectedMonth = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = {
+                        selectedYear = null
+                        selectedMonth = 0 // or your no-filter value
+                    },
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Clear year and month",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             if (sharedViewModel.unpaidDebtList.value.isEmpty()) {
                 Text(
                     text = context.getString(R.string.no_debts_recorded),
                     style = MaterialTheme.typography.bodyLarge
                 )
             } else {
-                Log.d(
-                    "sharedViewModel.unpaidDebtList.value",
-                    sharedViewModel.unpaidDebtList.value.toString()
-                )
                 sharedViewModel.unpaidDebtList.value.forEach { debt ->
                     DebtItem(debt = debt, onPayment = {
-                        Log.d("debt", debt.toString())
                         val updatedDebt = debt.copy(paymentFlag = true)
-                        sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
+                        sharedViewModel.updateDebt(updatedDebt)
                         sharedViewModel.updateDebtPaymentFlag(debt, true)
                         Toast.makeText(
                             context, context.getString(R.string.success_pay),
@@ -510,90 +485,110 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
                     })
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Add Debt item at end of list
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDebtDialog = true },
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = context.getString(R.string.add_new_debt),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = context.getString(R.string.add_new_debt),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
         }
     }
 
+    if (showSumDialog) {
+        AlertDialog(
+            onDismissRequest = { showSumDialog = false },
+            text = {
+                val totalAmount = formatNumberWithCommas(debts.sumOf { it.amount })
+                Text(
+                    text = "${context.getString(R.string.total_amount)}: $totalAmount",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    debts.forEach { debt ->
+                        val updatedDebt = debt.copy(paymentFlag = true)
+                        sharedViewModel.updateDebt(updatedDebt)
+                        sharedViewModel.updateDebtPaymentFlag(debt, true)
+                    }
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.all_debts_marked_paid),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    showSumDialog = false
+                }) {
+                    Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSumDialog = false }) {
+                    Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        )
+    }
+
     if (showDebtDialog) {
-//        EarningsDialog(
-//            building = building,
-//            onDismiss = { buildingViewModel.hideDialogs() },
-//            onConfirm = { earning ->
-//                buildingViewModel.insertEarnings(earning)
-//                buildingViewModel.hideDialogs()
-//            },
-//            sharedViewModel = sharedViewModel
-//        )
+        // Your existing dialog code here
     }
 }
+
 
 @Composable
 fun OwnerPaymentTab(ownerId: Long, sharedViewModel: SharedViewModel) {
     val payments by sharedViewModel.getPaysForOwner(ownerId = ownerId)
         .collectAsState(initial = emptyList())
-//    Log.d("payments debt", payments.toString())
-
-    var context = LocalContext.current
-//    val buildingsId = payments.firstOrNull()?.buildingId ?: return
-
-//    val units by sharedViewModel.getUnitsForBuilding(buildingId = buildingsId)
-//        .collectAsState(initial = emptyList())
-//    val owners by sharedViewModel.getOwnersForBuilding(buildingsId)
-//        .collectAsState(initial = emptyList())
-//    val crossRef by sharedViewModel.getOwnerUnitsCrossRefs(ownerId)
-//        .collectAsState(initial = emptyList())
-//
-//    // Fetch all costs at once (ideally from ViewModel, not in a loop)
-//    val costIds = payments.map { it.costId }.distinct()
-//    val costs by sharedViewModel.getCostsByIds(costIds)
-//        .collectAsState(initial = emptyList())
-//
-//    val costsMap = remember(costs) { costs.associateBy { it.id } }
-//    Log.d("cost mao", costsMap.toString())
-//
-//    val areaByOwner = remember(owners, units, crossRef) {
-//        calculateAreaByOwners(owners, units, crossRef)
-//    }
-//    val payment = remember(payments, areaByOwner, crossRef, costsMap) {
-//        calculateOwnerPaymentsPerCost(payments, areaByOwner, crossRef, costsMap)
-//    }
-//    Log.d("payments", payments.toString())
-
+    val context = LocalContext.current
 
     LaunchedEffect(payments) {
-        // Calculate payments per costId for this owner
-
-        // Convert to a list of Debts or your UI model to add to unpaid debt list
-//        val paidDebts = payment.mapNotNull { (costId, amount) ->
-//            // Find a representative debt to get buildingId, description, dueDate for this costId
-//            val representativeDebt =
-//                payments.find { it.costId == costId } ?: return@mapNotNull null
-//            Debts(
-//                debtId = representativeDebt.debtId,
-//                costId = costId,
-//                unitId = representativeDebt.unitId, // or -1 if you want to indicate owner-level debt
-//                buildingId = representativeDebt.buildingId,
-//                description = representativeDebt.description,
-//                dueDate = representativeDebt.dueDate,
-//                amount = amount,
-//                paymentFlag = true
-//            )
-//        }
-
         sharedViewModel.addUnpaidDebtListList(payments)
     }
-    Column(modifier = Modifier.padding(16.dp)) {
-        Log.d("sharedViewModel.unpaidDebtList.value", "1")
-        if (sharedViewModel.unpaidDebtList.value.isEmpty()) {
-            Text(
-                text = context.getString(R.string.no_payments_recorded),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        } else {
-            payments.forEach { payment ->
-                DebtItem(debt = payment, onPayment = {
-                    sharedViewModel.updateDebt(payment)
+
+    if (payments.isEmpty()) {
+        Text(
+            text = context.getString(R.string.no_payments_recorded),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(16.dp)
+        )
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(payments) { pay ->
+                DebtItem(debt = pay, onPayment = {
+                    sharedViewModel.updateDebt(pay)
                 })
             }
         }
     }
 }
+

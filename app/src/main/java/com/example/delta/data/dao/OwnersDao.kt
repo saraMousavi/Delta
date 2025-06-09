@@ -63,6 +63,13 @@ interface OwnersDao {
 """)
     fun getUnitsWithDangForOwner(ownerId: Long): List<UnitWithDang>
 
+    @Query("""
+        SELECT o.*
+        FROM owners_units_cross_ref ou
+        INNER JOIN owners o ON ou.ownerId = o.ownerId
+        WHERE ou.unitId = :unitId
+    """)
+    fun getOwnersForUnit(unitId: Long): List<Owners>
 
     @Query("""
     SELECT o.* FROM Owners o

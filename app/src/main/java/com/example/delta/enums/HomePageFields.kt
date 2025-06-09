@@ -12,5 +12,6 @@ enum class HomePageFields(
 ) {
     ALL_BUILDING(1L, R.string.all_building, "list", R.string.all_building),
     OWN_BUILDING(1L, R.string.user_building, "list", R.string.user_building),
+    SETTING(1L, R.string.setting_btn, "button", R.string.setting_btn),
     ADD_BUILDING(1L, R.string.add_building_btn, "button", R.string.add_building_btn)
 }

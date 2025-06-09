@@ -69,11 +69,6 @@ class HomePageActivity : ComponentActivity() {
     }
     val sharedViewModel: SharedViewModel by viewModels()
 
-    // Create a mock RolePermissionsManager
-//    val permissionsManager = RolePermissionsManagerImpl(
-//        authorizationData = mutableListOf(),
-//        currentUserRole = "admin"
-//    )
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +92,8 @@ class HomePageActivity : ComponentActivity() {
                             bottomBar = {
                                 CurvedBottomNavigation(
                                     navController = navController,
-                                    items = Screen.items
+                                    items = Screen.items,
+                                    sharedViewModel = sharedViewModel
                                 )
                             }
                         ) { padding ->

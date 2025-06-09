@@ -64,7 +64,6 @@ class BuildingUsageActivity : ComponentActivity() {
                             },
                             listContent = { vm ->
                                 GenericList(
-                                    viewModel = vm,
                                     items = buildingUsages,
                                     itemContent = { item ->
                                         GenericItem(
@@ -76,8 +75,7 @@ class BuildingUsageActivity : ComponentActivity() {
                                     }
                                 )
                             },
-                            contextString = R.string.building_usage_list,
-                            onFabClick = {}
+                            contextString = R.string.building_usage_list
                         )
                     }
                 }

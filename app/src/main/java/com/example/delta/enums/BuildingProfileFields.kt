@@ -11,13 +11,7 @@ enum class BuildingProfileFields(
     @StringRes val descriptionRes: Int
 ) {
     BUILDING_NAME(3L, R.string.building_name, "text", R.string.building_name),
-    STREET(3L, R.string.street, "text", R.string.street),
-    POST_CODE(3L, R.string.post_code, "text", R.string.post_code),
-    PROVINCE(3L,  R.string.province, "text", R.string.province),
-    STATE(3L, R.string.state, "text", R.string.state),
-    BUILDING_TYPE(3L, R.string.building_type, "text", R.string.building_type),
-    BUILDING_USAGE(3L, R.string.building_usage, "text", R.string.building_usage),
-    SHARED_UTILITIES_LIST(3L, R.string.shared_things, "list", R.string.shared_things),
+    DOCUMENTS(3L, R.string.documents, "list", R.string.documents),
     FUNDS_TAB(3L, R.string.funds, "tab", R.string.funds),
     OWNERS_TAB(3L, R.string.owners, "tab", R.string.owners),
     ALL_OWNERS(3L, R.string.all_owners, "list", R.string.all_owners),

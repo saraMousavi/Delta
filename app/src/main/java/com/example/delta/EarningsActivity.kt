@@ -79,7 +79,6 @@ class EarningsActivity : ComponentActivity() {
                         },
                         listContent = { vm ->
                             GenericList(
-                                viewModel = vm,
                                 items = incomes,
                                 itemContent = { item ->
                                     GenericItem(
@@ -91,8 +90,7 @@ class EarningsActivity : ComponentActivity() {
                                 }
                             )
                         },
-                        contextString = R.string.income_list,
-                        onFabClick = {}
+                        contextString = R.string.income_list
                     )
                 }
             }

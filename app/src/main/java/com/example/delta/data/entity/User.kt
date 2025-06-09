@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
         childColumns = ["roleId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index(value = ["roleId"], unique = true)]
+    indices = [Index(value = ["roleId"])]
 )
 data class User(
     @PrimaryKey(autoGenerate = true) var userId: Long = 0,

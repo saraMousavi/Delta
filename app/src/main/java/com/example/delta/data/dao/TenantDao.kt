@@ -100,6 +100,20 @@ interface TenantDao {
 
     @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM tenants_units_cross_ref WHERE tenantId = :tenantId)")
     suspend fun getUnitForTenant(tenantId: Long): Units
+
+    @Query("SELECT * FROM Units")
+    suspend fun getAllUnits(): List<Units>
+
+    @Query("SELECT * FROM Units where unitId = :unitId")
+    suspend fun getUnit(unitId: Long): Units
+
+    @Query("""
+    SELECT *
+    FROM tenants
+    WHERE mobile_number = :mobileNumber
+""")
+    suspend fun getTenantForUserMobileNumber(mobileNumber: String): Tenants?
+
 }
 
 //      , active: String  AND status = :active

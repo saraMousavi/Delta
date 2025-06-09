@@ -87,12 +87,6 @@ fun DetailDrawer(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    HorizontalDivider()
-                    Text(
-                        text = context.getString(R.string.first_sect),
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
                     NavigationDrawerItem(
                         label = { Text(context.getString(R.string.account)) },
                         selected = false,
@@ -153,13 +147,6 @@ fun DetailDrawer(
                     )
                     Spacer(Modifier.height(12.dp))
 
-//                    HorizontalDivider()
-//                    Text(
-//                        text = context.getString(R.string.second_sect),
-//                        modifier = Modifier.padding(16.dp),
-//                        style = MaterialTheme.typography.titleMedium
-//                    )
-//                    Spacer(Modifier.height(12.dp))
                     }
             }
         },

@@ -7,6 +7,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import android.webkit.MimeTypeMap
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,7 +22,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,9 +32,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,11 +49,9 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoneyOff
 import androidx.compose.material.icons.outlined.Support
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -85,7 +83,6 @@ import com.example.delta.data.entity.Units
 import com.example.delta.init.IranianLocations
 import androidx.compose.material3.InputChip
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -101,36 +98,32 @@ import ir.hamsaa.persiandatepicker.api.PersianPickerDate
 import ir.hamsaa.persiandatepicker.api.PersianPickerListener
 import com.example.delta.init.CurvedBottomNavShape
 import com.example.delta.init.WaveIndicatorShape
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.delta.data.dao.AuthorizationDao
-import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.NavItem
-import com.example.delta.interfaces.RolePermissionsManager
 import androidx.compose.foundation.lazy.items
 import kotlin.math.roundToInt
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.People
-import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.Owners
-import kotlinx.coroutines.launch
+import com.example.delta.enums.HomePageFields
+import com.example.delta.enums.PermissionLevel
+import com.example.delta.init.AuthUtils
+import com.example.delta.init.Preference
+import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import java.io.File
 import java.io.FileOutputStream
 
@@ -154,11 +147,9 @@ fun <VM : ViewModel> CostForm(
     viewModel: VM,
     insertItem: (String) -> Unit,
     listContent: @Composable (VM) -> Unit,
-    contextString: Int,
-    onFabClick: () -> Unit
+    contextString: Int
 ) {
     AppTheme {
-        var itemName by remember { mutableStateOf("") }
         val context = LocalContext.current
         var showDialog by remember { mutableStateOf(false) }
 
@@ -252,8 +243,7 @@ fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismis
 
 
 @Composable
-fun <T, VM : ViewModel> GenericList(
-    viewModel: VM,
+fun <T> GenericList(
     items: List<T>,
     itemContent: @Composable (T) -> Unit,
     onDeleteItem: (T) -> Unit,
@@ -263,12 +253,12 @@ fun <T, VM : ViewModel> GenericList(
         LazyColumn(
             modifier = modifier.fillMaxSize()
         ) {
-            itemsIndexed(items) { index, item ->
+            items(items) { item ->
                 SwipeToDeleteItem(
-                    item = item,
                     onDelete = {
                         onDeleteItem(item)
                     },
+                    modifier = Modifier,
                     content = { itemContent(item) }
                 )
             }
@@ -310,8 +300,7 @@ fun <T> GenericItem(
 
 
 @Composable
-fun <T> SwipeToDeleteItem(
-    item: T,
+fun SwipeToDeleteItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -357,7 +346,7 @@ fun AddItemDialog(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    var itemName by remember { mutableStateOf("") }
+                    val itemName by remember { mutableStateOf("") }
                     InputAndButton(
                         insertItem = onInsert,
                         itemNameState = itemName,
@@ -472,7 +461,6 @@ fun ProvinceStateSelector(
 }
 
 //@TODO merge this function with ChipgroupShared
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChipGroupUnits(
     selectedUnits: List<Units>,
@@ -499,7 +487,7 @@ fun ChipGroupUnits(
                     }
                     onSelectionChange(newSelection)
                 },
-                label = { Text(text = unit.unitNumber.toString(), style = MaterialTheme.typography.bodyLarge) }
+                label = { Text(text = unit.unitNumber, style = MaterialTheme.typography.bodyLarge) }
             )
         }
     }
@@ -576,38 +564,6 @@ fun ChipGroupShared(
 }
 
 
-// Example of checking user role in an activity
-@Composable
-fun checkUserRole(role: String): Boolean {
-    when (role) {
-        "owner" -> return true // Owner has access to all features
-        "tenant" -> return false // Tenant has limited access
-        "manager" -> return true // Manager has specific access
-        "guest" -> return false // Guest has restricted access
-        else -> return false
-    }
-}
-
-// Example of displaying different UI based on user role
-@Composable
-fun Dashboard(role: String) {
-    Column {
-        if (role == "owner") {
-            // Display owner-specific UI
-            Text("Owner Dashboard")
-        } else if (role == "tenant") {
-            // Display tenant-specific UI
-            Text("Tenant Dashboard")
-        } else if (role == "manager") {
-            // Display manager-specific UI
-            Text("Manager Dashboard")
-        } else if (role == "guest") {
-            // Display guest-specific UI
-            Text("Guest Dashboard")
-        }
-    }
-}
-
 
 @Composable
 fun PasswordTextField(
@@ -683,10 +639,6 @@ fun PersianDatePickerDialogContent(
     }
 }
 
-private fun currentRoute(navController: NavHostController): String? {
-    return navController.currentBackStackEntry?.destination?.route
-}
-
 
 @Composable
 fun AuthScreen() {
@@ -698,11 +650,6 @@ fun AuthScreen() {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        if (false) {
-            Text("Admin Settings", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(16.dp))
-//            RoleManagementSection(permissionsManager = permissionsManager)
-        } else {
             // Show an error message if not an admin
             Toast.makeText(
                 context,
@@ -713,7 +660,6 @@ fun AuthScreen() {
                 "You don't have permission to access this screen.",
                 style = MaterialTheme.typography.bodyLarge
             )
-        }
     }
 }
 //
@@ -741,10 +687,9 @@ fun AuthScreen() {
 
 @Composable
 fun SettingsScreen(
-    context: Context,
-    modifier: Modifier = Modifier
+    context: Context
 ) {
-    var showAuthScreen by remember { mutableStateOf(false) }
+    val showAuthScreen by remember { mutableStateOf(false) }
     val items = listOf(
         NavItem(
             title = R.string.supporting,
@@ -854,12 +799,25 @@ fun ClickableSettingItem(
 fun CurvedBottomNavigation(
     navController: NavHostController,
     items: List<Screen>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedViewModel: SharedViewModel
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val context = LocalContext.current
     val density = LocalDensity.current
+    val userId = Preference().getUserId(context = context)
+    val permissionLevelSetting = AuthUtils.checkFieldPermission(
+        userId,
+        HomePageFields.SETTING.fieldNameRes,
+        sharedViewModel
+    )
+
+    val permissionLevelAddBuilding = AuthUtils.checkFieldPermission(
+        userId,
+        HomePageFields.ADD_BUILDING.fieldNameRes,
+        sharedViewModel
+    )
 
     Box(modifier = modifier.fillMaxWidth()) {
         // Wave indicator
@@ -873,17 +831,17 @@ fun CurvedBottomNavigation(
                     .align(Alignment.TopCenter)
                     .offset(y = (-4).dp)
             ) {
-                val containerWidth = remember { mutableStateOf(0f) }
+                val containerWidth = remember { mutableFloatStateOf(0f) }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onSizeChanged { containerWidth.value = it.width.toFloat() }
+                        .onSizeChanged { containerWidth.floatValue = it.width.toFloat() }
                 ) {
-                    if (containerWidth.value > 0) {
+                    if (containerWidth.floatValue > 0) {
                         val animatedOffset by animateOffsetAsState(
                             targetValue = density.run {
-                                val itemWidth = containerWidth.value / items.size
+                                val itemWidth = containerWidth.floatValue / items.size
                                 Offset(
                                     x = itemWidth * selectedIndex + itemWidth / 2 - 24.dp.toPx(),
                                     y = 0f
@@ -929,13 +887,25 @@ fun CurvedBottomNavigation(
                         isAddButton = screen == Screen.Add, // Identify Add button
                         onClick = {
                             if (screen == Screen.Add) {
-                                context.startActivity(
-                                    Intent(
-                                        context,
-                                        BuildingFormActivity::class.java
+                                if(permissionLevelAddBuilding == PermissionLevel.FULL || permissionLevelAddBuilding == PermissionLevel.WRITE){
+                                    context.startActivity(
+                                        Intent(
+                                            context,
+                                            BuildingFormActivity::class.java
+                                        )
                                     )
-                                )
-                            } else {
+                                } else {
+                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+                                }
+
+                            } else if (screen == Screen.Settings){
+                                if(permissionLevelSetting == PermissionLevel.FULL || permissionLevelSetting == PermissionLevel.WRITE){
+                                    navController.navigate(screen.route)
+                                } else {
+                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            else {
                                 navController.navigate(screen.route)
                             }
                         }
@@ -996,111 +966,6 @@ fun CurvedBottomNavItem(
     }
 }
 
-@Composable
-fun Dp.toPx() = with(LocalDensity.current) { this@toPx.toPx() }
-
-@Composable
-fun Float.toDp() = with(LocalDensity.current) { this@toDp.toDp() }
-
-
-// For wave animation positioning
-fun lerp(start: Float, stop: Float, fraction: Float): Float {
-    return start + (stop - start) * fraction
-}
-//
-//@Composable
-//fun UploadFile(
-//    context: Context,
-//    modifier: Modifier = Modifier,
-//    onUploadSuccess: (String) -> Unit  // Callback to pass uploaded URL
-//) {
-//    // State for tracking upload progress and result
-//    var isUploading by remember { mutableStateOf(false) }
-//    var fileUrl by remember { mutableStateOf<String?>(null) }
-//    var errorMessage by remember { mutableStateOf<String?>(null) }
-//
-//    // Image picker launcher
-//    val imagePicker = rememberLauncherForActivityResult(
-//        contract = ActivityResultContracts.GetContent()
-//    ) { uri: Uri? ->
-//        uri?.let {
-//            isUploading = true
-//            val client = UploadcareClient("YOUR_PUBLIC_KEY", "YOUR_SECRET_KEY")
-//            val fileUploader = FileUploader(client, uri, context).store(true)
-//
-//            fileUploader.uploadAsync(object : UploadFileCallback {
-//                override fun onSuccess(result: UploadcareFile) {
-//                    fileUrl = result.originalFileUrl.toString()
-//                    errorMessage = null
-//                    isUploading = false
-//                    onUploadSuccess(fileUrl!!)
-//                }
-//
-//                override fun onFailure(e: UploadcareApiException) {
-//                    errorMessage = "Upload failed: ${e.message}"
-//                    isUploading = false
-//                    Log.e("Upload", errorMessage!!)
-//                }
-//
-//                override fun onProgressUpdate(
-//                    bytesWritten: Long,
-//                    contentLength: Long,
-//                    progress: Double
-//                ) {
-//                    // Handle progress updates if needed
-//                }
-//            })
-//        }
-//    }
-//
-//    Row(
-//        modifier = modifier.fillMaxWidth(),
-//        verticalAlignment = Alignment.CenterVertically,
-//        horizontalArrangement = Arrangement.SpaceBetween
-//    ) {
-////        Text(
-////            text = context.getString(R.string.upload),
-////            style = MaterialTheme.typography.bodyLarge
-////        )
-//
-//        Box {
-//            // Upload button
-//            Button(
-//                onClick = { imagePicker.launch("image/*") },
-//                enabled = !isUploading
-//            ) {
-//                if (isUploading) {
-//                    CircularProgressIndicator(
-//                        color = MaterialTheme.colorScheme.onPrimary,
-//                        modifier = Modifier.size(20.dp)
-//                    )
-//                } else {
-//                    Text(context.getString(R.string.upload))
-//                }
-//            }
-//
-//            // Show error message if exists
-//            errorMessage?.let {
-//                Text(
-//                    text = it,
-//                    color = MaterialTheme.colorScheme.error,
-//                    modifier = Modifier.align(Alignment.BottomEnd)
-//                )
-//            }
-//        }
-//
-//        // Display uploaded image thumbnail
-//        fileUrl?.let { url ->
-//            Image(
-//                painter = rememberAsyncImagePainter(url),
-//                contentDescription = "Uploaded building image",
-//                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
-//                contentScale = ContentScale.Crop
-//            )
-//        }
-//    }
-//}
-
 fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): String? {
     return try {
         val inputStream = context.contentResolver.openInputStream(uri) ?: return null
@@ -1115,6 +980,7 @@ fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): Stri
         null
     }
 }
+
 @Composable
 fun UploadFile(
     sharedViewModel: SharedViewModel,
@@ -1125,14 +991,13 @@ fun UploadFile(
     var isSaving by remember { mutableStateOf(false) }
     val savedFilePaths = sharedViewModel.savedFilePaths
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var selectedImagePath by remember { mutableStateOf<String?>(null) }
 
-    val imagePicker = rememberLauncherForActivityResult(
+    val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             isSaving = true
-            val filename = "uploaded_${System.currentTimeMillis()}.jpg"
+            val filename = queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
             val savedPath = copyUriToInternalStorage(context, it, filename)
             if (savedPath != null) {
                 savedFilePaths.add(savedPath)
@@ -1153,7 +1018,7 @@ fun UploadFile(
         ) {
             Box {
                 Button(
-                    onClick = { imagePicker.launch("image/*") },
+                    onClick = { filePicker.launch("*/*") }, // Allow all file types
                     enabled = !isSaving
                 ) {
                     if (isSaving) {
@@ -1186,173 +1051,235 @@ fun UploadFile(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items = savedFilePaths) { path ->
+                FileItem(
+                    filePath = path,
+                    onClick = { openFile(context, path) },
+                    onDelete = {
+                        sharedViewModel.deleteFile(path)
+                    },
+                    modifier = Modifier.size(64.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FileItem(
+    filePath: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val file = remember(filePath) { File(filePath) }
+    val extension = remember(filePath) { file.extension.lowercase() }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { onClick() },
+        contentAlignment = Alignment.TopEnd
+    ) {
+        when (extension) {
+            "jpg", "jpeg", "png", "gif", "bmp", "webp" -> {
                 Image(
-                    painter = rememberAsyncImagePainter(File(path)),
-                    contentDescription = "Saved image",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { selectedImagePath = path },
+                    painter = rememberAsyncImagePainter(file),
+                    contentDescription = "Image file",
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             }
+            "pdf" -> Icon(
+                imageVector = Icons.Default.PictureAsPdf,
+                contentDescription = "PDF file",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+            // Add other file type icons as needed
+            else -> Icon(
+                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                contentDescription = "File",
+                modifier = Modifier.size(32.dp)
+            )
+        }
+
+        IconButton(
+            onClick = {
+                onDelete()
+            },
+            modifier = Modifier
+                .size(24.dp)
+                .background(
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = CircleShape
+                )
+                .align(Alignment.TopEnd)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Delete file",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
+}
 
-    // Fullscreen image dialog
-    if (selectedImagePath != null) {
-        Dialog(onDismissRequest = { selectedImagePath = null }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.8f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = rememberAsyncImagePainter(File(selectedImagePath!!)),
-                    contentDescription = "Full image",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.8f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { selectedImagePath = null }, // dismiss on click
-                    contentScale = ContentScale.Fit
-                )
+
+fun openFile(context: Context, filePath: String) {
+    val file = File(filePath)
+    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+    val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mime)
+        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No app found to open this file type", Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun queryFileName(context: Context, uri: Uri): String? {
+    var name: String? = null
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) {
+                name = it.getString(index)
             }
         }
     }
+    return name
 }
 
 @Composable
 fun YearMonthSelector(
-    selectedYear: Int,
+    selectedYear: Int?, // nullable Int, null means no year selected
     onYearChange: (Int) -> Unit,
     selectedMonth: Int,
     onMonthChange: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     val persianMonths = listOf(
-        LocalContext.current.getString(R.string.farvardin),
-        LocalContext.current.getString(R.string.ordibehesht),
-        LocalContext.current.getString(R.string.khordad),
-        LocalContext.current.getString(R.string.tir),
-        LocalContext.current.getString(R.string.mordad),
-        LocalContext.current.getString(R.string.shahrivar),
-        LocalContext.current.getString(R.string.mehr),
-        LocalContext.current.getString(R.string.aban),
-        LocalContext.current.getString(R.string.azar),
-        LocalContext.current.getString(R.string.dey),
-        LocalContext.current.getString(R.string.bahman),
-        LocalContext.current.getString(R.string.esfand)
+        context.getString(R.string.farvardin),
+        context.getString(R.string.ordibehesht),
+        context.getString(R.string.khordad),
+        context.getString(R.string.tir),
+        context.getString(R.string.mordad),
+        context.getString(R.string.shahrivar),
+        context.getString(R.string.mehr),
+        context.getString(R.string.aban),
+        context.getString(R.string.azar),
+        context.getString(R.string.dey),
+        context.getString(R.string.bahman),
+        context.getString(R.string.esfand)
     )
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Year selector with border
+    val currentYear = remember { PersianCalendar().persianYear }
+
+    BoxWithConstraints {
+        val maxWidth = maxWidth
+        // Allocate roughly 30% for year and 40% for month text widths, adjust as needed
+        val yearTextWidth = maxWidth * 0.1f
+        val monthTextWidth = maxWidth * 0.5f
+
         Row(
-            modifier = Modifier
-                .border(
-                    width = 1.dp,
-                    color = Color.Gray,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.wrapContentWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { onYearChange(selectedYear - 1) }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Previous Year"
-                )
-            }
-            Text(
-                text = selectedYear.toString(),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            IconButton(onClick = { onYearChange(selectedYear + 1) }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropUp,
-                    contentDescription = "Next Year"
-                )
-            }
-        }
-
-        // Month selector with border
-        Row(
-            modifier = Modifier
-                .border(
-                    width = 1.dp,
-                    color = Color.Gray,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                val prevMonth = if (selectedMonth > 1) selectedMonth - 1 else 12
-                onMonthChange(prevMonth)
-            }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Previous Month"
-                )
-            }
-            Text(
-                text = persianMonths.getOrNull(selectedMonth - 1) ?: "",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            IconButton(onClick = {
-                val nextMonth = if (selectedMonth < 12) selectedMonth + 1 else 1
-                onMonthChange(nextMonth)
-            }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropUp,
-                    contentDescription = "Next Month"
-                )
-            }
-        }
-    }
-}
-
-
-// Convert to user-friendly strings
-fun PermissionLevel.toDisplayName(context: Context): String {
-    return when (this) {
-        PermissionLevel.READ -> context.getString(R.string.view)
-        PermissionLevel.WRITE -> context.getString(R.string.edit)
-        PermissionLevel.DELETE -> context.getString(R.string.delete)
-        PermissionLevel.FULL -> context.getString(R.string.full)
-    }
-}
-
-// For permission selection dialog
-@Composable
-fun PermissionLevelSelector(
-    currentLevel: PermissionLevel,
-    context: Context,
-    onLevelSelected: (PermissionLevel) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.wrapContentSize()) {
-        Button(onClick = { expanded = true }) {
-            Text(currentLevel.toDisplayName(context))
-            Icon(Icons.Default.ArrowDropDown, null)
-        }
-
-        DropdownMenu(expanded, { expanded = false }) {
-            PermissionLevel.entries.forEach { level ->
-                DropdownMenuItem(
-                    text = { Text(level.toDisplayName(context)) },
+            // Year selector with arrows and text
+            Row(
+                modifier = Modifier
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
                     onClick = {
-                        onLevelSelected(level)
-                        expanded = false
+                        val year = selectedYear ?: currentYear
+                        onYearChange(year - 1)
                     }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = context.getString(R.string.previous_year)
+                    )
+                }
+
+                Text(
+                    text = selectedYear?.toString() ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .width(yearTextWidth),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+
+                IconButton(
+                    onClick = {
+                        val year = selectedYear ?: currentYear
+                        onYearChange(year + 1)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropUp,
+                        contentDescription = context.getString(R.string.next_year)
+                    )
+                }
+            }
+
+            // Month selector with arrows and month name
+            Row(
+                modifier = Modifier
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
+                    onClick = {
+                        val prevMonth = if (selectedMonth > 1) selectedMonth - 1 else 12
+                        onMonthChange(prevMonth)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = context.getString(R.string.previous_month),
+                        modifier = Modifier.size(24.dp), // explicit size
+                        tint = MaterialTheme.colorScheme.onSurface // ensure contrast
+                    )
+                }
+
+                Text(
+                    text = persianMonths.getOrNull(selectedMonth - 1) ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .width(monthTextWidth),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                IconButton(
+                    onClick = {
+                        val nextMonth = if (selectedMonth < 12) selectedMonth + 1 else 1
+                        onMonthChange(nextMonth)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropUp,
+                        contentDescription = context.getString(R.string.next_month)
+                    )
+                }
             }
         }
     }
@@ -1392,6 +1319,7 @@ fun FundInfoBox(formattedFund: String, context: Context) {
     }
 }
 
+
 // Add to your utilities
 fun String.englishToPersianDigits(): String {
     return this.map { char ->
@@ -1410,6 +1338,10 @@ fun String.englishToPersianDigits(): String {
         }
     }.joinToString("")
 }
+
+
+
+
 
 
 

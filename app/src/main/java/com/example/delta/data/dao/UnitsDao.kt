@@ -26,8 +26,7 @@ interface UnitsDao {
     @Query("SELECT * FROM units where buildingId = :buildingId")
     suspend fun getUnits(buildingId: Long): List<Units>
 
-    @Query("SELECT * FROM units")
-    suspend fun getAllUnits(): List<Units>
+
 
 
     @Query("SELECT * FROM Units WHERE unitId IN (:unitIds)")
@@ -44,7 +43,7 @@ interface UnitsDao {
     fun getBuildingForUnit(unitId: Long): Buildings
 
 
-    @Query("SELECT * FROM units where unitId = :unitId")
+    @Query("SELECT * FROM Units where unitId = :unitId")
     fun getUnit(unitId: Long): Units
 
     @Query("SELECT COUNT(*) FROM units WHERE buildingId = :buildingId")

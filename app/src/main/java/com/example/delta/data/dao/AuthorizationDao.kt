@@ -25,6 +25,10 @@ interface AuthorizationDao {
     @Query("SELECT * FROM authorization_fields")
     fun getAllAuthorizationFields(): List<AuthorizationField>
 
+
+    @Query("SELECT * FROM role_authorization_object_field_cross_ref")
+    fun getAllRoleAuthorizationObjectFieldCrossRef(): List<RoleAuthorizationObjectFieldCrossRef>
+
     @Query("SELECT COUNT(*) FROM authorization_fields")
     suspend fun getFieldCount(): Int
 

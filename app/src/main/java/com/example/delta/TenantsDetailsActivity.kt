@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,17 +19,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -50,8 +55,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.lazy.items
-import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.PaymentLevel
@@ -59,23 +62,21 @@ import com.example.delta.enums.Responsible
 import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
-import kotlin.getValue
 
-class UnitDetailsActivity : ComponentActivity() {
+class TenantsDetailsActivity : ComponentActivity() {
 
     // Use SharedViewModel for shared state
     val sharedViewModel: SharedViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val unit = intent.getParcelableExtra("UNIT_DATA") as? Units
-
+        val unitId = intent.getLongExtra("UNIT_DATA", -1L)
+        Log.d("unitId", unitId.toString())
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
-                        unit?.let { UnitDetailsScreen(it) }
+                        unitId.let { this.UnitDetailsScreen(it) }
                     }
                 }
             }
@@ -84,9 +85,11 @@ class UnitDetailsActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    fun UnitDetailsScreen(unit: Units) {
+    fun UnitDetailsScreen(unitId: Long) {
         var context = LocalContext.current
 
+        val unit = sharedViewModel.getUnit(unitId).collectAsState(initial = null)
+        if (unit.value != null) {
         val tabTitles = listOf(
             context.getString(R.string.overview),
             context.getString(R.string.debt),
@@ -100,7 +103,7 @@ class UnitDetailsActivity : ComponentActivity() {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            text = "${context.getString(R.string.unit_name)} : ${unit.unitNumber}",
+                            text = "${context.getString(R.string.unit_name)} : ${unit.value!!.unitNumber}",
                             style = MaterialTheme.typography.bodyLarge
                         )
                     },
@@ -131,28 +134,28 @@ class UnitDetailsActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
                 var showAddCostDialog by remember { mutableStateOf(false) }
                 when (selectedTab) {
-                    0 -> OverviewSection(unit = unit)
+                    0 -> OverviewSection(unit = unit.value!!)
                     1 -> DebtSection(
-                        unitId = unit.unitId,
+                        unitId = unit.value!!.unitId,
                         sharedViewModel = sharedViewModel,
                         onAddCostClick = { showAddCostDialog = true }
                     ) // Pass SharedViewModel
                     2 -> PaymentsSection(
-                        unitId = unit.unitId,
+                        unitId = unit.value!!.unitId,
                         sharedViewModel = sharedViewModel
                     ) // Pass SharedViewModel
-                    3 -> ReportSection(unitId = unit.unitId)
+                    3 -> ReportSection(unitId = unit.value!!.unitId)
                 }
                 if (showAddCostDialog) {
                     AddCostDialog(
-                        buildingId = unit.buildingId ?: 0,
+                        buildingId = unit.value!!.buildingId ?: 0,
                         sharedViewModel = sharedViewModel,
                         onDismiss = { showAddCostDialog = false },
                         onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
                             // Insert cost and debts using selectedCost info
 
                             sharedViewModel.insertDebtPerNewCost(
-                                buildingId = unit.buildingId ?: 0,
+                                buildingId = unit.value!!.buildingId ?: 0,
                                 amount = amount,
                                 name = selectedCost.costName,
                                 period = period,
@@ -171,6 +174,7 @@ class UnitDetailsActivity : ComponentActivity() {
                     )
                 }
             }
+        }
         }
     }
 
@@ -316,55 +320,85 @@ class UnitDetailsActivity : ComponentActivity() {
 
     @Composable
     fun DebtSection(
-        unitId: Long, sharedViewModel: SharedViewModel,
+        unitId: Long,
+        sharedViewModel: SharedViewModel,
         onAddCostClick: () -> Unit
     ) {
+        var selectedYear by rememberSaveable { mutableStateOf<Int?>(PersianCalendar().persianYear) }
+        var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth) }
+        var showPayAllDialog by remember { mutableStateOf(false) }
+        val context = LocalContext.current
 
-        var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
-        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
-
+        val yearFilter = if (selectedYear == -1) null else selectedYear.toString()
+        val monthFilter =
+            if (selectedMonth == -1) null else selectedMonth.toString().padStart(2, '0')
 
         val debts by sharedViewModel.getDebtsForUnitAndMonth(
             unitId,
-            selectedYear.toString(),
-            selectedMonth.toString().padStart(2, '0')
+            yearFilter,
+            monthFilter
         ).collectAsState(initial = emptyList())
 
         LaunchedEffect(debts) {
             sharedViewModel.addUnpaidDebtListList(debts)
         }
 
-
-        var context = LocalContext.current
-
         Scaffold(
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = onAddCostClick,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.padding(16.dp)
+            bottomBar = {
+                Button(
+                    onClick = { showPayAllDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Cost")
+                    Text(
+                        text = context.getString(R.string.full_payment),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         ) { innerPadding ->
-            // Your debt list content here, e.g. LazyColumn
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // debt items
-                YearMonthSelector(
-                    selectedYear = selectedYear,
-                    onYearChange = { selectedYear = it },
-                    selectedMonth = selectedMonth,
-                    onMonthChange = { selectedMonth = it }
-                )
-                Log.d("slectedyear", selectedYear.toString())
-                Log.d("selectedmonth", selectedMonth.toString())
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    // Limit YearMonthSelector width so it doesn't take full width
+                    Box(modifier = Modifier.weight(1f)) {
+                        YearMonthSelector(
+                            selectedYear = selectedYear,
+                            onYearChange = { selectedYear = it },
+                            selectedMonth = selectedMonth,
+                            onMonthChange = { selectedMonth = it }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
+                        onClick = {
+                            selectedYear = null
+                            selectedMonth = 0 // or your no-filter value
+                        },
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear year and month",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (sharedViewModel.unpaidDebtList.value.isEmpty()) {
                     Text(
@@ -372,11 +406,11 @@ class UnitDetailsActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyLarge
                     )
                 } else {
+                    // Show debts
                     sharedViewModel.unpaidDebtList.value.forEach { debt ->
                         DebtItem(debt = debt, onPayment = {
-                            Log.d("debt", debt.toString())
                             val updatedDebt = debt.copy(paymentFlag = true)
-                            sharedViewModel.updateDebt(updatedDebt) // Use SharedViewModel to update
+                            sharedViewModel.updateDebt(updatedDebt)
                             sharedViewModel.updateDebtPaymentFlag(debt, true)
                             Toast.makeText(
                                 context, context.getString(R.string.success_pay),
@@ -386,21 +420,100 @@ class UnitDetailsActivity : ComponentActivity() {
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Add Debt item at end of list
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAddCostClick() },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = context.getString(R.string.add_new_debt),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = context.getString(R.string.add_new_debt),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
 
+        if (showPayAllDialog) {
+            AlertDialog(
+                onDismissRequest = { showPayAllDialog = false },
+                text = {
+                    val totalAmount = debts.filter { !it.paymentFlag }.sumOf { it.amount }
+                    Text(
+                        text = "${context.getString(R.string.total_amount)}: ${
+                            formatNumberWithCommas(
+                                totalAmount
+                            )
+                        }",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        debts.filter { !it.paymentFlag }.forEach { debt ->
+                            val updatedDebt = debt.copy(paymentFlag = true)
+                            sharedViewModel.updateDebt(updatedDebt)
+                            sharedViewModel.updateDebtPaymentFlag(debt, true)
+                        }
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.all_debts_marked_paid),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        showPayAllDialog = false
+                    }) {
+                        Text(
+                            text = context.getString(R.string.insert),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPayAllDialog = false }) {
+                        Text(
+                            text = context.getString(R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            )
+        }
     }
 
 
     @Composable
-    fun PaymentsSection(unitId: Long, sharedViewModel: SharedViewModel) { // Receive SharedViewModel
+    fun PaymentsSection(unitId: Long, sharedViewModel: SharedViewModel) {
         val pays by sharedViewModel.getPaysForUnit(unitId).collectAsState(initial = emptyList())
+        val context = LocalContext.current
 
-        Column {
-            if (pays.isEmpty()) {
-                Text(text = LocalContext.current.getString(R.string.no_costs_recorded))
-            } else {
-                pays.forEach { pay ->
+        if (pays.isEmpty()) {
+            Text(text = context.getString(R.string.no_costs_recorded))
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(pays) { pay ->
                     DebtItem(debt = pay, onPayment = {
                         sharedViewModel.updateDebt(pay)
                     })
@@ -408,5 +521,6 @@ class UnitDetailsActivity : ComponentActivity() {
             }
         }
     }
+
 }
 

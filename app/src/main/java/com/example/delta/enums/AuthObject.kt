@@ -12,7 +12,7 @@ import com.example.delta.EarningsActivity
 import com.example.delta.GuestActivity
 import com.example.delta.HomePageActivity
 import com.example.delta.R
-import com.example.delta.UnitDetailsActivity
+import com.example.delta.TenantsDetailsActivity
 
 enum class AuthObject(
     val id: Long,
@@ -78,7 +78,7 @@ enum class AuthObject(
             CostActivity::class.java to COST_MANAGEMENT,
             EarningsActivity::class.java to EARNINGS,
             GuestActivity::class.java to GUEST_ACCESS,
-            UnitDetailsActivity::class.java to UNIT_DETAILS
+            TenantsDetailsActivity::class.java to UNIT_DETAILS
         )
 
         fun fromActivity(activity: Activity): AuthObject? {

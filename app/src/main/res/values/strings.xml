@@ -275,7 +275,7 @@
     <string name="sign_up">ثبت نام</string>
     <string name="password">رمز</string>
     <string name="password_too_short">پیچیدگی پسورد کم</string>
-    <string name="manager">مدیر</string>
+    <string name="manager">هیئت مدیره</string>
     <string name="dang">دانگ</string>
     <string name="invalid_dang">مقدار وارد شده نامعتبر است.</string>
     <string name="loading">در حال بارگذاری</string>
@@ -304,4 +304,17 @@
     <string name="users_units">لیست واحدهای مربوط به کاربر</string>
     <string name="all_tenants">لیست کلی ساکنین</string>
     <string name="users_tenant">لیست ساکنین مربوط به کاربر</string>
+    <string name="full_payment">پرداخت کامل</string>
+    <string name="remove_filter">حذف فیلتر</string>
+    <string name="all_debts_marked_paid">پرداخت کلی انجام شد.</string>
+    <string name="total_amount">جمع مبالغ</string>
+    <string name="add_new_debt">اضافه کردن بدهی جدید</string>
+    <string name="year">سال</string>
+    <string name="previous_month">ماه قبل</string>
+    <string name="next_month">ماه بعد</string>
+    <string name="previous_year">سال قبل</string>
+    <string name="next_year">سال بعد</string>
+    <string name="documents">مستندات</string>
+    <string name="setting_btn">دکمه تنظمیات</string>
+    <string name="auth_cancel">شما به این قسمت دسترسی ندارید</string>
 </resources>

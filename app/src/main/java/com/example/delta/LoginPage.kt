@@ -230,30 +230,6 @@ fun handleLogin(
     }
 }
 
-//
-//fun checkBuildingList(context: Context, buildingsViewModel: BuildingsViewModel) {
-//    CoroutineScope(Dispatchers.IO).launch {
-//        // Simulate checking if there are buildings for the user
-//        val buildings = buildingsViewModel.getAllBuildingsList()
-//        withContext(Dispatchers.Main) {
-//            Log.d("buildings.isEmpty()", buildings.isEmpty().toString())
-//            if (buildings.isEmpty()) {
-//                navigateToActivity(context, BuildingFormActivity::class.java)
-//            } else {
-//                navigateToActivity(context, HomePageActivity::class.java)
-//            }
-//        }
-//    }
-//}
-
-//fun navigateToActivity(context: Context, activityClass: Class<*>) {
-//    val intent = Intent(context, activityClass)
-//    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-//    context.startActivity(intent)
-//    if (context is Activity) {
-//        context.finish()
-//    }
-//}
 
 fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile:String) {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)

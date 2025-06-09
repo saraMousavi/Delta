@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +40,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -65,7 +68,6 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -95,6 +97,8 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.TabItem
+import com.example.delta.data.entity.TabType
 import com.example.delta.data.entity.Units
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.BuildingProfileFields
@@ -108,20 +112,19 @@ import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.init.AuthUtils
 import com.example.delta.init.NumberCommaTransformation
+import com.example.delta.init.Preference
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import java.text.NumberFormat
-import java.util.Locale
-import kotlin.collections.forEach
-import kotlin.getValue
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.NumberFormat
+import java.util.Locale
 
 
 class BuildingProfileActivity : ComponentActivity() {
@@ -138,7 +141,6 @@ class BuildingProfileActivity : ComponentActivity() {
     var buildingUsageName: String = ""
 
     @RequiresApi(Build.VERSION_CODES.O)
-    @OptIn(ExperimentalMaterial3Api::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,47 +167,61 @@ class BuildingProfileActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun BuildingProfileScreen(building: Buildings) {
-        var context = LocalContext.current
-        val currentRoleId = AuthUtils.getCurrentRoleId(context) // From session/prefs
-        val authDao = AppDatabase.getDatabase(application).authorizationDao()
-
-        val canWriteFundsTab by sharedViewModel.getFieldPermissionFlow(
-            roleId = currentRoleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.FUNDS_TAB.fieldNameRes,
-            required = PermissionLevel.FULL
-        ).collectAsState(initial = false)
-
-        val canWriteOwnersTab by sharedViewModel.getFieldPermissionFlow(
-            roleId = currentRoleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.OWNERS_TAB.fieldNameRes,
-            required = PermissionLevel.FULL
-        ).collectAsState(initial = false)
-
-        val canWriteUnitsTab by sharedViewModel.getFieldPermissionFlow(
-            roleId = currentRoleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.UNITS_TAB.fieldNameRes,
-            required = PermissionLevel.FULL
-        ).collectAsState(initial = false)
-
-        val canWriteTenantTab by sharedViewModel.getFieldPermissionFlow(
-            roleId = currentRoleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.TENANTS_TAB.fieldNameRes,
-            required = PermissionLevel.FULL
-        ).collectAsState(initial = false)
-
-
-        val tabTitles = listOf(
-            context.getString(R.string.overview),
-            if (canWriteOwnersTab) context.getString(R.string.owners) else null,
-            if (canWriteUnitsTab)  context.getString(R.string.units) else null,
-            if (canWriteTenantTab) context.getString(R.string.tenants) else null,
-            if (canWriteFundsTab) context.getString(R.string.funds) else null,
-            if (canWriteTenantTab) context.getString(R.string.reports) else null
+        val context = LocalContext.current
+        val userId = Preference().getUserId(context = context)
+        Log.d("userId", userId.toString())
+        val permissionLevelFundTab = AuthUtils.checkFieldPermission(
+            userId, BuildingProfileFields.FUNDS_TAB.fieldNameRes, sharedViewModel
         )
+
+        val permissionLevelOwnerTab = AuthUtils.checkFieldPermission(
+            userId, BuildingProfileFields.OWNERS_TAB.fieldNameRes, sharedViewModel
+        )
+
+        val permissionLevelUnitsTab = AuthUtils.checkFieldPermission(
+            userId, BuildingProfileFields.UNITS_TAB.fieldNameRes, sharedViewModel
+        )
+
+        val permissionLevelTenantsTab = AuthUtils.checkFieldPermission(
+            userId, BuildingProfileFields.TENANTS_TAB.fieldNameRes, sharedViewModel
+        )
+
+        val currentRole = sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
+        val currentRoleId = currentRole.value?.roleId ?: 1L
+
+
+
+        val tabs = listOfNotNull(
+            TabItem(context.getString(R.string.overview), TabType.OVERVIEW),
+            if (permissionLevelOwnerTab == PermissionLevel.FULL || permissionLevelOwnerTab == PermissionLevel.WRITE
+                || permissionLevelOwnerTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.owners), TabType.OWNERS)
+            } else null,
+            if (permissionLevelUnitsTab == PermissionLevel.FULL || permissionLevelUnitsTab == PermissionLevel.WRITE
+                || permissionLevelUnitsTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.units), TabType.UNITS)
+            } else null,
+            if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
+                || permissionLevelTenantsTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.tenants), TabType.TENANTS)
+            } else null,
+            if (permissionLevelFundTab == PermissionLevel.FULL || permissionLevelFundTab == PermissionLevel.WRITE
+                || permissionLevelFundTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.funds), TabType.FUNDS)
+            }
+            else null,
+            if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
+                || permissionLevelTenantsTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.reports), TabType.REPORTS)
+            }
+            else null
+        )
+
         var selectedTab by remember { mutableIntStateOf(0) }
         Scaffold(
             topBar = {
@@ -225,32 +241,28 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
-                ScrollableTabRow(selectedTabIndex = selectedTab) {
-                    tabTitles.forEachIndexed { index, title ->
-                        if ( title != null) {
-                            Tab(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                text = {
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                }
-                            )
-                        }
+                ScrollableTabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
+                    tabs.forEachIndexed { index, tabItem ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(text = tabItem.title, style = MaterialTheme.typography.bodyLarge) }
+                        )
                     }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                when (selectedTab) {
-                    0 -> OverviewTab(sharedViewModel, building, currentRoleId)
-                    1 -> OwnersTab(building, sharedViewModel)
-                    2 -> UnitsTab(building, sharedViewModel)
-                    3 -> TenantsTab(building, sharedViewModel)  // Add Tenant Tab Content
-                    4 -> FundsTab(building)
-                    5 -> ReportsTab()
+                when (tabs.getOrNull(selectedTab)?.type) {
+                    TabType.OVERVIEW -> OverviewTab(sharedViewModel, building, currentRoleId)
+                    TabType.OWNERS -> OwnersTab(building, sharedViewModel)
+                    TabType.UNITS -> UnitsTab(building, sharedViewModel)
+                    TabType.TENANTS -> TenantsTab(building, sharedViewModel)
+                    TabType.FUNDS -> FundsTab(building)
+                    TabType.REPORTS -> ReportsTab()
+                    null -> {} // Handle invalid index if needed
                 }
+
             }
         }
     }
@@ -266,31 +278,17 @@ class BuildingProfileActivity : ComponentActivity() {
         val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
             .collectAsState(initial = emptyList())
         var selectedImagePath by remember { mutableStateOf<String?>(null) }
-
-        // Check WRITE permission
-        val canWriteBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
-            roleId = roleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
-            required = PermissionLevel.WRITE
+        val userId = Preference().getUserId(context = context)
+        val permissionLevelBuildingName = AuthUtils.checkFieldPermission(
+            userId,
+            BuildingProfileFields.BUILDING_NAME.fieldNameRes,
+            sharedViewModel
         )
-
-// Check DELETE permission
-        val canDeleteBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
-            roleId = roleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
-            required = PermissionLevel.DELETE
+        val permissionLevelDoc = AuthUtils.checkFieldPermission(
+            userId,
+            BuildingProfileFields.DOCUMENTS.fieldNameRes,
+            sharedViewModel
         )
-
-// Check FULL permission
-        val canFullBuildingName: Flow<Boolean> = sharedViewModel.getFieldPermissionFlow(
-            roleId = roleId,
-            objectId = 3L,
-            fieldNameRes = BuildingProfileFields.BUILDING_NAME.fieldNameRes,
-            required = PermissionLevel.FULL
-        )
-
 
         LazyColumn(
             modifier = Modifier
@@ -309,20 +307,9 @@ class BuildingProfileActivity : ComponentActivity() {
                         containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        val buildingNameVisible = remember { mutableStateOf(false) }
-                        LaunchedEffect(key1 = buildingNameVisible) {
-//                            buildingNameVisible.value = AuthUtils.hasFieldPermission(
-//                                authDao = authDao,
-//                                roleId = roleId,
-//                                objectId = AuthObject.BUILDING_PROFILE.id, // replace with your object Id
-//                                fieldName = R.string.building_name,
-//                                required = PermissionLevel.READ
-//                            )
-                        }
-                        Log.d("R.string.building_name", R.string.building_name.toString())
-                        Log.d("buildingNameVisible.value", buildingNameVisible.value.toString())
-                        if (buildingNameVisible.value) {
+                    Column(modifier = Modifier.padding(4.dp)) {
+
+                        if (permissionLevelBuildingName == PermissionLevel.FULL || permissionLevelBuildingName == PermissionLevel.WRITE) {
                             Text(
                                 text = "${context.getString(R.string.building_name)}: ${building.name}",
                                 style = MaterialTheme.typography.bodyLarge
@@ -346,7 +333,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
             item {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
 
@@ -361,7 +348,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Text(
                             text = "${context.getString(R.string.province)}: ${building.province}",
                             style = MaterialTheme.typography.bodyLarge
@@ -378,7 +365,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
             item {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
 
@@ -393,7 +380,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Text(
                             text = "${context.getString(R.string.building_type)}: $buildingTypeName",
                             style = MaterialTheme.typography.bodyLarge
@@ -410,7 +397,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
             item {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
 
@@ -425,7 +412,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Text(
                             text = context.getString(R.string.shared_things),
                             style = MaterialTheme.typography.bodyLarge,
@@ -442,54 +429,69 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 }
             }
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
-                    )
-                ) {
-                    Row(modifier = Modifier.padding(8.dp)) {
-                        fileList.forEach { file ->
-                            Image(
-                                painter = rememberAsyncImagePainter(File(file.fileUrl)),
-                                contentDescription = "Saved image",
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { selectedImagePath = file.fileUrl },
-                                contentScale = ContentScale.Crop
-                            )
+            if (fileList.isNotEmpty() && ( permissionLevelDoc == PermissionLevel.FULL || permissionLevelDoc == PermissionLevel.WRITE) ) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(context.getColor(R.color.primary_color))
+                        )
+                    ) {
+                        Row(modifier = Modifier.padding(8.dp)) {
+                            fileList.forEach { file ->
+                                val fileObj = File(file.fileUrl)
+                                val extension = fileObj.extension.lowercase()
+                                val painter = when (extension) {
+                                    "jpg", "jpeg", "png", "gif", "bmp", "webp" -> rememberAsyncImagePainter(
+                                        fileObj
+                                    )
 
-                            Spacer(Modifier.width(8.dp))
+                                    else -> null
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            // Open file externally on click
+                                            openFile(context, file.fileUrl)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (painter != null) {
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Image file",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        // Show icon for non-image files
+                                        val icon = when (extension) {
+                                            "pdf" -> Icons.Default.PictureAsPdf
+                                            "xls", "xlsx" -> Icons.Default.TableChart // or your custom Excel icon
+                                            "doc", "docx" -> Icons.Default.Description // or your custom Word icon
+                                            else -> Icons.Default.InsertDriveFile
+                                        }
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = "File icon",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.width(8.dp))
+                            }
                         }
                     }
-                }
-                // Fullscreen image dialog
-                if (selectedImagePath != null) {
-                    Dialog(onDismissRequest = { selectedImagePath = null }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.8f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(File(selectedImagePath!!)),
-                                contentDescription = "Full image",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(0.8f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { selectedImagePath = null }, // dismiss on click
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
+
                 }
             }
 
@@ -611,7 +613,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.hideDialogs() },
-                onSave = { selectedCost, amount, period, fundFlag, calculateMethod, calcaulatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
+                onSave = { selectedCost, amount, period, fundFlag, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
                     // Insert cost and debts using selectedCost info
 
                     sharedViewModel.insertDebtPerNewCost(
@@ -622,7 +624,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         fundFlag = fundFlag,
                         paymentLevel = selectedCost.paymentLevel,
                         calculateMethod = calculateMethod,
-                        calculatedUnitMethod = calcaulatedUnitMethod,
+                        calculatedUnitMethod = calculatedUnitMethod,
                         responsible = responsible,
                         dueDate = dueDate,
                         selectedUnitIds = selectedUnits.map { it },
@@ -652,6 +654,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     .padding(16.dp)
             ) {
                 items(tenants) { tenant ->
+                    val unit = sharedViewModel.getUnitForTenant(tenant.tenantId).collectAsState(initial = null)
                     TenantItem(
                         tenants = tenant,
                         sharedViewModel = sharedViewModel,
@@ -670,7 +673,14 @@ class BuildingProfileActivity : ComponentActivity() {
                                         .show()
                                 }
                             )
-                        })
+                        },
+                        activity = context.findActivity(),
+                        onClick = {
+                            val intent = Intent(context, TenantsDetailsActivity::class.java)
+                            intent.putExtra("UNIT_DATA", unit.value!!.unitId)
+                            context.startActivity(intent)
+                        }
+                    )
                 }
             }
 
@@ -846,22 +856,24 @@ class BuildingProfileActivity : ComponentActivity() {
         LazyColumn {
             items(units) { unit ->
                 UnitItem(unit = unit) {
-                    val intent = Intent(context, UnitDetailsActivity::class.java)
-                    intent.putExtra("UNIT_DATA", unit)
-                    context.startActivity(intent)
+
                 }
             }
         }
     }
 
     @Composable
-    fun UnitItem(unit: Units, onClick: () -> Unit) {
-        var context = LocalContext.current
+    fun UnitItem(
+        unit: Units,
+        onClick: () -> Unit
+    ) {
+        val context = LocalContext.current
+
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp)
-                .clickable(onClick = onClick),
+                .padding(8.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
@@ -924,10 +936,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(12.dp))
 
             }
-
         }
     }
-
 
     @Composable
     fun ReportsTab() {
@@ -1003,7 +1013,13 @@ class BuildingProfileActivity : ComponentActivity() {
                     onAddOwner = { newOwner, selectedUnits, isManager, selectedBuilding ->
                         Log.d("newOwner", newOwner.toString())
                         Log.d("selectedUnits", selectedUnits.toString())
-                        sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager, true, building.buildingId)
+                        sharedViewModel.saveOwnerWithUnits(
+                            newOwner,
+                            selectedUnits,
+                            isManager,
+                            true,
+                            building.buildingId
+                        )
                         showOwnerDialog = false
                     },
                     sharedViewModel = sharedViewModel,
@@ -1399,7 +1415,9 @@ class BuildingProfileActivity : ComponentActivity() {
                 }
             }
         }
+
     }
+}
 
     @Composable
     fun UnitDebtItem(
@@ -1538,9 +1556,6 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EarningsDialog(
     building: Buildings,
@@ -2185,4 +2200,4 @@ fun calculateBuildingFundFlow(
     ) { sumPositive, sumNegative, unitCount, earning, fundMinus ->
         (sumPositive + earning) - (sumNegative + fundMinus)
     }
-}
+    }

@@ -6,8 +6,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Build
-import com.example.delta.data.entity.BuildingTypes
-import com.example.delta.data.entity.BuildingUsages
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -18,8 +16,17 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,9 +38,39 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -47,6 +84,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
@@ -55,19 +94,23 @@ import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.UploadedFileEntity
+import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.factory.SharedViewModelFactory
+import com.example.delta.init.AuthUtils
 import com.example.delta.init.NumberCommaTransformation
+import com.example.delta.init.Preference
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.viewmodel.TenantViewModel
 import com.example.delta.viewmodel.UnitsViewModel
-import com.example.delta.volley.Building
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.round
 
@@ -738,7 +781,7 @@ fun OwnerItem(
     onDelete: (Owners) -> Unit, // Pass a callback for deletion
     activity: Activity?
 ) {
-    var context = LocalContext.current
+    val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -753,6 +796,23 @@ fun OwnerItem(
 // Convert to map for fast lookup
     val dangSumsMap: Map<Long, Double> = ownerUnits.associate { it.unitId to it.totalDang }
 
+    val userId = Preference().getUserId(context = context)
+    val user by sharedViewModel.getUserById(userId).collectAsState(initial = null)
+    val role = sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
+
+    // Check permission level (assuming this returns Boolean or similar)
+    val permissionLevelOwnersTab = AuthUtils.checkFieldPermission(
+        userId,
+        BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+        sharedViewModel
+    )
+
+    val permissionLevelAllOwnersTab = AuthUtils.checkFieldPermission(
+        userId,
+        BuildingProfileFields.ALL_OWNERS.fieldNameRes,
+        sharedViewModel
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -763,9 +823,18 @@ fun OwnerItem(
                     }
 
                     is BuildingProfileActivity -> {
-                        val intent = Intent(context, OwnerDetailsActivity::class.java)
-                        intent.putExtra("ownerId", owner.ownerId)
-                        context.startActivity(intent)
+                        if(permissionLevelAllOwnersTab == PermissionLevel.FULL || permissionLevelAllOwnersTab == PermissionLevel.WRITE){
+                            val intent = Intent(context, OwnerDetailsActivity::class.java)
+                            intent.putExtra("ownerId", owner.ownerId)
+                            context.startActivity(intent)
+                        } else if ( owner.mobileNumber == user!!.mobileNumber && (permissionLevelOwnersTab == PermissionLevel.FULL
+                                    || permissionLevelOwnersTab == PermissionLevel.WRITE)){
+                            val intent = Intent(context, OwnerDetailsActivity::class.java)
+                            intent.putExtra("ownerId", owner.ownerId)
+                            context.startActivity(intent)
+                        } else {
+                            Modifier
+                        }
                     }
                 }
             }
@@ -820,33 +889,13 @@ fun OwnerItem(
                             ) {
                                 Text(
                                     text = context.getString(R.string.manager), // Or context.getString(R.string.manager)
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSecondary
                                 )
                             }
                         }
                     }
                 }
-//                Text(
-//                    text = "${context.getString(R.string.address)}: ${owner.address}",
-//                    style = MaterialTheme.typography.bodyLarge,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant
-//                )
-//                Text(
-//                    text = "${context.getString(R.string.email)}: ${owner.email}",
-//                    style = MaterialTheme.typography.bodyLarge,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant
-//                )
-//                Text(
-//                    text = "${context.getString(R.string.phone_number)}: ${owner.phoneNumber}",
-//                    style = MaterialTheme.typography.bodyLarge,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant
-//                )
-//                Text(
-//                    text = "${context.getString(R.string.mobile_number)}: ${owner.mobileNumber}",
-//                    style = MaterialTheme.typography.bodyLarge,
-//                    color = MaterialTheme.colorScheme.onSurfaceVariant
-//                )
                 if (unitsForOwner.isNotEmpty()) {
                     Text(
                         text = context.getString(R.string.units),
@@ -1022,7 +1071,7 @@ fun OwnerDialog(
                         onItemSelected = { selectedBuilding = it },
                         label = context.getString(R.string.building),
                         modifier = Modifier.fillMaxWidth(),
-                        itemLabel = { building -> building.name.toString() }
+                        itemLabel = { building -> building.name }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -1288,7 +1337,9 @@ fun TenantsPage(
                                 Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
                             }
                         )
-                    })
+                    },
+                    activity = context.findActivity(),
+                    onClick = {})
             }
 
             // Add "Add New Tenant" as the last item
@@ -1383,22 +1434,93 @@ fun AddNewTenantItem(onClick: () -> Unit) {
 }
 
 
-@Composable
-fun TenantItem(
-    tenants: Tenants,
-    sharedViewModel: SharedViewModel,
-    modifier: Modifier = Modifier,
-    onDelete: (Tenants) -> Unit
-) {
-    var context = LocalContext.current
-    var showEditDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
+    @Composable
+    fun TenantItem(
+        tenants: Tenants,
+        sharedViewModel: SharedViewModel,
+        modifier: Modifier = Modifier,
+        onDelete: (Tenants) -> Unit,
+        onClick: () -> Unit,
+        activity: Activity?
+    ) {
+        val context = LocalContext.current
+        var showEditDialog by remember { mutableStateOf(false) }
+        var showDeleteDialog by remember { mutableStateOf(false) }
+        var showMenu by remember { mutableStateOf(false) }
+
+        val userId = Preference().getUserId(context = context)
+        val role = sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
+        // Collect user state
+        val user by sharedViewModel.getUserById(userId).collectAsState(initial = null)
+        val unit = sharedViewModel.getUnitForTenant(tenants.tenantId).collectAsState(initial = null)
+        // Collect units for user's mobile number (nullable)
+        val usersTenant by remember(user?.mobileNumber) {
+            if (user?.mobileNumber != null) {
+                sharedViewModel.getTenantForUserMobileNumber(user!!.mobileNumber)
+            } else {
+                // Return empty flow if no mobile number
+                flowOf(null)
+            }
+        }.collectAsState(initial = null)
+        Log.d("unit.value", unit.value.toString())
+        val owners by sharedViewModel.getOwnersForUnit(unit.value?.unitId ?: 0L)
+            .collectAsState(initial = emptyList())
+
+        val allOwners by sharedViewModel.getAllOwnerUnitsCrossRefs().collectAsState(initial = emptyList())
+        Log.d("allOwners", allOwners.toString())
+        Log.d("owners", owners.toString())
+        val isUnitOwner = remember(owners, user) {
+            user?.mobileNumber?.let { userMobile ->
+                owners.any { owner ->
+                    Log.d("owner.mobileNumber", owner.mobileNumber.toString())
+                    Log.d("userMobile ", userMobile.toString())
+                    owner.mobileNumber == userMobile
+                }
+            } ?: false
+        }
+        val currentIsUnitOwner by rememberUpdatedState(isUnitOwner)
+    Log.d("isUnitOwner", isUnitOwner.toString())
+
+    // Check permission level (assuming this returns Boolean or similar)
+    val permissionLevelTenantsTab = AuthUtils.checkFieldPermission(
+        userId,
+        BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+        sharedViewModel
+    )
+
+    val permissionLevelAllTenantsTab = AuthUtils.checkFieldPermission(
+        userId,
+        BuildingProfileFields.ALL_TENANTS.fieldNameRes,
+        sharedViewModel
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(8.dp)
-            .clickable(onClick = { showEditDialog = true }),
+            .clickable {
+                when (activity) {
+                    is BuildingFormActivity -> {
+                        showEditDialog = true
+                    }
+
+                    is BuildingProfileActivity -> {
+                        Log.d("currentIsUnitOwner", currentIsUnitOwner.toString())
+                        if (role.value!!.roleName == "Admin" || role.value!!.roleName == "Manager") {
+                            onClick()
+                        } else if (currentIsUnitOwner) {
+                            onClick()
+                        } else if (permissionLevelAllTenantsTab == PermissionLevel.FULL || permissionLevelAllTenantsTab == PermissionLevel.WRITE) {
+                            onClick()
+                        } else if (usersTenant == tenants && permissionLevelTenantsTab == PermissionLevel.FULL) {
+                            onClick()
+                        } else {
+                            Modifier
+                            Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1761,7 +1883,7 @@ fun TenantDialog(
                             label = context.getString(R.string.building),
                             modifier = Modifier
                                 .fillMaxWidth(1f),
-                            itemLabel = { building -> building.name.toString() }
+                            itemLabel = { building -> building.name }
                         )
                     }
                 }
@@ -1785,7 +1907,7 @@ fun TenantDialog(
                         label = context.getString(R.string.unit_number),
                         modifier = Modifier
                             .fillMaxWidth(1f),
-                        itemLabel = { unit -> unit.unitNumber.toString() }
+                        itemLabel = { unit -> unit.unitNumber }
                     )
                 }
             }
@@ -2995,7 +3117,7 @@ fun UnitCostItem(
     isFilled: Boolean,
     onUnitClick: (Units) -> Unit // Callback when the unit is clicked
 ) {
-    var context = LocalContext.current
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -3038,7 +3160,6 @@ fun String.persianToEnglishDigits(): String {
     }.joinToString("")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditOwnerDialog(
     owner: Owners,
@@ -3451,7 +3572,9 @@ fun EditTenantDialog(
                         label = { Text(context.getString(R.string.start_date)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { focusState -> if (focusState.isFocused) showStartDatePicker = true },
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showStartDatePicker = true
+                            },
                         readOnly = true
                     )
                     OutlinedTextField(
@@ -3460,7 +3583,9 @@ fun EditTenantDialog(
                         label = { Text(context.getString(R.string.end_date)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { focusState -> if (focusState.isFocused) showEndDatePicker = true },
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) showEndDatePicker = true
+                            },
                         readOnly = true
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -3479,7 +3604,7 @@ fun EditTenantDialog(
                             onItemSelected = { building -> selectedBuilding = building },
                             label = context.getString(R.string.building),
                             modifier = Modifier.fillMaxWidth(1f),
-                            itemLabel = { building -> building.name.toString() }
+                            itemLabel = { building -> building.name }
                         )
                     }
                 }
@@ -3497,7 +3622,7 @@ fun EditTenantDialog(
                         onItemSelected = { unit -> selectedUnit = unit },
                         label = context.getString(R.string.unit_number),
                         modifier = Modifier.fillMaxWidth(1f),
-                        itemLabel = { unit -> unit.unitNumber.toString() }
+                        itemLabel = { unit -> unit.unitNumber }
                     )
                 }
             }
@@ -3726,7 +3851,7 @@ fun UnitDangRow(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = unit.unitNumber.toString(),
+                text = unit.unitNumber,
                 style = MaterialTheme.typography.bodyLarge
             )
         }

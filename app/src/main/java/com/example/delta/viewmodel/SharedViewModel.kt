@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.min
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
@@ -175,24 +176,34 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
     // New function to get debts for a specific unit and month
-    fun getDebtsForUnitAndMonth(unitId: Long, year: String, month: String): Flow<List<Debts>> =
-        flow {
+    fun getDebtsForUnitAndMonth(unitId: Long, year: String?, month: String?): Flow<List<Debts>> = flow {
+        if ((year == null || year == "null") && month == "00") {
+            val debts = debtsDao.getAllDebtsForUnits(unitId)
+            emit(debts)
+        } else {
             val debts = debtsDao.getDebtsForUnits(
                 unitId = unitId,
                 yearStr = year,
                 monthStr = month
             )
             emit(debts)
-        }.flowOn(Dispatchers.IO)
+        }
+    }.flowOn(Dispatchers.IO)
 
-    fun getDebtsForOwner(ownerId: Long, year: String, month: String): Flow<List<Debts>> =
+
+    fun getDebtsForOwner(ownerId: Long, year: String?, month: String?): Flow<List<Debts>> =
         flow {
-            val debts = debtsDao.getDebtsForOwner(
-                ownerId = ownerId,
-                yearStr = year,
-                monthStr = month
-            )
-            emit(debts)
+            if ((year == null || year == "null") && month == "00") {
+                val debts = debtsDao.getAllDebtsForOwner(ownerId)
+                emit(debts)
+            } else {
+                val debts = debtsDao.getDebtsForOwner(
+                    ownerId = ownerId,
+                    yearStr = year,
+                    monthStr = month
+                )
+                emit(debts)
+            }
         }.flowOn(Dispatchers.IO)
 
     fun getPaysForOwner(ownerId: Long): Flow<List<Debts>> =
@@ -244,6 +255,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         required: PermissionLevel = PermissionLevel.READ
     ): Flow<Boolean> = flow {
         val fieldId = authorizationDao.getFieldIdByName(objectId, fieldNameRes)
+        Log.d("fieldNameRes", fieldNameRes.toString())
+        Log.d("fieldId", fieldId.toString())
+        Log.d("full", authorizationDao.getAllRoleAuthorizationObjectFieldCrossRef().toString())
         if (fieldId == null || fieldId == 0L) {
             emit(false)
         } else {
@@ -400,7 +414,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     fun getUnit(unitId: Long): Flow<Units> = flow {
-        val unit = unitsDao.getUnit(unitId)
+        val unit = tenantsDao.getUnit(unitId)
+        Log.d("sh unit", unit.toString())
         emit(unit)
     }.flowOn(Dispatchers.IO)
 
@@ -451,12 +466,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     fun getUserByMobile(mobile: String): Flow<User?> = flow {
-        Log.d("mobile", mobile.toString())
         emit(userDao.getUserByMobile(mobile))
     }.flowOn(Dispatchers.IO)
 
 
-    fun getRoleByUserId(userId: Long): Flow<Role?> = flow {
+    fun getUserById(userId: Long): Flow<User?> = flow {
+        emit(userDao.getUserById(userId))
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getRoleByUserId(userId: Long): Flow<Role> = flow {
         val user = userDao.getRoleByUserId(userId)
         emit(user)
     }.flowOn(Dispatchers.IO)
@@ -507,12 +526,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
     fun getAllUnits(): Flow<List<Units>> = flow {
-        val units = unitsDao.getAllUnits()
+        val units = tenantsDao.getAllUnits()
+        Log.d("sh units", units.toString())
         emit(units)
     }.flowOn(Dispatchers.IO)
 
     fun getUnitsForOwners(ownerId: Long): Flow<List<UnitWithDang>> = flow {
         val owners = ownersDao.getUnitsWithDangForOwner(ownerId)
+        emit(owners)
+    }.flowOn(Dispatchers.IO)
+
+    fun getOwnersForUnit(unitId: Long): Flow<List<Owners>> = flow {
+        val owners = ownersDao.getOwnersForUnit(unitId)
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
@@ -587,10 +612,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-//    fun getAuthorizationDetailsForRole(userId: Long): Flow<List<RoleAuthorizationObjectCrossRefWithDetails>> = flow {
-//        val auth = authorizationDoa.getAuthorizationDetailsForRole(userId)
-//        emit(auth)
-//    }.flowOn(Dispatchers.IO)
 
     fun getAuthorizationDetailsForUser(userId: Long): Flow<List<FieldWithPermission>> =
         authorizationDao.getFieldsWithPermissionsForUser(userId)
@@ -1320,14 +1341,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         }
                         ownerUnits.forEach { unit ->
                             // Get the dang value for this owner-unit pair, default to 0.0 if not present
-                            val cross = OwnersUnitsCrossRef(
-                                ownerId = ownerId,
-                                unitId = unit.unitId,
-                                dang = unit.dang
-                            )
-                            ownersDao.insertOwnerUnitCrossRef(cross)
-                            Log.d("cross", cross.toString())
-                            Log.d("dddd", ownersDao.getOwnersUnitsCrossRef().toString())
+                            if(unit.dang != 0.0) {
+                                val cross = OwnersUnitsCrossRef(
+                                    ownerId = ownerId,
+                                    unitId = unit.unitId,
+                                    dang = unit.dang
+                                )
+                                ownersDao.insertOwnerUnitCrossRef(cross)
+                                Log.d("cross", cross.toString())
+                                Log.d("dddd", ownersDao.getOwnersUnitsCrossRef().toString())
+                            }
                         }
                     }
 
@@ -1353,6 +1376,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 roleId = 4L
                             )
                         )
+                        Log.d("tenant.mobileNumber", tenant.mobileNumber.toString())
                         userDao.insertUserBuildingCrossRef(
                             UsersBuildingsCrossRef(
                                 userId = userTenantID,
@@ -1467,6 +1491,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
         val tenant = tenantsDao.getUnitForTenant(tenantId)
+        emit(tenant)
+    }.flowOn(Dispatchers.IO)
+
+    fun getTenantForUserMobileNumber(mobileNumber: String): Flow<Tenants?> = flow {
+        val tenant = tenantsDao.getTenantForUserMobileNumber(mobileNumber)
         emit(tenant)
     }.flowOn(Dispatchers.IO)
 
@@ -2023,6 +2052,24 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         )
 
     }
+
+    fun deleteFile(path: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(path)
+                if (file.exists()) {
+                    file.delete()
+                }
+                // Remove from savedFilePaths list safely on main thread
+                withContext(Dispatchers.Main) {
+                    savedFilePaths.remove(path)
+                }
+            } catch (e: Exception) {
+                Log.e("SharedViewModel", "Error deleting file", e)
+            }
+        }
+    }
+
 
 }
 

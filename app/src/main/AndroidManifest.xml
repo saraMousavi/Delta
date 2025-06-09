@@ -16,6 +16,16 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/customfontstyle"
         tools:targetApi="33">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.example.delta.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
             android:name=".HomePageActivity"
             android:exported="false"
@@ -48,7 +58,7 @@
             android:exported="false" />
 
         <activity
-            android:name=".UnitDetailsActivity"
+            android:name=".TenantsDetailsActivity"
             android:exported="false" />
         <activity android:name=".BuildingFormActivity"
             android:exported="true" />

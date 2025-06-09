@@ -36,12 +36,15 @@ interface UsersDao {
         @Query("SELECT * FROM user WHERE mobile_number = :mobile LIMIT 1")
         fun getUserByMobile(mobile: String): User?
 
+        @Query("SELECT * FROM user WHERE userId = :userId")
+        fun getUserById(userId: Long): User?
+
 
         @Query("""
     SELECT role.* FROM user_role_cross_ref as ur 
                 INNER JOIN role on role.roleId = ur.roleId where userId = :userId
 """)
-        suspend fun getRoleByUserId(userId:Long): Role?
+        suspend fun getRoleByUserId(userId:Long): Role
 
         @Transaction
         @Query("SELECT * FROM user_role_cross_ref")

@@ -28,21 +28,46 @@ interface DebtsDao {
     SELECT debts.*
     FROM debts
     WHERE debts.unitId = :unitId
-      AND SUBSTR(debts.due_date, 1, 4) = :yearStr
-      AND SUBSTR(debts.due_date, 6, 2) = :monthStr
+      AND (SUBSTR(due_date, 1, 4) = :yearStr)
+      AND (SUBSTR(due_date, 6, 2) = :monthStr)
       AND debts.payment_flag = 0
 """)
-    fun getDebtsForUnits(unitId: Long, yearStr: String, monthStr: String): List<Debts>
+    fun getDebtsForUnits(unitId: Long, yearStr: String?, monthStr: String?): List<Debts>
 
     @Query("""
     SELECT debts.*
     FROM debts
-    WHERE debts.ownerId = :ownerId 
-    AND SUBSTR(due_date, 1, 4) = :yearStr 
-    AND SUBSTR(due_date, 6, 2) = :monthStr
-    AND payment_flag = 0
+    WHERE debts.unitId = :unitId
+      AND debts.payment_flag = 0
 """)
-    fun getDebtsForOwner(ownerId: Long, yearStr: String, monthStr: String): List<Debts>
+    fun getAllDebtsForUnits(unitId: Long): List<Debts>
+
+
+    @Query("""
+    SELECT debts.* 
+    FROM debts
+    WHERE debts.ownerId = :ownerId 
+      AND ( SUBSTR(due_date, 1, 4) = :yearStr)
+      AND (SUBSTR(due_date, 6, 2) = :monthStr)
+      AND payment_flag = 0
+""")
+    fun getDebtsForOwner(
+        ownerId: Long,
+        yearStr: String?,
+        monthStr: String?
+    ): List<Debts>
+
+    @Query("""
+    SELECT debts.* 
+    FROM debts
+    WHERE debts.ownerId = :ownerId 
+      AND payment_flag = 0
+""")
+    fun getAllDebtsForOwner(
+        ownerId: Long
+    ): List<Debts>
+
+
 
     @Query("""
     SELECT debts.*
