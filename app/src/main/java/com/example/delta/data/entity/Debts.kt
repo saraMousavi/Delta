@@ -40,6 +40,7 @@ import androidx.room.PrimaryKey
         Index("ownerId")
     ]
 )
+
 data class Debts(
     @PrimaryKey(autoGenerate = true)
     val debtId: Long = 0,

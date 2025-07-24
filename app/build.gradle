@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.delta"
-        minSdk 24
+        minSdk 26
         targetSdk 35
         versionCode 1
         versionName "1.0"
@@ -92,6 +92,10 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.room.ktx)
     implementation(libs.date.picker)
+    //implementation(libs.chart)
+    implementation(libs.mpandroidchart)
+    implementation(libs.apache.poi)
+    implementation(libs.apache.poi.ooxml)
 //    implementation (libs.firebase)
     testImplementation libs.junit
     // Mockito for mocking dependencies

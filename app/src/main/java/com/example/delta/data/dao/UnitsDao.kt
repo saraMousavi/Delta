@@ -46,6 +46,12 @@ interface UnitsDao {
     @Query("SELECT * FROM Units where unitId = :unitId")
     fun getUnit(unitId: Long): Units
 
+
+    @Query("SELECT * FROM Units u inner join buildings b" +
+            " on u.buildingId = b.buildingId " +
+            "where unit_number = :unitNumber  and b.name = :buildingName")
+    fun getUnitByUnitNumber(unitNumber: Long, buildingName: String): Units
+
     @Query("SELECT COUNT(*) FROM units WHERE buildingId = :buildingId")
     suspend fun countUnits(buildingId: Long): Int
 

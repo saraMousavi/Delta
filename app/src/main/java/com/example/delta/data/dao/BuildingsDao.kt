@@ -75,6 +75,9 @@ interface BuildingsDao {
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
     fun getBuilding(buildingId: Long): Buildings
 
+    @Query("SELECT * FROM buildings WHERE name = :buildingName")
+    fun getBuilding(buildingName: String): Buildings
+
 //    @Query("""
 //        SELECT
 //            b.*,

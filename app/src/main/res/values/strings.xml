@@ -317,4 +317,15 @@
     <string name="documents">مستندات</string>
     <string name="setting_btn">دکمه تنظمیات</string>
     <string name="auth_cancel">شما به این قسمت دسترسی ندارید</string>
+    <string name="phone_book">دفترچه تلفن</string>
+    <string name="emergency_calls">تماس های اضطراری</string>
+    <string name="delete_call">حذف تماس</string>
+    <string name="add_new_phone">ثبت شماره جدید</string>
+    <string name="name">نام</string>
+    <string name="select_type">نوع شماره</string>
+    <string name="bilan_report">گزارش بیلان</string>
+    <string name="no_phone_recorded">هیچ تماسی ثبت نشده است.</string>
+    <string name="click_on_cost_columns">لطفا برای مشاهده جزئیات هزینه برای ستون ها کلیک کنید.</string>
+    <string name="other">سایر</string>
+    <string name="cost_detail">"جزئیات هزینه ی "</string>
 </resources>

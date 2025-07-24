@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "f2349374c7836219f0625ab30d0e7cd8",
+    "identityHash": "f000926664ac1e84477565a0e0a5b79c",
     "entities": [
       {
         "tableName": "building_types",
@@ -337,7 +337,7 @@
       },
       {
         "tableName": "units",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, `number_of_parking` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, `number_of_parking` TEXT NOT NULL, `excel_building_name` TEXT, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "unitId",
@@ -378,6 +378,11 @@
             "columnName": "number_of_parking",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "excelBuildingName",
+            "columnName": "excel_building_name",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -572,7 +577,7 @@
       },
       {
         "tableName": "owners",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `birthday` TEXT NOT NULL, `address` TEXT NOT NULL, `email` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `birthday` TEXT NOT NULL, `address` TEXT NOT NULL, `email` TEXT NOT NULL, `excel_units_number` TEXT, `excel_building_name` TEXT, `excel_is_manager` INTEGER, `excel_dang` REAL)",
         "fields": [
           {
             "fieldPath": "ownerId",
@@ -621,6 +626,26 @@
             "columnName": "email",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "excelUnitsNumber",
+            "columnName": "excel_units_number",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "excelBuildingName",
+            "columnName": "excel_building_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "excelIsManager",
+            "columnName": "excel_is_manager",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "excelDang",
+            "columnName": "excel_dang",
+            "affinity": "REAL"
           }
         ],
         "primaryKey": {
@@ -632,7 +657,7 @@
       },
       {
         "tableName": "tenants",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `email` TEXT NOT NULL, `birthday` TEXT NOT NULL, `number_of_tenants` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL, `status` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tenantId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `phone_number` TEXT NOT NULL, `mobile_number` TEXT NOT NULL, `email` TEXT NOT NULL, `birthday` TEXT NOT NULL, `number_of_tenants` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL, `status` TEXT NOT NULL, `excel_units_number` TEXT, `excel_building_name` TEXT)",
         "fields": [
           {
             "fieldPath": "tenantId",
@@ -699,6 +724,16 @@
             "columnName": "status",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "excelUnitsNumber",
+            "columnName": "excel_units_number",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "excelBuildingName",
+            "columnName": "excel_building_name",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -1381,6 +1416,95 @@
         ]
       },
       {
+        "tableName": "phonebook_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entryId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `name` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `type` TEXT NOT NULL, `unitId` INTEGER, `isEmergency` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "entryId",
+            "columnName": "entryId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phoneNumber",
+            "columnName": "phoneNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unitId",
+            "columnName": "unitId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isEmergency",
+            "columnName": "isEmergency",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "entryId"
+          ]
+        }
+      },
+      {
+        "tableName": "emergency_numbers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`emergencyId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `serviceName` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "emergencyId",
+            "columnName": "emergencyId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serviceName",
+            "columnName": "serviceName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phoneNumber",
+            "columnName": "phoneNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "emergencyId"
+          ]
+        }
+      },
+      {
         "tableName": "users_buildings_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `roleName` TEXT NOT NULL, PRIMARY KEY(`userId`, `buildingId`), FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1458,7 +1582,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f2349374c7836219f0625ab30d0e7cd8')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f000926664ac1e84477565a0e0a5b79c')"
     ]
   }
 }

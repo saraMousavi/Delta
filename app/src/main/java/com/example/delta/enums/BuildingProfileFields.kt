@@ -22,6 +22,7 @@ enum class BuildingProfileFields(
     ALL_TENANTS(3L, R.string.all_tenants, "list", R.string.all_tenants),
     USERS_TENANTS(3L, R.string.users_tenant, "list", R.string.users_tenant),
     TENANTS_TAB(3L, R.string.tenants, "tab", R.string.tenants),
-    REPORTS_TAB(3L, R.string.reports, "tab", R.string.reports)
+    REPORTS_TAB(3L, R.string.reports, "tab", R.string.reports),
+    PHONEBOOK_TAB(3L, R.string.phone_book, "tab", R.string.phone_book)
     // Add more as needed
 }

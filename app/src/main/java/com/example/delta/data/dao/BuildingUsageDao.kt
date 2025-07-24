@@ -17,5 +17,5 @@ interface BuildingUsageDao {
     fun getAllBuildingUsages(): Flow<List<BuildingUsages>>
 
     @Query("SELECT building_usage_name FROM building_usages WHERE buildingUsageId = :buildingUsageId")
-    suspend fun getBuildingUsageName(buildingUsageId: Long?): String
+    suspend fun getBuildingUsageName(buildingUsageId: Long?): String?
 }

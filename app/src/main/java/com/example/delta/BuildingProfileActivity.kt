@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
@@ -40,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -66,6 +68,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -83,6 +86,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -90,17 +94,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.res.ResourcesCompat
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.PhonebookEntry
 import com.example.delta.data.entity.TabItem
 import com.example.delta.data.entity.TabType
 import com.example.delta.data.entity.Units
-import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
@@ -111,11 +117,21 @@ import com.example.delta.enums.Responsible
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.init.AuthUtils
+import com.example.delta.init.MoneyValueFormatter
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.EarningsViewModel
 import com.example.delta.viewmodel.SharedViewModel
+import com.github.mikephil.charting.charts.BarChart
+import com.github.mikephil.charting.components.XAxis
+import com.github.mikephil.charting.data.BarData
+import com.github.mikephil.charting.data.BarDataSet
+import com.github.mikephil.charting.data.BarEntry
+import com.github.mikephil.charting.data.Entry
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.github.mikephil.charting.highlight.Highlight
+import com.github.mikephil.charting.listener.OnChartValueSelectedListener
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -186,6 +202,12 @@ class BuildingProfileActivity : ComponentActivity() {
             userId, BuildingProfileFields.TENANTS_TAB.fieldNameRes, sharedViewModel
         )
 
+        val permissionLevelPhonebookTab = AuthUtils.checkFieldPermission(
+            userId,
+            BuildingProfileFields.PHONEBOOK_TAB.fieldNameRes,
+            sharedViewModel
+        )
+
         val currentRole = sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
         val currentRoleId = currentRole.value?.roleId ?: 1L
 
@@ -212,6 +234,12 @@ class BuildingProfileActivity : ComponentActivity() {
                 || permissionLevelFundTab == PermissionLevel.READ
             ) {
                 TabItem(context.getString(R.string.funds), TabType.FUNDS)
+            }
+            else null,
+            if (permissionLevelPhonebookTab == PermissionLevel.FULL || permissionLevelPhonebookTab == PermissionLevel.WRITE
+                || permissionLevelPhonebookTab == PermissionLevel.READ
+            ) {
+                TabItem(context.getString(R.string.phone_number), TabType.PHONEBOOK_TAB)
             }
             else null,
             if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
@@ -259,7 +287,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     TabType.UNITS -> UnitsTab(building, sharedViewModel)
                     TabType.TENANTS -> TenantsTab(building, sharedViewModel)
                     TabType.FUNDS -> FundsTab(building)
-                    TabType.REPORTS -> ReportsTab()
+                    TabType.PHONEBOOK_TAB -> PhonebookTab(building, sharedViewModel, permissionLevelPhonebookTab!!)
+                    TabType.REPORTS -> ReportsTab(building, sharedViewModel)
                     null -> {} // Handle invalid index if needed
                 }
 
@@ -940,9 +969,475 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ReportsTab() {
-        Text(text = "Reports Tab Content")
+    fun ReportsTab(
+        buildings: Buildings,
+        sharedViewModel: SharedViewModel,
+        modifier: Modifier = Modifier
+    ) {
+        val buildingId = buildings.buildingId
+
+        var selectedCategory by remember { mutableStateOf<String?>(null) }
+
+        val debtsList by sharedViewModel.getDebtsForBuilding(buildingId).collectAsState(initial = emptyList())
+        val paysList by sharedViewModel.getPaysForBuilding(buildingId).collectAsState(initial = emptyList())
+        val unitsList by sharedViewModel.getUnitsForBuilding(buildingId).collectAsState(initial = emptyList())
+        val ownersList by sharedViewModel.getOwnersForBuilding(buildingId).collectAsState(initial = emptyList())
+        val context = LocalContext.current
+        val YekanTypeface = remember {
+            ResourcesCompat.getFont(context, R.font.yekan)
+        }
+
+
+        val debtsByCategory = debtsList.groupBy { it.description }
+        val paysByCategory = paysList.groupBy { it.description }
+        val allCategories = (debtsByCategory.keys + paysByCategory.keys).distinct()
+        val xAxisLabels = allCategories.toTypedArray()
+
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Text(context.getString(R.string.bilan_report), style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(12.dp))
+            Log.d("allCategories", allCategories.toString())
+            AndroidView(
+                factory = { context ->
+                     BarChart(context).apply {
+                        description.isEnabled = false
+                        setPinchZoom(false)
+                        setDrawGridBackground(false)
+                        legend.isEnabled = true
+                        animateY(1000)
+                        axisRight.isEnabled = false
+                        axisLeft.apply {
+                            axisMinimum = 0f
+                            setDrawGridLines(true)
+                            granularity = 1f
+                            typeface = YekanTypeface
+                            valueFormatter = MoneyValueFormatter()
+                        }
+                         legend.apply {
+                             typeface = YekanTypeface
+                             textSize = 12f
+                             textColor = Color(context.getColor(R.color.black)).toArgb()
+                         }
+                        xAxis.apply {
+                            position = XAxis.XAxisPosition.BOTTOM
+                            granularity = 1f
+                            setDrawGridLines(false)
+                            typeface = YekanTypeface
+                            labelRotationAngle = -45f
+                            setCenterAxisLabels(true)
+                            valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                        }
+                    }
+                },
+                update = { chart ->
+                    val debtsEntries = ArrayList<BarEntry>()
+                    val paysEntries = ArrayList<BarEntry>()
+
+                    allCategories.forEachIndexed { index, category ->
+                        val debtAmount = debtsByCategory[category]?.sumOf { it.amount }?.toFloat() ?: 0f
+                        val payAmount = paysByCategory[category]?.sumOf { it.amount }?.toFloat() ?: 0f
+                        debtsEntries.add(BarEntry(index.toFloat(), debtAmount))
+                        paysEntries.add(BarEntry(index.toFloat(), payAmount))
+                    }
+
+                    if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
+                        val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                            color = Color(context.getColor(R.color.Red_light)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = YekanTypeface
+                        }
+                        val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                            color = Color(context.getColor(R.color.Green)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = YekanTypeface
+                        }
+
+                        val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                        val groupSpace = 0.4f
+                        val barSpace = 0.05f
+
+                        data.groupBars(0f, groupSpace, barSpace)
+                        chart.data = data
+                        chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                        chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                        chart.xAxis.axisMinimum = -0.5f
+                        chart.invalidate()
+                    } else {
+                        chart.clear()
+                        chart.invalidate()
+                    }
+                    chart.setOnChartValueSelectedListener(object : OnChartValueSelectedListener {
+                        override fun onValueSelected(e: Entry?, h: Highlight?) {
+                            if (e == null) return
+                            val xIndex = e.x.toInt()
+                            selectedCategory = if (xIndex in allCategories.indices) {
+                                allCategories[xIndex]
+                            } else {
+                                null
+                            }
+                        }
+
+                        override fun onNothingSelected() {
+                            selectedCategory = null
+                        }
+                    })
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (selectedCategory == null) {
+                Text(
+                    text =  context.getString(R.string.click_on_cost_columns),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                val debtsDetails = debtsByCategory[selectedCategory] ?: emptyList()
+                val paysDetails = paysByCategory[selectedCategory] ?: emptyList()
+
+                CategoryDetailChart(
+                    category = selectedCategory!!,
+                    debts = debtsDetails,
+                    pays = paysDetails,
+                    unitsList = unitsList,
+                    ownersList = ownersList
+                )
+            }
+        }
     }
+
+
+    @Composable
+    fun CategoryDetailChart(
+        category: String,
+        debts: List<Debts>,
+        pays: List<Debts>,
+        unitsList: List<Units>,
+        ownersList: List<Owners>,
+        modifier: Modifier = Modifier
+    ) {
+        val unitsMap = remember(unitsList) { unitsList.associateBy { it.unitId } }
+        val ownersMap = remember(ownersList) { ownersList.associateBy { it.ownerId } }
+        val context = LocalContext.current
+        val yekanTypeface = remember {
+            ResourcesCompat.getFont(context, R.font.yekan)
+        }
+        fun labelForDebt(debt: Debts): String {
+            return debt.unitId?.let { unitsMap[it]?.unitNumber }
+                ?: debt.ownerId?.let { ownerId ->
+                    ownersMap[ownerId]?.let { "${it.firstName} ${it.lastName}" }
+                } ?:  context.getString(R.string.other)
+        }
+
+        val debtsByLabel = debts.groupBy { labelForDebt(it) }
+        val paysByLabel = pays.groupBy { labelForDebt(it) }
+        val allLabels = (debtsByLabel.keys + paysByLabel.keys).distinct()
+        val xAxisLabels = allLabels.toTypedArray()
+
+        Column(modifier = modifier) {
+            Text(
+                text = "${context.getString(R.string.cost_detail)}$category",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            AndroidView(
+                factory = { context ->
+                    BarChart(context).apply {
+                        description.isEnabled = false
+                        setPinchZoom(false)
+                        setDrawGridBackground(false)
+                        legend.isEnabled = true
+                        axisRight.isEnabled = false
+                        axisLeft.apply {
+                            axisMinimum = 0f
+                            setDrawGridLines(true)
+                            granularity = 1f
+                            typeface = yekanTypeface
+                            valueFormatter = MoneyValueFormatter()
+                        }
+                        legend.apply {
+                            typeface = yekanTypeface
+                            textSize = 12f
+                            textColor = Color(context.getColor(R.color.black)).toArgb()
+                        }
+                        xAxis.apply {
+                            position = XAxis.XAxisPosition.BOTTOM
+                            granularity = 1f
+                            setDrawGridLines(false)
+                            labelRotationAngle = -45f
+                            setCenterAxisLabels(true)
+                            textSize = 14f
+                            typeface = yekanTypeface
+                            customFontFamily
+                        }
+                    }
+                },
+                update = { chart ->
+                    val debtsEntries = mutableListOf<BarEntry>()
+                    val paysEntries = mutableListOf<BarEntry>()
+                    allLabels.forEachIndexed { index, label ->
+                        val debtSum = debtsByLabel[label]?.sumOf { it.amount }?.toFloat() ?: 0f
+                        val paySum = paysByLabel[label]?.sumOf { it.amount }?.toFloat() ?: 0f
+                        debtsEntries.add(BarEntry(index.toFloat(), debtSum))
+                        paysEntries.add(BarEntry(index.toFloat(), paySum))
+                    }
+
+                    if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
+                        val debtDataSet = BarDataSet(debtsEntries,  context.getString(R.string.debt)).apply {
+                            color = Color(context.getColor(R.color.Red_light)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                        }
+                        val payDataSet = BarDataSet(paysEntries,  context.getString(R.string.payments)).apply {
+                            color = Color(context.getColor(R.color.Green)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                        }
+
+                        val data = BarData(debtDataSet, payDataSet).apply {
+                            barWidth = 0.3f
+                        }
+                        val groupSpace = 0.4f
+                        val barSpace = 0.05f
+
+                        data.groupBars(0f, groupSpace, barSpace)
+
+                        chart.data = data
+                        chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                        chart.xAxis.axisMaximum = chart.data.xMax + groupSpace + 0.9f
+                        chart.xAxis.axisMinimum = -0.5f
+                        chart.xAxis.typeface = yekanTypeface
+                        chart.notifyDataSetChanged() // مهم
+                        chart.animateY(1000)
+                        chart.invalidate()
+                    } else {
+                        chart.clear()
+                        chart.invalidate()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+            )
+        }
+    }
+
+
+
+    @Composable
+    fun PhonebookTab(
+        building: Buildings,
+        sharedViewModel: SharedViewModel,
+        permissionLevel: PermissionLevel
+    ) {
+        val residents by sharedViewModel.getResidents(building.buildingId).collectAsState(emptyList())
+        Log.d("residents", residents.toString())
+        val emergencyNumbers by sharedViewModel.getEmergencyNumbers(building.buildingId).collectAsState(emptyList())
+        Log.d("emergencyNumbers", emergencyNumbers.toString())
+        var showAddDialog by remember { mutableStateOf(false) }
+        val context = LocalContext.current
+        Scaffold(
+            floatingActionButton = {
+                if (permissionLevel >= PermissionLevel.WRITE) {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true },
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Entry")
+                    }
+                }
+            }
+        ) { padding ->
+            if (residents.isEmpty() && emergencyNumbers.isEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = context.getString(R.string.no_phone_recorded),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                LazyColumn(modifier = Modifier.padding(padding)) {
+                    item {
+                        Text(
+                            context.getString(R.string.tenants),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+
+                    items(residents) { entry ->
+                        PhonebookEntryItem(entry, permissionLevel)
+                    }
+
+                    item {
+                        Text(
+                            context.getString(R.string.emergency_calls),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                    items(emergencyNumbers) { entry ->
+                        PhonebookEntryItem(entry, permissionLevel)
+                    }
+                }
+            }
+        }
+
+        if (showAddDialog) {
+            AddPhonebookEntryDialog(
+                buildingId = building.buildingId,
+                onDismiss = { showAddDialog = false },
+                onConfirm = { entry ->
+                    sharedViewModel.addPhonebookEntry(entry)
+                    showAddDialog = false
+                }
+            )
+        }
+    }
+
+    @Composable
+    fun PhonebookEntryItem(entry: PhonebookEntry, permissionLevel: PermissionLevel) {
+        val context = LocalContext.current
+        var showDeleteDialog by remember { mutableStateOf(false) }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+                .clickable {
+                    val intent = Intent(Intent.ACTION_DIAL).apply {
+                        data = Uri.parse("tel:${entry.phoneNumber}")
+                    }
+                    context.startActivity(intent)
+                }
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(entry.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(entry.phoneNumber, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (permissionLevel >= PermissionLevel.FULL) {
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    }
+                }
+            }
+        }
+
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text(text = context.getString(R.string.delete_call), style = MaterialTheme.typography.bodyLarge) },
+                text = { Text(context.getString(R.string.are_you_sure)) },
+                confirmButton = {
+                    TextButton( onClick = {
+                        sharedViewModel.deletePhonebookEntry(entry)
+                        showDeleteDialog = false
+                    }) { Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) { Text(context.getString(R.string.cancel)) }
+                }
+            )
+        }
+    }
+
+
+    @Composable
+    fun AddPhonebookEntryDialog(
+        buildingId: Long,
+        onDismiss: () -> Unit,
+        onConfirm: (PhonebookEntry) -> Unit
+    ) {
+        var name by remember { mutableStateOf("") }
+        var phone by remember { mutableStateOf("") }
+//        var type by remember { mutableStateOf("resident") }
+        var context = LocalContext.current
+        var selectedType by remember { mutableStateOf(context.getString(R.string.tenants)) }
+//        var selectedTypeList by remember { mutableStateOf("resident") }
+
+        val type = when (selectedType) {
+            context.getString(R.string.tenants) -> "resident"
+            context.getString(R.string.emergency_calls) -> "emergency"
+            else -> "resident"
+        }
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(context.getString(R.string.add_new_phone), style = MaterialTheme.typography.bodyLarge) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(context.getString(R.string.name), style = MaterialTheme.typography.bodyLarge) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text(context.getString(R.string.phone_number)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+
+                        ChipGroupShared(
+                            selectedItems = listOf(selectedType),
+                            onSelectionChange = { newSelection ->
+                                // Since singleSelection = true, newSelection will be a single-item list
+                                if (newSelection.isNotEmpty()) {
+                                    selectedType = newSelection.first()
+                                }
+                            },
+                            items = listOf(context.getString(R.string.tenants), context.getString(R.string.emergency_calls)),
+                            label = context.getString(R.string.select_type),
+                            singleSelection = true
+                        )
+
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onConfirm(
+                            PhonebookEntry(
+                                buildingId = buildingId,
+                                name = name,
+                                phoneNumber = phone,
+                                type = type
+                            )
+                        )
+                    }
+                ) { Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge) }
+            },
+            dismissButton = {
+                Button(onClick = onDismiss) { Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge) }
+            }
+        )
+    }
+
+
 
     @Composable
     fun OwnersTab(building: Buildings, sharedViewModel: SharedViewModel) {

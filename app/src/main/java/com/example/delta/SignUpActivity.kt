@@ -75,7 +75,7 @@ class SignUpActivity : ComponentActivity() {
                             Log.d("user.userId", user.userId.toString())
                             saveLoginState(this, true, userId = user.userId, mobile = user.mobileNumber)
                             Log.d("BuildingFormActivity", "true")
-                            val intent = Intent(this, BuildingFormActivity::class.java)
+                            val intent = Intent(this, ImportOrManualActivity::class.java)
                             startActivity(intent)
                             finish()
                         },

@@ -19,5 +19,8 @@ data class Owners(
     @ColumnInfo(name = "birthday") val birthday: String,
     @ColumnInfo(name = "address") val address: String,
     @ColumnInfo(name = "email") val email: String,
-
+    @ColumnInfo(name = "excel_units_number") val excelUnitsNumber: String? = "",
+    @ColumnInfo(name = "excel_building_name") val excelBuildingName: String? = "",
+    @ColumnInfo(name = "excel_is_manager") val excelIsManager: Boolean? = false,
+    @ColumnInfo(name = "excel_dang") val excelDang: Double? = 0.0
 ) : Parcelable

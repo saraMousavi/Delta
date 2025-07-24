@@ -23,7 +23,10 @@ interface EarningsDao {
     suspend fun getAllMenuEarnings(): List<Earnings>
 
     @Query("SELECT * FROM earnings WHERE buildingId = :buildingId")
-    fun getEarningsForBuilding(buildingId: Long): Flow<List<Earnings>>
+    suspend fun getEarningsForBuilding(buildingId: Long): List<Earnings>
+
+    @Query("SELECT * FROM earnings WHERE buildingId = :buildingId")
+    fun getFlowEarningsForBuilding(buildingId: Long): Flow<List<Earnings>>
 
     // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
     @Query("""

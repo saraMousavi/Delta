@@ -29,7 +29,14 @@
         <activity
             android:name=".HomePageActivity"
             android:exported="false"
-        />
+        >
+
+        </activity>
+        <activity
+            android:name=".ImportOrManualActivity"
+            android:exported="false">
+
+        </activity>
         <activity
             android:name=".LoginPage"
             android:exported="true">

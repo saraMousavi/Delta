@@ -14,4 +14,5 @@
     <color name="Green">#045725</color>
     <color name="Low_Green">#97C7AA</color>
     <color name="Red">#7A2B25</color>
+    <color name="Red_light">#F0645A</color>
 </resources>

@@ -13,6 +13,7 @@ import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
 import com.example.delta.data.dao.OwnersDao
+import com.example.delta.data.dao.PhonebookDao
 import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.dao.TenantDao
 import com.example.delta.data.dao.UnitsDao
@@ -29,8 +30,10 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.EmergencyNumber
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
+import com.example.delta.data.entity.PhonebookEntry
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
 import com.example.delta.data.entity.Tenants
@@ -54,6 +57,7 @@ import com.example.delta.init.Converter
         RoleAuthorizationObjectFieldCrossRef::class,
         User::class, Role::class, UserRoleCrossRef::class,
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
+        PhonebookEntry::class, EmergencyNumber::class,
         UsersBuildingsCrossRef::class],
     version = 1,
     exportSchema = true
@@ -73,6 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun authorizationDao(): AuthorizationDao
     abstract fun roleDao(): RoleDao
     abstract fun uploadedFileDao() : UploadedFileDao
+    abstract fun phonebookDao() : PhonebookDao
 
 
     companion object {

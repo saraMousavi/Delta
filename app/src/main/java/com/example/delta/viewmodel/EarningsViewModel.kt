@@ -27,6 +27,6 @@ class EarningsViewModel (application: Application) : AndroidViewModel(applicatio
     }
 
     fun fetchAndProcessEarnings(buildingId: Long) : Flow<List<Earnings>> {
-        return earningsDao.getEarningsForBuilding(buildingId)
+        return earningsDao.getFlowEarningsForBuilding(buildingId)
     }
 }

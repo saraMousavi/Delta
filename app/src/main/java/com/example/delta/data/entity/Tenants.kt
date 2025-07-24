@@ -22,5 +22,7 @@ data class Tenants(
     @ColumnInfo(name = "start_date") val startDate: String,
     @ColumnInfo(name = "end_date") val endDate: String,
     @ColumnInfo(name = "status") val status: String,
+    @ColumnInfo(name = "excel_units_number") val excelUnitsNumber: String? = "",
+    @ColumnInfo(name = "excel_building_name") val excelBuildingName: String? = ""
 
 ) : Parcelable
