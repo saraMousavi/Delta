@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -13,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
+import com.example.delta.data.dao.NotificationDao
 import com.example.delta.data.dao.UnitsDao.UnitDangSum
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.AuthorizationObject
@@ -25,6 +27,7 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.Notification
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.PhonebookEntry
@@ -39,9 +42,11 @@ import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
+import com.example.delta.data.entity.UsersNotificationCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
+import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.PermissionLevel
@@ -55,9 +60,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -65,6 +73,9 @@ import java.io.File
 import kotlin.math.min
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val context = getApplication<Application>().applicationContext
+    val userId = Preference().getUserId(context)
 
     private val buildingDao = AppDatabase.getDatabase(application).buildingsDao()
     private val ownersDao = AppDatabase.getDatabase(application).ownersDao()
@@ -80,6 +91,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val buildingUsagesDao = AppDatabase.getDatabase(application).buildingUsageDao()
     private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
     private val phonebookDao = AppDatabase.getDatabase(application).phonebookDao()
+    private val notificationDao = AppDatabase.getDatabase(application).notificationDao()
 
     // State for Building Info Page
     var name by mutableStateOf("")
@@ -155,10 +167,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // Options Lists
     val periods = Period.entries
 
+    // Hold the flow of all notifications with read statuses
+    private val _allNotifications = notificationDao.getNotificationsWithReadStatusByUser(userId)
+
+    // Filter to system and manager notifications as StateFlows
+    val systemNotifications = _allNotifications
+        .map { list -> list.filter { it.notification.type == NotificationType.SYSTEM } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val managerNotifications = _allNotifications
+        .map { list -> list.filter { it.notification.type == NotificationType.MANAGER } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
 
     init {
 //        loadOwners()
 //        loadTenants()
+//        loadNotification()
         loadCosts()
         loadBuildingsWithTypesAndUsages()
 //        loadDefaultCosts()
@@ -249,6 +274,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getBuildingsWithUserRole(userId: Long): Flow<List<BuildingWithTypesAndUsages>> = flow {
         val units = buildingDao.getBuildingsWithUserRole(userId)
+        emit(units)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getBuildingsForUser(userId: Long): Flow<List<Buildings>> = flow {
+        val units = buildingDao.getBuildingsForUser(userId)
         emit(units)
     }.flowOn(Dispatchers.IO)
 
@@ -495,6 +526,82 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
+    fun getNotifications(): Flow<List<Notification>> = flow {
+        val notification = notificationDao.getNotifications()
+        emit(notification)
+    }.flowOn(Dispatchers.IO)
+
+    fun getNotificationsWithReadStatus(userId: Long = this.userId): Flow<List<NotificationDao.NotificationWithRead>> {
+        return notificationDao.getNotificationsWithReadStatusByUser(userId)
+    }
+
+
+    fun getUsersNotificationsByUser(userId: Long): Flow<List<UsersNotificationCrossRef>> = flow {
+        val notification = notificationDao.getUsersNotificationsByUser(userId)
+        emit(notification)
+    }.flowOn(Dispatchers.IO)
+
+    fun getUsersNotificationsByNotification(notificationId: Long, userId: Long): Flow<UsersNotificationCrossRef> = flow {
+        val notification = notificationDao.getUsersNotificationsByNotification(notificationId, userId)
+        emit(notification)
+    }.flowOn(Dispatchers.IO)
+
+    fun deleteUserNotificationCrossRef(userId: Long, notificationId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val crossRef = notificationDao.getUsersNotificationsByNotification(notificationId, userId)
+            if (crossRef != null) {
+                notificationDao.deleteUserNotificationCrossRef(crossRef)
+            }
+        }
+    }
+
+
+
+    fun getUsersNotificationsById(notificationId: Long): Flow<UsersNotificationCrossRef> = flow {
+        val notification = notificationDao.getUsersNotificationsById(notificationId)
+        emit(notification)
+    }.flowOn(Dispatchers.IO)
+
+    fun updateNotification(notification: Notification){
+        viewModelScope.launch(Dispatchers.IO) {
+            notificationDao.updateNotification(notification)
+        }
+    }
+
+    fun updateUserNotificationCrossRef(notification: UsersNotificationCrossRef){
+        viewModelScope.launch(Dispatchers.IO) {
+            notificationDao.updateUserNotificationCrossRef(notification)
+        }
+    }
+    fun insertNotification(
+        notification: Notification,
+        targetUserIds: List<Long> // null for all users
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Insert notification and get its id
+            val notificationId = notificationDao.insertNotification(notification)
+
+            // Insert a UsersNotificationCrossRef for each target user
+            Log.d("targetUserIds", targetUserIds.toString())
+            targetUserIds.forEach { userId ->
+                Log.d("userIdd", userId.toString())
+                notificationDao.insertUsersNotificationCrossRef(UsersNotificationCrossRef(userId, notificationId, isRead = false))
+            }
+        }
+    }
+
+
+
+    fun getNotificationsForCrossRefsFlow(crossRefs: List<UsersNotificationCrossRef>): Flow<List<Notification>> = flow {
+        val notifications = notificationDao.getNotificationsForCrossRefs(crossRefs)  // suspend call
+        emit(notifications)
+    }.flowOn(Dispatchers.IO)
+
+    fun getNotificationsByNotificationId(notificationId:Long): Flow<Notification> = flow {
+        val notifications = notificationDao.getNotificationsById(notificationId) // suspend call
+        emit(notifications)
+    }.flowOn(Dispatchers.IO)
+
 
     fun getUsers(): Flow<List<User>> = flow {
         val user = userDao.getUsers()
@@ -514,6 +621,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getUserByRoleId(roleId: Long): Flow<User> = flow {
         emit(userDao.getUserByRoleId(roleId))
+    }.flowOn(Dispatchers.IO)
+
+    fun getUsersForBuilding(buildingId: Long): Flow<List<User>> = flow {
+        emit(userDao.getUsersForBuilding(buildingId))
     }.flowOn(Dispatchers.IO)
 
 
@@ -1864,6 +1975,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         fileList.add(uploadedFileEntity)
     }
 
+
+
     fun loadCosts() {
         viewModelScope.launch(Dispatchers.IO) {
             val costsFromDb = costsDao.getCostsWithNullBuildingId()
@@ -2223,26 +2336,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     }
 
-    fun getUsersBuilding(context: Context) {
-        Building().fetchBuildings(
-            context,
-            phone = Preference().getUserMobile(context = context) ?: "",
-            userId = Preference().getUserId(context = context).toString(),
-            onSuccess = { buildings ->
-                // Handle the userList (e.g., update your ViewModel, display in UI)
-                //Example:
-                //  userViewModel.updateUsers(userList)
-                _buildingList.value = buildings
-            },
-            onError = { error ->
-                Log.e("error", error.toString())
-                // Handle the error (e.g., show a toast, log the error)
-                // Example:
-                // Toast.makeText(context, "Error fetching users: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
-        )
 
-    }
 
     fun deleteFile(path: String) {
         viewModelScope.launch(Dispatchers.IO) {

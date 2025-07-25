@@ -40,6 +40,15 @@ interface BuildingsDao {
 """)
     fun getBuildingsWithUserRole(userId: Long): List<BuildingWithTypesAndUsages>
 
+
+    @Query("""
+    SELECT b.*
+        FROM buildings b
+            INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
+            WHERE b.userId = :userId
+""")
+    fun getBuildingsForUser(userId: Long): List<Buildings>
+
     @Query("""
     SELECT * FROM  users_buildings_cross_ref ub 
 """)
@@ -78,16 +87,6 @@ interface BuildingsDao {
     @Query("SELECT * FROM buildings WHERE name = :buildingName")
     fun getBuilding(buildingName: String): Buildings
 
-//    @Query("""
-//        SELECT
-//            b.*,
-//            bt.building_type_name AS buildingTypeName,
-//            bu.building_usage_name AS buildingUsageName
-//        FROM buildings b
-//        LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
-//        LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
-//    """)
-//    fun getAllBuildingsWithTypesAndUsages(): Flow<List<BuildingWithTypesAndUsages>>
 
     @Query("SELECT bt.building_type_name FROM building_types bt WHERE bt.buildingTypeId = :buildingTypeId")
     suspend fun getBuildingTypeName(buildingTypeId: Long?): String

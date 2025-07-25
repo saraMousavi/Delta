@@ -12,6 +12,7 @@ import com.example.delta.data.dao.BuildingsDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.dao.NotificationDao
 import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.dao.PhonebookDao
 import com.example.delta.data.dao.RoleDao
@@ -31,6 +32,7 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.EmergencyNumber
+import com.example.delta.data.entity.Notification
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.PhonebookEntry
@@ -43,6 +45,7 @@ import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
+import com.example.delta.data.entity.UsersNotificationCrossRef
 import com.example.delta.init.Converter
 
 @Database(
@@ -58,6 +61,7 @@ import com.example.delta.init.Converter
         User::class, Role::class, UserRoleCrossRef::class,
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
         PhonebookEntry::class, EmergencyNumber::class,
+        Notification::class, UsersNotificationCrossRef::class,
         UsersBuildingsCrossRef::class],
     version = 1,
     exportSchema = true
@@ -78,6 +82,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun roleDao(): RoleDao
     abstract fun uploadedFileDao() : UploadedFileDao
     abstract fun phonebookDao() : PhonebookDao
+    abstract fun notificationDao() : NotificationDao
 
 
     companion object {

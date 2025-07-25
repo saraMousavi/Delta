@@ -2,6 +2,7 @@ package com.example.delta.init
 
 import androidx.room.TypeConverter
 import com.example.delta.enums.FundFlag
+import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible

@@ -337,4 +337,16 @@
     <string name="guest_user">کاربر مهمان</string>
     <string name="guest_dialog_info">شما به عنوان کاربر مهمان وارد شده اید و \nتمامی این اطلاعات به صورت موفقت می باشد برای اینکه اطلاعات شما به \nصورت دائمی در سرور ذخیره شود لطفا ثبت نام کنید.</string>
     <string name="confirm">تایید</string>
+    <string name="create_notification">ایجاد نوتیفیکیشن</string>
+    <string name="no_manager_notification">هیچ نوتیفیکیشنی از سمت مدیر ساختمان ثبت نشده است.</string>
+    <string name="manager_notification">مدیر ساختمان</string>
+    <string name="system_notification">سیستم</string>
+    <string name="no_system_notification">هیچ نوتیفیکیشنی ازسمت سیستم ثبت نشده است.</string>
+    <string name="message">متن</string>
+    <string name="building_select">انتخاب ساختمان</string>
+    <string name="no_building_recorded">ساختمانی ثبت نشده است.</string>
+    <string name="user_select">انتخاب کاربر</string>
+    <string name="please_select_building">لطفا ابتدا یک ساختمان را انتخاب نمایید.</string>
+    <string name="no_user_recorded">هیچ کاربری ثبت نشده است.</string>
+    <string name="delete_notification">حذف نوتیفیکیشن</string>
 </resources>

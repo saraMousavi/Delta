@@ -84,6 +84,7 @@ class HomePageActivity : ComponentActivity() {
             AppTheme {
                 DetailDrawer(
                     title = getString(R.string.menu_title),
+                    sharedViewModel = sharedViewModel,
                     imageId = R.drawable.profilepic
                 ) { innerPadding ->
                     Box(

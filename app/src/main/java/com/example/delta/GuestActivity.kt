@@ -190,6 +190,7 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
                     when (selectedRole) {
                         Roles.GUEST_BUILDING_MANAGER -> {
                             //@todo check it to be done once
+                            val guestBuilding = sharedViewModel.getBuildingsForUser(user.value!!.userId)
                             saveLoginState(thisActivity, true, userId = user.value!!.userId, mobile = user.value!!.mobileNumber)
                             //Insert Sample Building for guest
                             Log.d("userid", user.value!!.userId.toString())

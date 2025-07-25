@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "f000926664ac1e84477565a0e0a5b79c",
+    "identityHash": "3188ddbf71b16262d22f4ee07557d286",
     "entities": [
       {
         "tableName": "building_types",
@@ -1505,6 +1505,152 @@
         }
       },
       {
+        "tableName": "notification",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`notificationId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `message` TEXT NOT NULL, `type` TEXT NOT NULL, `userId` INTEGER, `timestamp` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "notificationId",
+            "columnName": "notificationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "notificationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_userId` ON `${TABLE_NAME}` (`userId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "user",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "users_notification_cross_ref",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `notificationId` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, PRIMARY KEY(`userId`, `notificationId`), FOREIGN KEY(`notificationId`) REFERENCES `notification`(`notificationId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationId",
+            "columnName": "notificationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRead",
+            "columnName": "isRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "notificationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_users_notification_cross_ref_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_users_notification_cross_ref_userId` ON `${TABLE_NAME}` (`userId`)"
+          },
+          {
+            "name": "index_users_notification_cross_ref_notificationId",
+            "unique": false,
+            "columnNames": [
+              "notificationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_users_notification_cross_ref_notificationId` ON `${TABLE_NAME}` (`notificationId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "notification",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "notificationId"
+            ],
+            "referencedColumns": [
+              "notificationId"
+            ]
+          },
+          {
+            "table": "user",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
         "tableName": "users_buildings_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `roleName` TEXT NOT NULL, PRIMARY KEY(`userId`, `buildingId`), FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1582,7 +1728,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f000926664ac1e84477565a0e0a5b79c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3188ddbf71b16262d22f4ee07557d286')"
     ]
   }
 }

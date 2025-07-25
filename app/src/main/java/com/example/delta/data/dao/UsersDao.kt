@@ -12,6 +12,7 @@ import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
+import com.example.delta.volley.Users
 
 @Dao
 interface UsersDao {    
@@ -53,5 +54,11 @@ interface UsersDao {
         @Transaction
         @Query("SELECT * FROM user_role_cross_ref")
         fun getUsersWithRoles(): List<UserRoleCrossRef>
+
+        @Transaction
+        @Query("SELECT u.* FROM users_buildings_cross_ref ubc " +
+                " inner join user u on u.userId = ubc.userId " +
+                " where ubc.buildingId =:buildingId")
+        fun getUsersForBuilding(buildingId : Long): List<User>
 
 }
