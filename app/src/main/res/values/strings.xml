@@ -276,6 +276,7 @@
     <string name="password">رمز</string>
     <string name="password_too_short">پیچیدگی پسورد کم</string>
     <string name="manager">هیئت مدیره</string>
+    <string name="building_manager">مدیر ساختمان</string>
     <string name="dang">دانگ</string>
     <string name="invalid_dang">مقدار وارد شده نامعتبر است.</string>
     <string name="loading">در حال بارگذاری</string>
@@ -328,4 +329,12 @@
     <string name="click_on_cost_columns">لطفا برای مشاهده جزئیات هزینه برای ستون ها کلیک کنید.</string>
     <string name="other">سایر</string>
     <string name="cost_detail">"جزئیات هزینه ی "</string>
+    <string name="select_role">انتخاب نقش</string>
+    <string name="complex_manager">مدیر شهرک</string>
+    <string name="independent_user">کاربر مستقل</string>
+    <string name="admin">مدیرسیستم</string>
+    <string name="choose_role">انتخاب نقش</string>
+    <string name="guest_user">کاربر مهمان</string>
+    <string name="guest_dialog_info">شما به عنوان کاربر مهمان وارد شده اید و \nتمامی این اطلاعات به صورت موفقت می باشد برای اینکه اطلاعات شما به \nصورت دائمی در سرور ذخیره شود لطفا ثبت نام کنید.</string>
+    <string name="confirm">تایید</string>
 </resources>

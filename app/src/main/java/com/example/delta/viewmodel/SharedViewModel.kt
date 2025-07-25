@@ -512,6 +512,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
 
+    fun getUserByRoleId(roleId: Long): Flow<User> = flow {
+        emit(userDao.getUserByRoleId(roleId))
+    }.flowOn(Dispatchers.IO)
+
+
     fun getRoleByUserId(userId: Long): Flow<Role> = flow {
         val user = userDao.getRoleByUserId(userId)
         emit(user)
@@ -565,6 +570,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getAllUnits(): Flow<List<Units>> = flow {
         val units = tenantsDao.getAllUnits()
         emit(units)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getAllUsers(): Flow<List<User>> = flow {
+        val users = userDao.getUsers()
+        emit(users)
     }.flowOn(Dispatchers.IO)
 
     fun getUnitsForOwners(ownerId: Long): Flow<List<UnitWithDang>> = flow {
@@ -1091,7 +1102,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     if (role == null) {
                         roleName = "nothing"
                     } else {
-                        roleName = role.roleName
+                        roleName = role.roleName.getDisplayName(context)
                     }
                     val building = Buildings(
                         name = name,
@@ -1456,7 +1467,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         UsersBuildingsCrossRef(
                             userId = building.userId,
                             buildingId = buildingId,
-                            roleName = roleName
+                            roleName = "مدیر ساختمان"
                         )
                     )
                     successCount++
@@ -1464,6 +1475,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 units.forEach { unit ->
                     val tmpBuilding = buildingDao.getBuilding(unit.excelBuildingName ?: "-1")
                     val allBuilding = buildingDao.getAllBuildingsList()
+                    Log.d("allBuilding",allBuilding.toString())
                     unit.buildingId = tmpBuilding.buildingId
                     unitsDao.insertUnit(unit)
                 }

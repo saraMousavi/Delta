@@ -40,6 +40,10 @@ interface UsersDao {
         fun getUserById(userId: Long): User?
 
 
+        @Query("SELECT * FROM user WHERE roleId = :roleId")
+        fun getUserByRoleId(roleId: Long): User
+
+
         @Query("""
     SELECT role.* FROM user_role_cross_ref as ur 
                 INNER JOIN role on role.roleId = ur.roleId where userId = :userId

@@ -47,12 +47,12 @@ import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.AuthObject
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.PermissionLevel
+import com.example.delta.enums.Roles
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.getValue
 
 
 private lateinit var roleDao: RoleDao // Add Role DAO
@@ -208,9 +208,7 @@ fun SignUpScreen(
                             user.userId = userId
                             insertDefaultAuthorizationData()
                             onSignUpSuccess(user)
-                        })
-
-
+                    })
 
                 },
                 enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank(),
@@ -244,7 +242,7 @@ private fun insertDefaultAuthorizationData() {
         }
 
         // Admin and Manager: all auth objects and all fields with FULL permission
-        val adminManagerRoles = listOf("Admin", "Manager")
+        val adminManagerRoles = listOf(Roles.ADMIN, Roles.BUILDING_MANAGER)
         adminManagerRoles.forEach { roleName ->
             val role = roleMap[roleName] ?: return@forEach
             AuthObject.getAll().forEach { authObject ->
@@ -254,7 +252,7 @@ private fun insertDefaultAuthorizationData() {
         }
 
         // Tenant role: get fields from Room for objectId = 3 (BuildingProfile)
-        roleMap["Tenant"]?.let { tenantRole ->
+        roleMap[Roles.PROPERTY_TENANT]?.let { tenantRole ->
             val tenantFieldNames = listOf(
                 BuildingProfileFields.UNITS_TAB.fieldNameRes,
                 BuildingProfileFields.USERS_OWNERS.fieldNameRes,
@@ -267,7 +265,7 @@ private fun insertDefaultAuthorizationData() {
         }
 
         // Owner role: similar to tenant plus owners tab fields
-        roleMap["Owner"]?.let { ownerRole ->
+        roleMap[Roles.PROPERTY_OWNER]?.let { ownerRole ->
             val ownerFieldNames = listOf(
                 BuildingProfileFields.UNITS_TAB.fieldNameRes,
                 BuildingProfileFields.USERS_OWNERS.fieldNameRes,

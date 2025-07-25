@@ -97,6 +97,7 @@ import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.FundFlag
 import com.example.delta.enums.PermissionLevel
+import com.example.delta.enums.Roles
 import com.example.delta.factory.SharedViewModelFactory
 import com.example.delta.init.AuthUtils
 import com.example.delta.init.NumberCommaTransformation
@@ -1506,7 +1507,7 @@ fun AddNewTenantItem(onClick: () -> Unit) {
 
                     is BuildingProfileActivity -> {
                         Log.d("currentIsUnitOwner", currentIsUnitOwner.toString())
-                        if (role.value!!.roleName == "Admin" || role.value!!.roleName == "Manager") {
+                        if (role.value!!.roleName == Roles.ADMIN || role.value!!.roleName == Roles.BUILDING_MANAGER) {
                             onClick()
                         } else if (currentIsUnitOwner) {
                             onClick()

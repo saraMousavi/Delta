@@ -29,21 +29,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
-import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.Owners
-import com.example.delta.data.entity.Tenants
-import com.example.delta.data.entity.Units
-import com.example.delta.init.Preference
+import com.example.delta.init.FileManagement
 import com.example.delta.viewmodel.SharedViewModel
 import org.apache.poi.ss.usermodel.Cell
 import org.apache.poi.ss.usermodel.CellType
 import org.apache.poi.ss.usermodel.DateUtil
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
-
 
 class ImportOrManualActivity : ComponentActivity() {
 
@@ -62,7 +52,7 @@ class ImportOrManualActivity : ComponentActivity() {
                 try {
                     val inputStream = contentResolver.openInputStream(uri)
                     if (inputStream != null) {
-                        handleExcelFile(inputStream)
+                        FileManagement().handleExcelFile(inputStream, this, sharedViewModel)
                         inputStream.close()
                     } else {
                         Toast.makeText(this, "Unable to open selected file", Toast.LENGTH_SHORT).show()
@@ -74,194 +64,6 @@ class ImportOrManualActivity : ComponentActivity() {
                             .show()
                     }
                 }
-            }
-        }
-    }
-
-    private fun handleExcelFile(inputStream: InputStream) {
-        try {
-            val workbook = XSSFWorkbook(inputStream)
-            val buildingSheet = workbook.getSheetAt(0)
-            val unitsSheet = workbook.getSheetAt(1)
-            val ownersSheet = workbook.getSheetAt(2)
-            val tenantSheet = workbook.getSheetAt(3)
-            val buildingsList = mutableListOf<Buildings>()
-            val unitsList = mutableListOf<Units>()
-            val ownersList = mutableListOf<Owners>()
-            val tenantsList = mutableListOf<Tenants>()
-
-            for (row in buildingSheet) {
-                if (row.rowNum == 0) continue
-
-                val name = row.getCell(0)?.stringCellValue ?: ""
-                val phone = row.getCell(1)?.stringCellValue ?: ""
-                val email = row.getCell(2)?.stringCellValue ?: ""
-                val postcode = row.getCell(3)?.stringCellValue ?: ""
-                val street = row.getCell(4)?.stringCellValue ?: ""
-                if (name.isEmpty()){
-                    break
-                } else {
-                    val building = Buildings(
-                        name = name,
-                        phone = phone,
-                        email = email,
-                        postCode = postcode,
-                        street = street,
-                        province = "Tehran",
-                        state = "Central",
-                        buildingTypeId = 1,
-                        buildingUsageId = 1,
-                        fund = 0.0,
-                        userId = Preference().getUserId(context = this),
-                        utilities = emptyList()
-                    )
-                    buildingsList.add(building)
-                }
-            }
-            for (row in unitsSheet) {
-                if (row.rowNum == 0) continue
-                val unitNumber = getCellStringValue(row.getCell(0))
-                if (unitNumber.isEmpty()) {
-                    break
-                } else {
-
-                    val area = getCellStringValue(row.getCell(1))
-                    val numberOfRoom = getCellStringValue(row.getCell(2))
-                    val numberOfParking = getCellStringValue(row.getCell(3))
-                    val buildingName = getCellStringValue(row.getCell(4))
-
-                    val units = Units(
-                        unitNumber = unitNumber,
-                        area = area,
-                        numberOfRooms = numberOfRoom,
-                        numberOfParking = numberOfParking,
-                        excelBuildingName = buildingName
-                    )
-                    unitsList.add(units)
-                }
-
-            }
-
-            for (row in ownersSheet) {
-                if (row.rowNum == 0) continue
-                val firstName = getCellStringValue(row.getCell(0))
-                if (firstName.isEmpty()) {
-                    break
-                } else {
-                    val lastName = getCellStringValue(row.getCell(1))
-                    val phoneNumber = getCellStringValue(row.getCell(2))
-                    val mobileNumber = getCellStringValue(row.getCell(3))
-                    val address = getCellStringValue(row.getCell(4))
-                    val email = getCellStringValue(row.getCell(5))
-                    val unitsNumber = getCellStringValue(row.getCell(6))
-                    val buildingName = getCellStringValue(row.getCell(7))
-                    val isManager = getCellStringValue(row.getCell(8))
-                    val dang = getCellStringValue(row.getCell(9))
-                    val owner = Owners(
-                        firstName = firstName,
-                        lastName = lastName,
-                        phoneNumber = phoneNumber,
-                        mobileNumber = mobileNumber,
-                        address = address,
-                        birthday = "",
-                        email = email,
-                        excelUnitsNumber = unitsNumber,
-                        excelBuildingName = buildingName,
-                        excelIsManager = isManager.toBoolean(),
-                        excelDang = dang.toDouble()
-                    )
-                    ownersList.add(owner)
-                }
-            }
-            for (row in tenantSheet) {
-                if (row.rowNum == 0) continue
-                val firstName = getCellStringValue(row.getCell(0))
-                if (firstName.isEmpty()) {
-                    break
-                } else {
-                    val lastName = getCellStringValue(row.getCell(1))
-                    val phoneNumber = getCellStringValue(row.getCell(2))
-                    val mobileNumber = getCellStringValue(row.getCell(3))
-                    val email = getCellStringValue(row.getCell(4))
-                    val numberOfTenants = getCellStringValue(row.getCell(5))
-                    val startDate = getCellStringValue(row.getCell(6))
-                    val endDate = getCellStringValue(row.getCell(7))
-                    val status = getCellStringValue(row.getCell(8))
-                    val unitsNumber = getCellStringValue(row.getCell(9))
-                    val buildingName = getCellStringValue(row.getCell(10))
-                    val tenants = Tenants(
-                        firstName = firstName,
-                        lastName = lastName,
-                        phoneNumber = phoneNumber,
-                        mobileNumber = mobileNumber,
-                        birthday = "",
-                        email = email,
-                        startDate = startDate,
-                        endDate = endDate,
-                        status = status,
-                        numberOfTenants = numberOfTenants,
-                        excelUnitsNumber = unitsNumber,
-                        excelBuildingName = buildingName
-                    )
-                    tenantsList.add(tenants)
-                }
-            }
-            workbook.close()
-
-            sharedViewModel.saveBuildingsList(buildingsList, unitsList, ownersList, tenantsList) { successCount, errors ->
-                runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        "ثبت $successCount ساختمان موفق بود.\nخطاها:\n${errors.joinToString("\n")}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    val intent = Intent(this, HomePageActivity::class.java)
-                    startActivity(intent)
-                    finish()
-                }
-            }
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            runOnUiThread {
-                Toast.makeText(this, "خطا در پردازش فایل اکسل: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-
-    private fun openTemplateExcel() {
-        val inputStream = resources.openRawResource(R.raw.export_delta_template)
-        val fileName = "export_delta_template.xlsx"
-        val file = File(cacheDir, fileName)
-
-        inputStream.use { input ->
-            FileOutputStream(file).use { output ->
-                input.copyTo(output)
-            }
-        }
-
-        val fileUri = FileProvider.getUriForFile(
-            this,
-            "${packageName}.fileprovider",
-            file
-        )
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(fileUri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-
-        try {
-            startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            Log.e("e", e.toString())
-            runOnUiThread {
-                Toast.makeText(
-                    this,
-                    "برنامه‌ای برای باز کردن فایل اکسل وجود ندارد",
-                    Toast.LENGTH_LONG
-                ).show()
             }
         }
     }
@@ -287,7 +89,7 @@ class ImportOrManualActivity : ComponentActivity() {
     @Composable
     fun MainScreen() {
         val context = LocalContext.current
-
+        val thisActivity = this
 
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -321,7 +123,15 @@ class ImportOrManualActivity : ComponentActivity() {
                 text = "دانلود فایل تمپلیت اکسل وارد کردن اطلاعات",
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable {
-                    openTemplateExcel()
+                    val fileManager = FileManagement()
+
+                    fileManager.openTemplateExcel(
+                        activity = thisActivity,
+                        rawResourceId = R.raw.export_delta_template,
+                        fileName = "export_delta_template.xlsx",
+                        authority = "${packageName}.fileprovider"
+                    )
+
                 },
                 style = MaterialTheme.typography.bodyLarge
             )

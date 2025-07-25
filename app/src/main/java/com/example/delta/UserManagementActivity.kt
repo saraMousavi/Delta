@@ -145,7 +145,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
                 selectedItem = selectedRole,
                 onItemSelected = { selectedRole = it },
                 label = context.getString(R.string.role),
-                itemLabel = { it.roleName },
+                itemLabel = { it.roleName.getDisplayName(context) },
                 modifier = Modifier.fillMaxWidth()
             )
 

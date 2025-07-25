@@ -4,6 +4,8 @@ package com.example.delta.init
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.delta.R
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.BuildingsDao
@@ -16,12 +18,15 @@ import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Role
+import com.example.delta.data.entity.User
+import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
+import com.example.delta.enums.Roles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -68,10 +73,15 @@ class MyApplication : Application() {
             val existingRoles = roleDao.getRoles().firstOrNull()
             if (existingRoles == null) {
                 val defaultRoles = listOf(
-                    Role(roleName = "Admin", roleDescription = "System Administrator"),
-                    Role(roleName = "Owner", roleDescription = "Property Owner"),
-                    Role(roleName = "Manager", roleDescription = "Property Manager"),
-                    Role(roleName = "Tenant", roleDescription = "Building Tenant")
+                    Role(roleName = Roles.ADMIN, roleDescription = "System Administrator"),
+                    Role(roleName = Roles.PROPERTY_OWNER, roleDescription = "Property Owner"),
+                    Role(roleName = Roles.BUILDING_MANAGER, roleDescription = "Property Manager"),
+                    Role(roleName = Roles.PROPERTY_TENANT, roleDescription = "Building Tenant"),
+                    Role(roleName = Roles.INDEPENDENT_USER, roleDescription = "Independent User"),
+                    Role(roleName = Roles.GUEST_BUILDING_MANAGER, roleDescription = "Guest Property Manager"),
+                    Role(roleName = Roles.GUEST_PROPERTY_OWNER, roleDescription = "Guest Property Owner"),
+                    Role(roleName = Roles.GUEST_PROPERTY_TENANT, roleDescription = "Guest Building Tenant"),
+                    Role(roleName = Roles.GUEST_INDEPENDENT_USER, roleDescription = "Guest Independent User")
                 )
                 defaultRoles.forEach { role ->
                     roleDao.insertRole(role)
@@ -81,6 +91,67 @@ class MyApplication : Application() {
             } else {
                 Log.d("MyApplication", "Roles already exist")
             }
+
+            // Insert Default Guest User
+            val guestBuildingManager = User(
+                mobileNumber = "01111111111",
+                password = "123456",
+                roleId = 6L // guest user for building manager
+            )
+            var userId = usersDao.insertUser(guestBuildingManager)
+
+            usersDao.insertUserRoleCrossRef(
+                UserRoleCrossRef(
+                    roleId = 6L,
+                    userId = userId
+                )
+            )
+
+            val guestPropertyOwner = User(
+                mobileNumber = "0222222222",
+                password = "123456",
+                roleId = 7L // guest user for owner
+            )
+            userId = usersDao.insertUser(guestPropertyOwner)
+
+            usersDao.insertUserRoleCrossRef(
+                UserRoleCrossRef(
+                    roleId = 7L,
+                    userId = userId
+                )
+            )
+
+
+            val guestPropertyTenant = User(
+                mobileNumber = "03333333333",
+                password = "123456",
+                roleId = 8L // guest user for building tenant
+            )
+            userId = usersDao.insertUser(guestPropertyTenant)
+
+            usersDao.insertUserRoleCrossRef(
+                UserRoleCrossRef(
+                    roleId = 8L,
+                    userId = userId
+                )
+            )
+
+            val guestIndependentUser = User(
+                mobileNumber = "04444444444",
+                password = "123456",
+                roleId = 9L // guest user for independent user
+            )
+            userId = usersDao.insertUser(guestIndependentUser)
+
+            usersDao.insertUserRoleCrossRef(
+                UserRoleCrossRef(
+                    roleId = 9L,
+                    userId = userId
+                )
+            )
+
+            val allUsers = usersDao.getUsers()
+            Log.d("allUsrs", allUsers.toString())
 
             // Insert Default Building Types
             val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()

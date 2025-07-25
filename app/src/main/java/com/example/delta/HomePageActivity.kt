@@ -28,10 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +46,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,9 +61,11 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
+import com.example.delta.data.entity.User
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.Preference
 import com.example.delta.interfaces.RolePermissionsManager
+import kotlinx.coroutines.flow.first
 
 
 class HomePageActivity : ComponentActivity() {
@@ -127,6 +132,7 @@ class HomePageActivity : ComponentActivity() {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildingList(
     viewModel: BuildingsViewModel,
@@ -134,12 +140,57 @@ fun BuildingList(
 ) {
 
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        //sharedViewModel.getUsersBuilding(context)
-    }
-
     val userId = Preference().getUserId(context = context)
     Log.d("userId", userId.toString())
+    var showGuestDialog by remember { mutableStateOf(false) }
+
+    var user by remember { mutableStateOf<User?>(null) }
+    LaunchedEffect(userId) {
+        val fetchedUser = sharedViewModel.getUserById(userId).first()
+        user = fetchedUser
+        Log.d("MyScreen", "user: $fetchedUser")
+
+        if (fetchedUser != null && fetchedUser.roleId >= 6) {
+            showGuestDialog = true
+        }
+    }
+
+
+
+
+
+
+
+
+    if(showGuestDialog) {
+        AlertDialog(
+            onDismissRequest = { showGuestDialog = false },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.guest_user),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.guest_dialog_info),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showGuestDialog = false
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.confirm),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
+    }
 //    val buildingsWithTypesAndUsages by sharedViewModel.buildingList.collectAsState()
     val buildingsWithTypesAndUsages by sharedViewModel.getBuildingsWithUserRole(userId)//getAllBuildingsWithTypeAndUsage()
         .collectAsState(initial = emptyList())
