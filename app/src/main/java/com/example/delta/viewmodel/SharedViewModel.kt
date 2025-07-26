@@ -24,6 +24,7 @@ import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
@@ -92,6 +93,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
     private val phonebookDao = AppDatabase.getDatabase(application).phonebookDao()
     private val notificationDao = AppDatabase.getDatabase(application).notificationDao()
+    private val cityComplexDao = AppDatabase.getDatabase(application).cityComplexDao()
 
     // State for Building Info Page
     var name by mutableStateOf("")
@@ -136,6 +138,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     // These represent the selected items from your dropdowns
     var selectedBuildingTypes by mutableStateOf<BuildingTypes?>(null)
+    var selectedCityComplex by mutableStateOf<CityComplex?>(null)
     var selectedBuildingUsages by mutableStateOf<BuildingUsages?>(null)
     var selectedEarnings by mutableStateOf<Earnings?>(null)
 
@@ -332,6 +335,19 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         val buildings = buildingDao.getBuildings()
         emit(buildings)
     }.flowOn(Dispatchers.IO)
+
+    fun getAllCityComplex(): Flow<List<CityComplex>> = flow {
+        val buildings = cityComplexDao.getAllCityComplexesFlow()
+        emit(buildings)
+    }.flowOn(Dispatchers.IO)
+
+    // Insert city complex
+    fun insertCityComplex(cityComplex: CityComplex, onInserted: (Long) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = cityComplexDao.insertCityComplex(cityComplex)
+            onInserted(id)
+        }
+    }
 
     fun getPaysForUnit(unitId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getPaysForUnit(unitId)
@@ -1227,7 +1243,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         state = state,
                         fund = 0.0,
                         utilities = sharedUtilities,
-                        userId = userId
+                        userId = userId,
+                        complexId = selectedCityComplex?.complexId
                     )
 
                     val buildingId = buildingDao.insertBuilding(building)
@@ -1548,7 +1565,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     state = state,
                     fund = 0.0,
                     utilities = sharedUtilities,
-                    userId = userId
+                    userId = userId,
+                    complexId = selectedCityComplex?.complexId
                 )
                 onSuccess(building)
             } catch (e: Exception) {

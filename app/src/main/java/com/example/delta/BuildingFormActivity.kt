@@ -87,6 +87,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Owners
@@ -314,6 +315,9 @@ fun BuildingInfoPage(
     var showBuildingUsageDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val isValid = Validation().isBuildingInfoValid(sharedViewModel)
+    val cityComplexes by sharedViewModel.getAllCityComplex().collectAsState(initial = emptyList())
+    var showAddCityComplexDialog by remember { mutableStateOf(false) }
+
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -386,6 +390,34 @@ fun BuildingInfoPage(
                     itemLabel = { it.buildingTypeName }
                 )
             }
+            val buildingTypeName = context.getString(R.string.city_complex)
+            if (sharedViewModel.selectedBuildingTypes?.buildingTypeName == buildingTypeName) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                item {
+                    ExposedDropdownMenuBoxExample(
+                        items = cityComplexes + CityComplex(
+                            complexId = 0L,
+                            name = context.getString(R.string.addNew),
+                            address = null
+                        ),
+                        selectedItem = sharedViewModel.selectedCityComplex,
+                        onItemSelected = {
+                            if (it.name == context.getString(R.string.addNew)) {
+                                showAddCityComplexDialog = true
+                            } else {
+                                sharedViewModel.selectedCityComplex = it
+                            }
+                        },
+                        label = context.getString(R.string.city_complex),
+                        modifier = Modifier.fillMaxWidth(),
+                        itemLabel = { it.name }
+                    )
+                }
+            }
+
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -595,6 +627,26 @@ fun BuildingInfoPage(
             }
         }
         Spacer(Modifier.height(32.dp))
+
+        if (showAddCityComplexDialog) {
+            AddCityComplexDialog(
+                onDismiss = { showAddCityComplexDialog = false },
+                onInsert = { newName, newAddress ->
+                    val newComplex = CityComplex(name = newName, address = newAddress)
+                    sharedViewModel.insertCityComplex(newComplex) { id ->
+                        // After inserting, update selected city complex by id
+//                        viewModelScope.launch {
+                        val insertedComplex = cityComplexes.find { it.complexId == id }
+                        if (insertedComplex != null) {
+                            sharedViewModel.selectedCityComplex = insertedComplex
+                        }
+//                        }
+                    }
+                    showAddCityComplexDialog = false
+                }
+            )
+        }
+
 
         // Dialogs for Adding Items
         if (showBuildingTypeDialog) {
@@ -824,12 +876,13 @@ fun OwnerItem(
                     }
 
                     is BuildingProfileActivity -> {
-                        if(permissionLevelAllOwnersTab == PermissionLevel.FULL || permissionLevelAllOwnersTab == PermissionLevel.WRITE){
+                        if (permissionLevelAllOwnersTab == PermissionLevel.FULL || permissionLevelAllOwnersTab == PermissionLevel.WRITE) {
                             val intent = Intent(context, OwnerDetailsActivity::class.java)
                             intent.putExtra("ownerId", owner.ownerId)
                             context.startActivity(intent)
-                        } else if ( owner.mobileNumber == user!!.mobileNumber && (permissionLevelOwnersTab == PermissionLevel.FULL
-                                    || permissionLevelOwnersTab == PermissionLevel.WRITE)){
+                        } else if (owner.mobileNumber == user!!.mobileNumber && (permissionLevelOwnersTab == PermissionLevel.FULL
+                                    || permissionLevelOwnersTab == PermissionLevel.WRITE)
+                        ) {
                             val intent = Intent(context, OwnerDetailsActivity::class.java)
                             intent.putExtra("ownerId", owner.ownerId)
                             context.startActivity(intent)
@@ -1517,7 +1570,11 @@ fun AddNewTenantItem(onClick: () -> Unit) {
                             onClick()
                         } else {
                             Modifier
-                            Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.auth_cancel),
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 }
@@ -3867,6 +3924,56 @@ fun UnitDangRow(
         )
     }
 }
+
+@Composable
+fun AddCityComplexDialog(
+    onDismiss: () -> Unit,
+    onInsert: (name: String, address: String?) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = context.getString(R.string.add_new_city_complex), style = MaterialTheme.typography.bodyLarge) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(text = context.getString(R.string.city_complex_name), style = MaterialTheme.typography.bodyLarge) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text(text = context.getString(R.string.address), style = MaterialTheme.typography.bodyLarge) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (name.isNotBlank()) {
+                    onInsert(name, if (address.isBlank()) null else address)
+                }
+            }) {
+                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    )
+}
+
 
 
 fun Double.roundToOneDecimal(): Double {

@@ -9,6 +9,7 @@ import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.BuildingTypeDao
 import com.example.delta.data.dao.BuildingUsageDao
 import com.example.delta.data.dao.BuildingsDao
+import com.example.delta.data.dao.CityComplexDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
@@ -28,6 +29,7 @@ import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
@@ -62,6 +64,7 @@ import com.example.delta.init.Converter
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
         PhonebookEntry::class, EmergencyNumber::class,
         Notification::class, UsersNotificationCrossRef::class,
+        CityComplex::class,
         UsersBuildingsCrossRef::class],
     version = 1,
     exportSchema = true
@@ -83,6 +86,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun uploadedFileDao() : UploadedFileDao
     abstract fun phonebookDao() : PhonebookDao
     abstract fun notificationDao() : NotificationDao
+    abstract fun cityComplexDao() : CityComplexDao
 
 
     companion object {

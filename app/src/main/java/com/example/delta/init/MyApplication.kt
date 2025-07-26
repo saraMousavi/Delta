@@ -158,7 +158,8 @@ class MyApplication : Application() {
             if (buildingTypes == null) {
                 val defaultBuildingTypes = listOf(
                     BuildingTypes(buildingTypeName = getString(R.string.villa)),
-                    BuildingTypes(buildingTypeName = getString(R.string.apartment))
+                    BuildingTypes(buildingTypeName = getString(R.string.apartment)),
+                    BuildingTypes(buildingTypeName = getString(R.string.city_complex))
                 )
                 defaultBuildingTypes.forEach {
                     buildingDao.insertBuildingType(it)

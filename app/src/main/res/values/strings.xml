@@ -349,4 +349,7 @@
     <string name="please_select_building">لطفا ابتدا یک ساختمان را انتخاب نمایید.</string>
     <string name="no_user_recorded">هیچ کاربری ثبت نشده است.</string>
     <string name="delete_notification">حذف نوتیفیکیشن</string>
+    <string name="city_complex">شهرک</string>
+    <string name="add_new_city_complex">ثبت شهرک جدید</string>
+    <string name="city_complex_name">نام شهرک</string>
 </resources>

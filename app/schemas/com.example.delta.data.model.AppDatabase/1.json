@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3188ddbf71b16262d22f4ee07557d286",
+    "identityHash": "a4623c768cc8f9db50b2df97cecc32a5",
     "entities": [
       {
         "tableName": "building_types",
@@ -54,13 +54,18 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, `userId` INTEGER NOT NULL, `utilities` TEXT NOT NULL, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `complexId` INTEGER, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, `userId` INTEGER NOT NULL, `utilities` TEXT NOT NULL, FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`complexId`) REFERENCES `city_complex`(`complexId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
             "columnName": "buildingId",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "complexId",
+            "columnName": "complexId",
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "name",
@@ -166,6 +171,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_buildings_userId` ON `${TABLE_NAME}` (`userId`)"
+          },
+          {
+            "name": "index_buildings_complexId",
+            "unique": false,
+            "columnNames": [
+              "complexId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_buildings_complexId` ON `${TABLE_NAME}` (`complexId`)"
           }
         ],
         "foreignKeys": [
@@ -200,6 +214,17 @@
             ],
             "referencedColumns": [
               "userId"
+            ]
+          },
+          {
+            "table": "city_complex",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "complexId"
+            ],
+            "referencedColumns": [
+              "complexId"
             ]
           }
         ]
@@ -1651,6 +1676,35 @@
         ]
       },
       {
+        "tableName": "city_complex",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`complexId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `address` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "complexId",
+            "columnName": "complexId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "complexId"
+          ]
+        }
+      },
+      {
         "tableName": "users_buildings_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `roleName` TEXT NOT NULL, PRIMARY KEY(`userId`, `buildingId`), FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1728,7 +1782,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3188ddbf71b16262d22f4ee07557d286')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a4623c768cc8f9db50b2df97cecc32a5')"
     ]
   }
 }
