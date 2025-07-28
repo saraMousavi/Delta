@@ -17,6 +17,7 @@ import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
+import com.example.delta.enums.CalculateMethod
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -72,7 +73,6 @@ class Building {
             put("buildingUsageName", buildingUsages?.buildingUsageName ?: "") // add this
             put("fund", building.fund)
             put("userId", building.userId)
-            put("utilities", JSONArray(building.utilities))
         }
     }
 
@@ -183,114 +183,114 @@ class Building {
     /**
      * Fetches buildings from the server with their related type and usage information
      */
-    fun fetchBuildings(
-        context: Context?,
-        phone: String? = null,
-        userId: String? = null,
-        onSuccess: (List<BuildingWithTypesAndUsages>) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        val baseUrl = "http://89.42.211.69:3000/building/filter/"
-        val urlBuilder = StringBuilder(baseUrl)
-
-        val queryParams = mutableListOf<String>()
-        phone?.let { queryParams.add("phone=$it") }
-        userId?.let { queryParams.add("userId=$it") }
-
-        if (queryParams.isNotEmpty()) {
-            urlBuilder.append("?").append(queryParams.joinToString("&"))
-        }
-
-        val url = urlBuilder.toString()
-
-        if (context == null) {
-            onError(Exception("Context is null"))
-            return
-        }
-
-        val queue = Volley.newRequestQueue(context)
-
-        val jsonArrayRequest = JsonArrayRequest(
-            Request.Method.GET, url, null,
-            { response ->
-                try {
-                    val buildingsList = mutableListOf<BuildingWithTypesAndUsages>()
-
-                    for (i in 0 until response.length()) {
-                        val buildingJson = response.getJSONObject(i)
-
-                        // Parse building data
-                        val building = parseBuilding(buildingJson)
-
-                        // Get building type and usage names
-                        val buildingTypeJson = buildingJson.optJSONObject("buildingTypeId")
-                        val buildingUsageJson = buildingJson.optJSONObject("buildingUsageId")
-
-                        val buildingTypeName = buildingTypeJson?.optString("buildingTypeName") ?: "Unknown"
-                        val buildingUsageName = buildingUsageJson?.optString("buildingUsageName") ?: "Unknown"
-
-                        // Create the combined object
-                        val buildingWithTypesAndUsages = BuildingWithTypesAndUsages(
-                            building = building,
-                            buildingTypeName = buildingTypeName,
-                            buildingUsageName = buildingUsageName,
-                            roleName = ""
-                        )
-
-                        buildingsList.add(buildingWithTypesAndUsages)
-                    }
-
-                    onSuccess(buildingsList)
-
-                } catch (e: Exception) {
-                    Log.e("FetchBuildings", "Error parsing buildings: ${e.message}")
-                    onError(e)
-                }
-            },
-            { error ->
-                Log.e("FetchBuildings", "Network error: ${error.message}")
-                onError(error)
-            }
-        )
-
-        queue.add(jsonArrayRequest)
-    }
+//    fun fetchBuildings(
+//        context: Context?,
+//        phone: String? = null,
+//        userId: String? = null,
+//        onSuccess: (List<BuildingWithTypesAndUsages>) -> Unit,
+//        onError: (Exception) -> Unit
+//    ) {
+//        val baseUrl = "http://89.42.211.69:3000/building/filter/"
+//        val urlBuilder = StringBuilder(baseUrl)
+//
+//        val queryParams = mutableListOf<String>()
+//        phone?.let { queryParams.add("phone=$it") }
+//        userId?.let { queryParams.add("userId=$it") }
+//
+//        if (queryParams.isNotEmpty()) {
+//            urlBuilder.append("?").append(queryParams.joinToString("&"))
+//        }
+//
+//        val url = urlBuilder.toString()
+//
+//        if (context == null) {
+//            onError(Exception("Context is null"))
+//            return
+//        }
+//
+//        val queue = Volley.newRequestQueue(context)
+//
+//        val jsonArrayRequest = JsonArrayRequest(
+//            Request.Method.GET, url, null,
+//            { response ->
+//                try {
+//                    val buildingsList = mutableListOf<BuildingWithTypesAndUsages>()
+//
+//                    for (i in 0 until response.length()) {
+//                        val buildingJson = response.getJSONObject(i)
+//
+//                        // Parse building data
+////                        val building = parseBuilding(buildingJson)
+//
+//                        // Get building type and usage names
+//                        val buildingTypeJson = buildingJson.optJSONObject("buildingTypeId")
+//                        val buildingUsageJson = buildingJson.optJSONObject("buildingUsageId")
+//
+//                        val buildingTypeName = buildingTypeJson?.optString("buildingTypeName") ?: "Unknown"
+//                        val buildingUsageName = buildingUsageJson?.optString("buildingUsageName") ?: "Unknown"
+//
+//                        // Create the combined object
+//                        val buildingWithTypesAndUsages = BuildingWithTypesAndUsages(
+//                            building = building,
+//                            buildingTypeName = buildingTypeName,
+//                            buildingUsageName = buildingUsageName,
+//                            roleName = ""
+//                        )
+//
+//                        buildingsList.add(buildingWithTypesAndUsages)
+//                    }
+//
+//                    onSuccess(buildingsList)
+//
+//                } catch (e: Exception) {
+//                    Log.e("FetchBuildings", "Error parsing buildings: ${e.message}")
+//                    onError(e)
+//                }
+//            },
+//            { error ->
+//                Log.e("FetchBuildings", "Network error: ${error.message}")
+//                onError(error)
+//            }
+//        )
+//
+//        queue.add(jsonArrayRequest)
+//    }
 
     /**
      * Parses a JSON object into a Buildings object
      */
-    private fun parseBuilding(json: JSONObject): Buildings {
-        // Extract utilities as a List<String>
-        val utilitiesArray = json.optJSONArray("utilities") ?: JSONArray()
-        val utilities = mutableListOf<String>()
-        for (i in 0 until utilitiesArray.length()) {
-            utilities.add(utilitiesArray.optString(i, ""))
-        }
-
-        // Map MongoDB _id to buildingId (Long)
-        val buildingId = try {
-            json.optString("_id", "0").hashCode().toLong() // Convert string ID to a numeric hash
-        } catch (e: Exception) {
-            0L
-        }
-
-        return Buildings(
-            buildingId = buildingId,
-            name = json.optString("name", ""),
-            phone = json.optString("phone", ""),
-            email = json.optString("email", ""),
-            postCode = json.optString("postCode", ""),
-            street = json.optString("street", ""),
-            province = json.optString("province", "Tehran"),
-            state = json.optString("state", "Central"),
-            // These will be null as we're getting the actual names separately
-            buildingTypeId = null,
-            buildingUsageId = null,
-            fund = json.optDouble("fund", 0.0),
-            userId = json.optLong("userId", 0),
-            utilities = utilities
-        )
-    }
+//    private fun parseBuilding(json: JSONObject): Buildings {
+//        // Extract utilities as a List<String>
+//        val utilitiesArray = json.optJSONArray("utilities") ?: JSONArray()
+//        val utilities = mutableListOf<Map<Utility, CalculateMethod>>()
+//        for (i in 0 until utilitiesArray.length()) {
+//            utilities.add(utilitiesArray.optString(i, ""))
+//        }
+//
+//        // Map MongoDB _id to buildingId (Long)
+//        val buildingId = try {
+//            json.optString("_id", "0").hashCode().toLong() // Convert string ID to a numeric hash
+//        } catch (e: Exception) {
+//            0L
+//        }
+//
+//        return Buildings(
+//            buildingId = buildingId,
+//            name = json.optString("name", ""),
+//            phone = json.optString("phone", ""),
+//            email = json.optString("email", ""),
+//            postCode = json.optString("postCode", ""),
+//            street = json.optString("street", ""),
+//            province = json.optString("province", "Tehran"),
+//            state = json.optString("state", "Central"),
+//            // These will be null as we're getting the actual names separately
+//            buildingTypeId = null,
+//            buildingUsageId = null,
+//            fund = json.optDouble("fund", 0.0),
+//            userId = json.optLong("userId", 0),
+//            utilities = utilities
+//        )
+//    }
 
 
 

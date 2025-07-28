@@ -111,6 +111,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.ContentScale
@@ -692,25 +693,31 @@ fun SettingsScreen(
     val showAuthScreen by remember { mutableStateOf(false) }
     val items = listOf(
         NavItem(
+            title = R.string.charges_calculation,
+            icon = Icons.Outlined.Calculate,
+            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
+        ),
+
+         NavItem(
             title = R.string.supporting,
             icon = Icons.Outlined.Support,
-            onClick = { /* Handle support */ }
+            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
         ),
-        NavItem(
-            title = R.string.owners_list,
-            icon = Icons.Outlined.Badge,
-            onClick = { context.startActivity(Intent(context, OwnersActivity::class.java)) }
-        ),
-        NavItem(
-            title = R.string.tenant_list,
-            icon = Icons.Outlined.People,
-            onClick = { context.startActivity(Intent(context, TenantsActivity::class.java)) }
-        ),
-        NavItem(
-            title = R.string.cost_list,
-            icon = Icons.Outlined.MoneyOff,
-            onClick = { context.startActivity(Intent(context, CostActivity::class.java)) }
-        ),
+//        NavItem(
+//            title = R.string.owners_list,
+//            icon = Icons.Outlined.Badge,
+//            onClick = { context.startActivity(Intent(context, OwnersActivity::class.java)) }
+//        ),
+//        NavItem(
+//            title = R.string.tenant_list,
+//            icon = Icons.Outlined.People,
+//            onClick = { context.startActivity(Intent(context, TenantsActivity::class.java)) }
+//        ),
+//        NavItem(
+//            title = R.string.cost_list,
+//            icon = Icons.Outlined.MoneyOff,
+//            onClick = { context.startActivity(Intent(context, CostActivity::class.java)) }
+//        ),
         NavItem(
             title = R.string.income_list,
             icon = Icons.Outlined.AttachMoney,

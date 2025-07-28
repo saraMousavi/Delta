@@ -1,6 +1,7 @@
 package com.example.delta.init
 
 import androidx.room.TypeConverter
+import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
 import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PaymentLevel
@@ -81,5 +82,6 @@ class Converter {
         fun fromResponsibleToString(responsible: Responsible?): String {
             return responsible?.name ?: Responsible.TENANT.name
         }
+
     }
 }

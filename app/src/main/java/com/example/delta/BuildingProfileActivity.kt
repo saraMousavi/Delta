@@ -307,6 +307,8 @@ class BuildingProfileActivity : ComponentActivity() {
         val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
             .collectAsState(initial = emptyList())
         var selectedImagePath by remember { mutableStateOf<String?>(null) }
+        val chargesCost by sharedViewModel.getCostsForBuildingWithChargeFlag(buildingId = building.buildingId)
+            .collectAsState(initial = emptyList())
         val userId = Preference().getUserId(context = context)
         val permissionLevelBuildingName = AuthUtils.checkFieldPermission(
             userId,
@@ -443,18 +445,19 @@ class BuildingProfileActivity : ComponentActivity() {
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
                         Text(
-                            text = context.getString(R.string.shared_things),
+                            text = context.getString(R.string.charges_parameter),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-                        building.utilities.forEach { utility ->
+                        chargesCost.forEach { cost ->
                             Text(
-                                text = utility,
+                                text = cost.costName,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
+
                     }
                 }
             }
@@ -1586,6 +1589,17 @@ class BuildingProfileActivity : ComponentActivity() {
     fun CostSection(building: Buildings, sharedViewModel: SharedViewModel) {
         val context = LocalContext.current
         var showAddCostDialog by remember { mutableStateOf(false) }
+        var showChargeDialog by remember { mutableStateOf(false) }
+        var showResultDialog by remember { mutableStateOf(false) }
+
+//        var allocationTypesMap = building.utilities
+        var calculatedCharges by remember { mutableStateOf<Map<Long, Double>>(emptyMap()) }
+        var selectedPeriod by remember {mutableStateOf<Period?>(null)}
+
+        val activeUnits by sharedViewModel.getActiveUnits(building.buildingId)
+            .collectAsState(initial = emptyList())
+
+
 
         // Observe changes to costs using a Flow
         val costs by sharedViewModel.getCostsForBuilding(building.buildingId)
@@ -1675,6 +1689,23 @@ class BuildingProfileActivity : ComponentActivity() {
 //                contentColor = Color(context.getColor(R.color.white))
             )
 
+//            ExtendedFloatingActionButton(
+//                onClick = { showChargeDialog = true },
+//                modifier = Modifier
+//                    .align(Alignment.BottomStart)
+//                    .padding(16.dp),
+//                icon = { Icon(Icons.Default.Add, "Calculate Charge") },
+//                text = {
+//                    Text(
+//                        text = context.getString(R.string.charge_account),
+//                        style = MaterialTheme.typography.bodyLarge
+//                    )
+//                },
+////                containerColor = Color(context.getColor(R.color.secondary_color)),
+////                contentColor = Color(context.getColor(R.color.white))
+//            )
+
+
             if (showAddCostDialog) {
                 AddCostDialog(
                     buildingId = building.buildingId,
@@ -1703,6 +1734,58 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 )
             }
+
+//            val coroutineScope = rememberCoroutineScope()
+//            if (showChargeDialog) {
+//                ChargeCalculationInputDialog(
+//                    allocationTypes = allocationTypesMap, // your current map
+//                    onDismiss = { showChargeDialog = false },
+//                    onConfirm = { costsMap, updatedAllocationTypes, period ->
+//                        coroutineScope.launch(Dispatchers.IO) {
+//                            selectedPeriod = period
+//                            allocationTypesMap = updatedAllocationTypes
+//
+//                            val charges = sharedViewModel.calculateCharges(
+//                                building.buildingId,
+//                                activeUnits,
+//                                costsMap,
+//                                allocationTypesMap
+//                            )
+//
+//                            withContext(Dispatchers.Main) {
+//                                calculatedCharges = charges
+//                                showChargeDialog = false
+//                                showResultDialog = true
+//                            }
+//                        }
+//                    }
+//                )
+//
+//
+//            }
+//            if (showResultDialog) {
+//                ChargeCalculationResultDialog(
+//                    unitCharges = calculatedCharges,
+//                    unitsList = activeUnits,
+//                    onDismiss = { showResultDialog = false },
+//                    onSave = {
+//
+//                        coroutineScope.launch(Dispatchers.IO) {
+//                            sharedViewModel.insertChargesToDebt(
+//                                unitCharges = calculatedCharges,
+//                                unitsList = activeUnits,
+//                                selectedPeriod = selectedPeriod,
+//                                buildingId = building.buildingId
+//                            )
+//
+//                            withContext(Dispatchers.Main) {
+//                                showResultDialog = false
+//                            }
+//                        }
+//
+//                    }
+//                )
+//            }
         }
     }
 
@@ -1714,16 +1797,16 @@ class BuildingProfileActivity : ComponentActivity() {
         var selectedYear by rememberSaveable { mutableIntStateOf(PersianCalendar().persianYear) }
         var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
 
-        val units by sharedViewModel.getUnitsOfBuildingForCost(cost.id, building.buildingId)
+        val units by sharedViewModel.getUnitsOfBuildingForCost(cost.costId, building.buildingId)
             .collectAsState(initial = emptyList())
-        val owners by sharedViewModel.getOwnersOfBuildingForCost(cost.id, building.buildingId)
+        val owners by sharedViewModel.getOwnersOfBuildingForCost(cost.costId, building.buildingId)
             .collectAsState(initial = emptyList())
         Column {
             if (cost.responsible == Responsible.ALL) {
                 val debts by sharedViewModel
                     .getDebtsFundMinus(
                         buildingId = building.buildingId,
-                        costId = cost.id,
+                        costId = cost.costId,
                         yearStr = selectedYear.toString(),
                         monthStr = selectedMonth.toString().padStart(2, '0')
                     ).collectAsState(initial = emptyList())
@@ -1770,7 +1853,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                     val debts by sharedViewModel
                                         .getDebtsForOwnerCostCurrentAndPreviousUnpaid(
                                             buildingId = building.buildingId,
-                                            costId = cost.id,
+                                            costId = cost.costId,
                                             ownerId = owner.ownerId,
                                             yearStr = selectedYear.toString(),
                                             monthStr = selectedMonth.toString().padStart(2, '0')
@@ -1847,7 +1930,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         val debts by sharedViewModel
                             .getDebtsForUnitCostCurrentAndPreviousUnpaid(
                                 buildingId = building.buildingId,
-                                costId = cost.id,
+                                costId = cost.costId,
                                 unitId = unit.unitId,
                                 yearStr = selectedYear.toString(),
                                 monthStr = selectedMonth.toString().padStart(2, '0')
@@ -2284,28 +2367,28 @@ fun AddCostDialog(
         else -> Responsible.OWNER
     }
     val calculateMethod = when (selectedCalculateMethod) {
-        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
+        CalculateMethod.EQUAL.getDisplayName(context) -> CalculateMethod.EQUAL
         CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.DANG
         CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
-        else -> CalculateMethod.FIXED
+        else -> CalculateMethod.EQUAL
     }
 
     val calculateUnitMethod = when (selectedUnitCalculateMethod) {
-        CalculateMethod.FIXED.getDisplayName(context) -> CalculateMethod.FIXED
+        CalculateMethod.EQUAL.getDisplayName(context) -> CalculateMethod.EQUAL
         CalculateMethod.DANG.getDisplayName(context) -> CalculateMethod.PEOPLE
         CalculateMethod.AREA.getDisplayName(context) -> CalculateMethod.AREA
-        else -> CalculateMethod.FIXED
+        else -> CalculateMethod.EQUAL
     }
 
     // Add a dummy "Add New Cost" item for dropdown
     val costsWithAddNew = costs + listOf(
         Costs(
-            id = -1,
+            costId = -1,
             buildingId = buildingId,
             costName = context.getString(R.string.add_new_cost),
             tempAmount = 0.0,
             period = Period.NONE,
-            calculateMethod = CalculateMethod.FIXED,
+            calculateMethod = CalculateMethod.EQUAL,
             paymentLevel = PaymentLevel.BUILDING,
             responsible = Responsible.OWNER,
             fundFlag = FundFlag.NEGATIVE_EFFECT
@@ -2330,7 +2413,7 @@ fun AddCostDialog(
                         items = costsWithAddNew,
                         selectedItem = selectedCost,
                         onItemSelected = {
-                            if (it.id == -1L) {
+                            if (it.costId == -1L) {
                                 // "Add New Cost" selected
                                 showAddNewCostNameDialog = true
                             } else {
@@ -2530,12 +2613,21 @@ fun AddCostDialog(
                     onDismiss = { showAddNewCostNameDialog = false },
                     onSave = { newCostName ->
                         coroutineScope.launch {
-                            val newCost =
-                                sharedViewModel.insertNewCostName(buildingId, newCostName)
+                            val cost = Costs(
+                                buildingId = buildingId,
+                                costName = newCostName,
+                                tempAmount = 0.0,
+                                period = Period.NONE,
+                                calculateMethod = CalculateMethod.EQUAL,
+                                paymentLevel = PaymentLevel.BUILDING,
+                                responsible = Responsible.OWNER,
+                                fundFlag = FundFlag.NO_EFFECT
+                            )
+                            sharedViewModel.insertNewCost(cost)
                             showAddNewCostNameDialog = false
-                            selectedCost = newCost
-                            totalAmount = newCost.tempAmount.toLong().toString()
-                            selectedPeriod = newCost.period
+                            selectedCost = cost
+                            totalAmount = cost.tempAmount.toLong().toString()
+                            selectedPeriod = cost.period
                         }
                     },
                     checkCostNameExists = { bId, cName ->
@@ -2695,4 +2787,5 @@ fun calculateBuildingFundFlow(
     ) { sumPositive, sumNegative, unitCount, earning, fundMinus ->
         (sumPositive + earning) - (sumNegative + fundMinus)
     }
-    }
+}
+

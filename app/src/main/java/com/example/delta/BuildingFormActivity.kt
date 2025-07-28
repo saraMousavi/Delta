@@ -96,8 +96,12 @@ import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.enums.BuildingProfileFields
+import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundFlag
+import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.Period
 import com.example.delta.enums.PermissionLevel
+import com.example.delta.enums.Responsible
 import com.example.delta.enums.Roles
 import com.example.delta.factory.SharedViewModelFactory
 import com.example.delta.init.AuthUtils
@@ -217,14 +221,6 @@ fun BuildingFormScreen(
             TenantsPage(
                 sharedViewModel = sharedViewModel,
                 onBack = { currentPage = 2 },
-                onNext = { currentPage++ }
-            )
-
-        } else if (currentPage == 4) {
-
-
-            CostPage(
-                sharedViewModel = sharedViewModel,
                 onSave = {
                     sharedViewModel.isLoading = true
                     lifecycleOwner.lifecycleScope.launch {
@@ -232,7 +228,6 @@ fun BuildingFormScreen(
 
                             val tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations()
                             sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
-                                tenantsUnitsCrossRef = tenantsUnitsCrossRef,
                                 onSuccess = { building ->
                                     //                                    sharedViewModel.insertBuildingToServer(
 //                                        context = context,
@@ -266,12 +261,12 @@ fun BuildingFormScreen(
 //                                        }
 //                                    )
                                     sharedViewModel.resetState()
-                                            // Create an Intent to start HomePageActivity
-                                            val intent =
-                                                Intent(context, HomePageActivity::class.java)
-                                            sharedViewModel.isLoading = false
-                                            // Start the activity
-                                            context.startActivity(intent)
+                                    // Create an Intent to start HomePageActivity
+                                    val intent =
+                                        Intent(context, HomePageActivity::class.java)
+                                    sharedViewModel.isLoading = false
+                                    // Start the activity
+                                    context.startActivity(intent)
                                 },
                                 onError = { errorMessage ->
                                     sharedViewModel.isLoading = false
@@ -291,12 +286,216 @@ fun BuildingFormScreen(
                         }
 
                     }
-                },
-                onBack = { currentPage = 3 }
+                }
             )
+
         }
     }
 }
+
+@Composable
+fun ChargesChipGroup(
+    sharedViewModel: SharedViewModel,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    // Selected cost names (initially all selected or none, customize as needed)
+    var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // Compose the list for chips: existing costNames + "Add New" chip
+    val chipItems = sharedViewModel.costsList.value + Costs(
+        costName = context.getString(R.string.addNew),
+        chargeFlag = true,
+        fundFlag = FundFlag.POSITIVE_EFFECT,
+        responsible = Responsible.TENANT,
+        paymentLevel = PaymentLevel.UNIT,
+        calculateMethod = CalculateMethod.EQUAL,
+        period = Period.YEARLY,
+        tempAmount = 0.0
+    )
+
+    var showChargeCostDialog by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    ChipGroupShared(
+        selectedItems = selectedCostNames,
+        onSelectionChange = { newSelectionStrings ->
+
+            if (newSelectionStrings.contains(context.getString(R.string.addNew))) {
+                // If user clicked "Add New", show dialog
+                showChargeCostDialog = true
+                // Remove the addNew chip label from selection
+                selectedCostNames =
+                    newSelectionStrings.filter { it != context.getString(R.string.addNew) }
+            } else {
+                // Normal selection update
+                val newlySelected = newSelectionStrings - selectedCostNames
+                val newlyDeselected = selectedCostNames - newSelectionStrings
+
+                // Update selectedCostNames state
+                selectedCostNames = newSelectionStrings
+
+                // Create updated list for costsList.value by adjusting tempAmount accordingly
+                sharedViewModel.costsList.value = sharedViewModel.costsList.value.map { cost ->
+                    when {
+                        cost.costName in newlySelected -> cost.copy(tempAmount = 1.0)
+                        cost.costName in newlyDeselected -> cost.copy(tempAmount = 0.0)
+                        else -> cost
+                    }
+                }
+            }
+        },
+        // Pass only the costName for each Costs item to ChipGroupShared as items
+        items = chipItems.map { it.costName },
+        modifier = modifier,
+        label = context.getString(R.string.charges_parameter),
+        singleSelection = false
+    )
+
+    if (showChargeCostDialog) {
+        AddNewCostDialog(
+            onDismiss = {
+                showChargeCostDialog = false
+            },
+            onConfirm = { newCostName ->
+                coroutineScope.launch {
+                    val newCost = Costs(
+                        costName = newCostName,
+                        chargeFlag = true,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        responsible = Responsible.TENANT,
+                        paymentLevel = PaymentLevel.UNIT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        period = Period.YEARLY,
+                        tempAmount = 0.0
+                    )
+//                    sharedViewModel.insertNewCost(newCost)
+                    // Update selection to include the new cost name after adding it
+                    sharedViewModel.costsList.value += newCost
+
+                    showChargeCostDialog = false
+                }
+
+            }
+        )
+    }
+}
+
+@Composable
+fun AddNewCostDialog(
+    onDismiss: () -> Unit,
+    onChargeConfirm: ((newCostNameList: List<String>) -> Unit)? = null,
+    onConfirm: ((newCostName: String) -> Unit)? = null,
+    costs: List<Costs> = emptyList()
+) {
+    val context = LocalContext.current
+
+    var costName by remember { mutableStateOf("") }
+    var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var chipItems by remember(costs) {
+        mutableStateOf(costs.map { it.costName } + context.getString(R.string.addNew))
+    }
+
+    var showInputField by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = context.getString(R.string.add_new_cost),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            LazyColumn {
+                if (chipItems.isNotEmpty()) {
+                    item {
+                        ChipGroupShared(
+                            selectedItems = selectedCostNames,
+                            onSelectionChange = { newSelected ->
+                                if (newSelected.contains(context.getString(R.string.addNew))) {
+                                    showInputField = true
+                                    selectedCostNames = newSelected.filter { it != context.getString(R.string.addNew) }
+                                } else {
+                                    selectedCostNames = newSelected
+                                }
+                            },
+                            items = chipItems,
+                            modifier = Modifier,
+                            label = context.getString(R.string.charges_parameter),
+                            singleSelection = false
+                        )
+                    }
+                    if (showInputField) {
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = costName,
+                                onValueChange = { costName = it },
+                                label = { Text(context.getString(R.string.cost_name)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                } else {
+                    item {
+                        OutlinedTextField(
+                            value = costName,
+                            onValueChange = { costName = it },
+                            label = { Text(context.getString(R.string.cost_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = (showInputField && costName.isNotBlank()) || (!showInputField && selectedCostNames.isNotEmpty()),
+                onClick = {
+                    if (showInputField && costName.isNotBlank()) {
+                        val trimmedName = costName.trim()
+                        // Add new cost name to chipItems (just before "Add New")
+                        if (!chipItems.contains(trimmedName)) {
+                            chipItems = chipItems.filter { it != context.getString(R.string.addNew) } + trimmedName + context.getString(R.string.addNew)
+                        }
+                        // Select the new cost
+                        selectedCostNames = selectedCostNames + trimmedName
+
+                        // Call corresponding callback with single item or entire list
+                        onConfirm?.invoke(trimmedName)
+                        onChargeConfirm?.invoke(selectedCostNames)
+
+                        // Reset input
+                        costName = ""
+                        showInputField = false
+                    } else {
+                        // Confirm selected chips only
+                        onChargeConfirm?.invoke(selectedCostNames)
+                    }
+                }
+            ) {
+                Text(
+                    text = context.getString(R.string.confirm),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    )
+}
+
 
 @SuppressLint("UnrememberedMutableState")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -317,6 +516,9 @@ fun BuildingInfoPage(
     val isValid = Validation().isBuildingInfoValid(sharedViewModel)
     val cityComplexes by sharedViewModel.getAllCityComplex().collectAsState(initial = emptyList())
     var showAddCityComplexDialog by remember { mutableStateOf(false) }
+
+    val chargesCost by sharedViewModel.getAllCostsOfCharges()
+        .collectAsState(initial = emptyList())
 
 
     Column(
@@ -549,21 +751,7 @@ fun BuildingInfoPage(
 
 
             item {
-                ChipGroupShared(
-                    selectedItems = sharedViewModel.sharedUtilities,
-                    onSelectionChange = { newSelection ->
-                        sharedViewModel.sharedUtilities = newSelection
-                    },
-                    items = listOf(
-                        context.getString(R.string.gas),
-                        context.getString(R.string.water),
-                        context.getString(R.string.electricity)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    label = context.getString(R.string.shared_things)
-                )
+                ChargesChipGroup(sharedViewModel)
             }
 
             item {
@@ -1350,7 +1538,7 @@ fun OwnerDialog(
 fun TenantsPage(
     sharedViewModel: SharedViewModel,
     onBack: () -> Unit,
-    onNext: () -> Unit
+    onSave: () -> Unit
 ) {
     var showTenantDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -1424,13 +1612,13 @@ fun TenantsPage(
             }
 
             Button(
-                onClick = onNext,
+                onClick = onSave,
 //                colors = ButtonDefaults.buttonColors(
 //                    containerColor = Color(context.getColor(R.color.secondary_color)) // Change button text color
 //                )
             ) {
                 Text(
-                    context.getString(R.string.next),
+                    context.getString(R.string.insert),
                     modifier = Modifier.padding(2.dp),
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -3001,7 +3189,7 @@ fun DebtItem(
 
     LaunchedEffect(debts.costId, debts.amount) {
         val currentCosts = sharedViewModel.costsList.value
-        val index = currentCosts.indexOfFirst { it.id == debts.costId }
+        val index = currentCosts.indexOfFirst { it.costId == debts.costId }
         if (index != -1) {
             val updatedCost = currentCosts[index].copy(tempAmount = debts.amount)
             val updatedCostsList = currentCosts.toMutableList()

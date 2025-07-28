@@ -94,8 +94,8 @@ dependencies {
     implementation(libs.date.picker)
     //implementation(libs.chart)
     implementation(libs.mpandroidchart)
-    implementation(libs.apache.poi)
-    implementation(libs.apache.poi.ooxml)
+//    implementation(libs.apache.poi)
+//    implementation(libs.apache.poi.ooxml)
 //    implementation (libs.firebase)
     testImplementation libs.junit
     // Mockito for mocking dependencies

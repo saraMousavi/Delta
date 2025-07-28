@@ -135,11 +135,13 @@ interface DebtsDao {
 //    suspend fun getDebtsForUnitCostCurrentAndPreviousUnpaid(buildingId: Long, costId: Long, unitId: Long): List<Debts>
 
 
-    @Query("SELECT * FROM debts inner join costs on costs.id = debts.costId " +
+    @Query(
+        "SELECT * FROM debts inner join costs on costs.costId = debts.costId " +
             "WHERE costs.buildingId = :buildingId and payment_flag = 0 ORDER BY due_date ASC")
     suspend fun getDebtsForBuilding(buildingId: Long): List<Debts>
 
-    @Query("SELECT * FROM debts inner join costs on costs.id = debts.costId " +
+    @Query(
+        "SELECT * FROM debts inner join costs on costs.costId = debts.costId " +
             "WHERE costs.buildingId = :buildingId and payment_flag = 1  ORDER BY due_date ASC")
     suspend fun getPaysForBuilding(buildingId: Long): List<Debts>
 
@@ -161,32 +163,74 @@ interface DebtsDao {
 
 
         // Sum of debts.amount where cost.fundFlag = +1 and debts.paymentFlag = 1 for given building
-        @Query("""
+        @Query(
+            """
         SELECT SUM(d.amount) FROM debts d
-        INNER JOIN costs c ON d.costId = c.id
+        INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 
           AND c.fund_flag = 1
           AND d.payment_flag = 1
-    """)
+    """
+        )
         fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double>
 
         // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
-        @Query("""
+        @Query(
+            """
         SELECT SUM(d.amount) FROM debts d
-        INNER JOIN costs c ON d.costId = c.id
+        INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 
           AND c.fund_flag = -1
           AND d.payment_flag = 0
-    """)
+    """
+        )
         fun sumUnpaidFundFlagNegative(buildingId: Long): Flow<Double>
 
     // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
-    @Query("""
+    @Query(
+        """
         SELECT SUM(d.amount) FROM debts d
-        INNER JOIN costs c ON d.costId = c.id
+        INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 
           AND c.responsible = :responsible
-    """)
+    """
+    )
     fun sumFundMinus(buildingId: Long, responsible:Responsible): Flow<Double>
+
+    @Query("""
+        SELECT d.unitId, SUM(d.amount) as totalAmount
+        FROM debts d
+        INNER JOIN costs c ON d.costId = c.costId
+        WHERE d.buildingId = :buildingId 
+          AND c.cost_name = 'شارژ'
+          AND d.due_date LIKE :fiscalYear || '%'
+        GROUP BY d.unitId
+    """)
+    suspend fun getTotalChargesByUnitForChargeCost(
+        buildingId: Long,
+        fiscalYear: String
+    ): List<UnitChargeAggregate>
+
+    @Query("""
+    SELECT * FROM debts 
+    WHERE buildingId = :buildingId AND costId = :costId AND unitId = :unitId 
+      AND due_date = :dueDate 
+      AND (ownerId = :ownerId OR (:ownerId IS NULL AND ownerId IS NULL))
+    LIMIT 1
+""")
+    suspend fun getDebtByKeys(
+        buildingId: Long,
+        costId: Long,
+        unitId: Long?,
+        dueDate: String,
+        ownerId: Long?
+    ): Debts?
+
+
+    data class UnitChargeAggregate(
+        val unitId: Long?,
+        val totalAmount: Double
+    )
+
 
 }

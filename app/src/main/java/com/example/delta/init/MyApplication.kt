@@ -4,8 +4,6 @@ package com.example.delta.init
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import com.example.delta.R
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.BuildingsDao
@@ -183,9 +181,86 @@ class MyApplication : Application() {
             val costs = costsDao.getCosts().firstOrNull()
             if (costs == null) {
                 val defaultCosts = listOf(
-                    Costs(costName = getString(R.string.charge), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.AREA, responsible = Responsible.TENANT, tempAmount = 0.0),
-                    Costs(costName = getString(R.string.mortgage), period = Period.YEARLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
-                    Costs(costName = getString(R.string.rent), period = Period.MONTHLY, paymentLevel = PaymentLevel.UNIT, fundFlag = FundFlag.NO_EFFECT, calculateMethod = CalculateMethod.FIXED, responsible = Responsible.TENANT, tempAmount = 0.0),
+                    Costs(
+                        costName = getString(R.string.charge),
+                        period = Period.MONTHLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.AREA,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = false
+                    ),
+                    Costs(
+                        costName = getString(R.string.gas),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.AREA,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.electricity),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.AREA,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.water),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.PEOPLE,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.elevator),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.fire_protection),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.internet),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
+                    Costs(
+                        costName = getString(R.string.net),
+                        period = Period.YEARLY,
+                        paymentLevel = PaymentLevel.UNIT,
+                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        responsible = Responsible.TENANT,
+                        tempAmount = 0.0,
+                        chargeFlag = true
+                    ),
                 )
                 defaultCosts.forEach {
                     costsDao.insertCost(it)

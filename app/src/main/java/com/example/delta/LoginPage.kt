@@ -184,7 +184,7 @@ fun LoginPageForm(users: List<User>, buildingsViewModel: BuildingsViewModel) {
     }
 }
 
-fun handleLogin(
+suspend fun handleLogin(
     context: Context,
     user: List<User>,
     username: String,
@@ -200,8 +200,8 @@ fun handleLogin(
 
 
         // Navigate to HomePageActivity after login
-        Log.d("buildingsViewModel.getAllBuildingsList()", buildingsViewModel.getAllBuildingsList().toString())
-        if(buildingsViewModel.getAllBuildingsList().isEmpty()){
+        val buildings = buildingsViewModel.getAllBuildingsList()
+        if (buildings.isEmpty()) {
             val intent = Intent(context, BuildingFormActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly

@@ -31,9 +31,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.init.FileManagement
 import com.example.delta.viewmodel.SharedViewModel
-import org.apache.poi.ss.usermodel.Cell
-import org.apache.poi.ss.usermodel.CellType
-import org.apache.poi.ss.usermodel.DateUtil
+//import org.apache.poi.ss.usermodel.Cell
+//import org.apache.poi.ss.usermodel.CellType
+//import org.apache.poi.ss.usermodel.DateUtil
 
 class ImportOrManualActivity : ComponentActivity() {
 
@@ -125,12 +125,12 @@ class ImportOrManualActivity : ComponentActivity() {
                 modifier = Modifier.clickable {
                     val fileManager = FileManagement()
 
-                    fileManager.openTemplateExcel(
-                        activity = thisActivity,
-                        rawResourceId = R.raw.export_delta_template,
-                        fileName = "export_delta_template.xlsx",
-                        authority = "${packageName}.fileprovider"
-                    )
+//                    fileManager.openTemplateExcel(
+//                        activity = thisActivity,
+//                        rawResourceId = R.raw.export_delta_template,
+//                        fileName = "export_delta_template.xlsx",
+//                        authority = "${packageName}.fileprovider"
+//                    )
 
                 },
                 style = MaterialTheme.typography.bodyLarge
@@ -140,35 +140,35 @@ class ImportOrManualActivity : ComponentActivity() {
 
 }
 
-fun getCellStringValue(cell: Cell?): String {
-    if (cell == null) return ""
-    //@todo manage dates
-    return when(cell.cellType) {
-        CellType.STRING -> cell.stringCellValue
-        CellType.NUMERIC -> {
-            if (DateUtil.isCellDateFormatted(cell)) {
-                val date = cell.dateCellValue
-                java.text.SimpleDateFormat("yyyy-MM-dd").format(date)
-            } else {
-                // عدد را به رشته تبدیل می‌کنیم
-                if (cell.numericCellValue % 1 == 0.0) // عدد صحیح است؟
-                    cell.numericCellValue.toLong().toString()
-                else
-                    cell.numericCellValue.toString()
-            }
-        }
-        CellType.BOOLEAN -> cell.booleanCellValue.toString()
-        CellType.FORMULA -> {
-            try {
-                cell.stringCellValue
-            } catch(e: Exception) {
-                try {
-                    cell.numericCellValue.toString()
-                } catch (_: Exception) {
-                    ""
-                }
-            }
-        }
-        else -> ""
-    }
-}
+//fun getCellStringValue(cell: Cell?): String {
+//    if (cell == null) return ""
+//    //@todo manage dates
+//    return when(cell.cellType) {
+//        CellType.STRING -> cell.stringCellValue
+//        CellType.NUMERIC -> {
+//            if (DateUtil.isCellDateFormatted(cell)) {
+//                val date = cell.dateCellValue
+//                java.text.SimpleDateFormat("yyyy-MM-dd").format(date)
+//            } else {
+//                // عدد را به رشته تبدیل می‌کنیم
+//                if (cell.numericCellValue % 1 == 0.0) // عدد صحیح است؟
+//                    cell.numericCellValue.toLong().toString()
+//                else
+//                    cell.numericCellValue.toString()
+//            }
+//        }
+//        CellType.BOOLEAN -> cell.booleanCellValue.toString()
+//        CellType.FORMULA -> {
+//            try {
+//                cell.stringCellValue
+//            } catch(e: Exception) {
+//                try {
+//                    cell.numericCellValue.toString()
+//                } catch (_: Exception) {
+//                    ""
+//                }
+//            }
+//        }
+//        else -> ""
+//    }
+//}

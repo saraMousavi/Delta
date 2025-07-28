@@ -63,6 +63,13 @@ interface TenantDao {
             "(SELECT tenantId FROM tenants_units_cross_ref WHERE unitId = :unitId)")
     suspend fun getTenantsForUnit(unitId: Long): List<Tenants>
 
+
+    @Transaction
+    @Query("SELECT * FROM Tenants WHERE tenantId IN " +
+            "(SELECT tenantId FROM tenants_units_cross_ref WHERE unitId = :unitId" +
+            " and status = 'فعال')")
+    fun getActiveTenantForUnit(unitId: Long): Tenants?
+
     // Get cross-reference entries for a unit
     @Query("SELECT * FROM tenants_units_cross_ref WHERE unitId = :unitId")
     suspend fun getTenantUnitRelationships(unitId: Long): List<TenantsUnitsCrossRef>
@@ -86,7 +93,7 @@ interface TenantDao {
     INNER JOIN tenants_units_cross_ref AS crossRef ON tenants.tenantId = crossRef.tenantId
     WHERE crossRef.unitId = :unitId
 """)
-    fun getTenantsWithRelationForUnit(unitId: Long): Flow<List<TenantWithRelation>>
+    suspend fun getTenantsWithRelationForUnit(unitId: Long): List<TenantWithRelation>
 
 
 

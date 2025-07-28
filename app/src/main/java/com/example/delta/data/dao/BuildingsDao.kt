@@ -110,5 +110,14 @@ interface BuildingsDao {
 
     // Delete cross-references by fileId(s) (optional)
     @Query("DELETE FROM building_uploaded_files_cross_ref WHERE fileId IN (:fileIds)")
-    suspend fun deleteCrossRefsByFileIds(fileIds: List<Long>)
+    fun deleteCrossRefsByFileIds(fileIds: List<Long>)
+
+    @Query("""
+    SELECT SUM(CAST(number_of_tenants AS INTEGER)) 
+    FROM tenants t
+    INNER JOIN building_tenant_cross_ref b ON t.tenantId = b.tenantId
+    WHERE b.buildingId = :buildingId
+""")
+    fun getTotalResidentsInBuilding(buildingId: Long): Int
+
 }

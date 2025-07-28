@@ -90,6 +90,10 @@ interface OwnersDao {
     fun getOwnersWithUnits(ownerId: Long): List<OwnersUnitsCrossRef>
 
 
+    @Query("SELECT * FROM owners_units_cross_ref WHERE unitId = :unitId")
+    fun getOwnersWithUnitId(unitId: Long): List<OwnersUnitsCrossRef>
+
+
     @Query("SELECT * FROM owners_units_cross_ref WHERE ownerId in ( :ownerId )")
     fun getOwnersWithUnitsList(ownerId: List<Long>): List<OwnersUnitsCrossRef>
 

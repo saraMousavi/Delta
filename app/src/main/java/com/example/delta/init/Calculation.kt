@@ -67,7 +67,7 @@ class Calculation {
                         }
                     }
 
-                    CalculateMethod.FIXED.name -> {
+                    CalculateMethod.EQUAL.name -> {
 // Get distinct owners
                         val distinctOwners = ownersUnitsCrossRefs.map { it.ownerId }.distinct()
                         val sharePerOwner =
@@ -121,7 +121,7 @@ class Calculation {
                 }
             }
 
-            CalculateMethod.FIXED.name -> {
+            CalculateMethod.EQUAL.name -> {
                 val distinctOwners = ownersUnitsCrossRefs.map { it.ownerId }.distinct()
                 val sharePerOwner = if (distinctOwners.isNotEmpty()) totalAmount / distinctOwners.size else 0.0
                 distinctOwners.associateWith { sharePerOwner }

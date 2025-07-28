@@ -352,4 +352,25 @@
     <string name="city_complex">شهرک</string>
     <string name="add_new_city_complex">ثبت شهرک جدید</string>
     <string name="city_complex_name">نام شهرک</string>
+    <string name="charge_account">محاسبه شارژ</string>
+    <string name="elevator">آسانسور</string>
+    <string name="fire_protection">آتش نشانی</string>
+    <string name="internet">اینترنت</string>
+    <string name="charges_parameter">موارد موثر در محاسبه شارژ</string>
+    <string name="cost">هزینه</string>
+    <string name="allocation_type">نوع تخصیص</string>
+    <string name="charge_calculated_result">نتیجه محاسبه شارژ</string>
+    <string name="calculate">محاسبه</string>
+    <string name="central_antenna">آنتن مرکزی</string>
+    <string name="protection_system">سیستم های نظارتی/حفاظتی</string>
+    <string name="net">هزینه های تگهداری</string>
+    <string name="charges_calculation">محاسبه شارژ</string>
+    <string name="no_data">اطلاعاتی برای نمایش وجود ندارد.</string>
+    <string name="charge_method">روش محاسبه شارژ</string>
+    <string name="fiscal_year">سال مالی</string>
+    <string name="charge_amount">مبلغ شارژ</string>
+    <string name="add_new_parameter">ثبت پارامتر جدید</string>
+    <string name="charge_calcualted_successfully">محاسبه شارژ با موفقیت انجام شد و در کارتابل مالکین و ساکنین قرار گرفت.</string>
+    <string name="failed">عملیات با خطا مواجه شد.لطفا دوباره امتحان کنید.</string>
+    <string name="this_year_charge_calculated">شارژمحاسبه شده</string>
 </resources>

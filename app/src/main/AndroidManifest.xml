@@ -74,6 +74,9 @@
             android:name=".UserManagementActivity"
             android:exported="false" />
         <activity
+            android:name=".ChargeCalculationActivity"
+            android:exported="false" />
+        <activity
             android:name=".BuildingProfileActivity"
             android:exported="false" />
         <activity

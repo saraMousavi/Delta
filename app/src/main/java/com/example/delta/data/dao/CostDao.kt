@@ -20,7 +20,7 @@ interface CostDao {
     @Query("SELECT * FROM costs")
     fun getAllCost(): Flow<List<Costs>>
 
-    @Query("SELECT * FROM costs where id = :costId")
+    @Query("SELECT * FROM costs where costId = :costId")
     fun getCost(costId: Long): Costs
 
 
@@ -59,17 +59,38 @@ interface CostDao {
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId")
     fun getFlowCostsForBuilding(buildingId: Long): Flow<List<Costs>>
 
-    @Query("SELECT MAX(id) FROM costs")
+    @Query("SELECT MAX(costId) FROM costs")
     fun getLastCostId(): Long
 
     @Query("SELECT * FROM costs")
     suspend fun getCosts(): List<Costs>
 
-    @Query("SELECT * FROM costs WHERE buildingId = :buildingId  AND fund_flag != :fundFlag")
+
+
+    @Query("SELECT c.cost_name FROM costs c where charge_flag = 1")
+    suspend fun getCostsOfCharges(): List<String>
+
+    @Query("SELECT * FROM costs WHERE buildingId = :buildingId  AND fund_flag != :fundFlag and charge_flag = 0" +
+            " and cost_name != 'شارژ'")
     suspend fun getCostsForBuildingWithFundFlag(buildingId: Long, fundFlag: FundFlag): List<Costs>
 
+
+    @Query("SELECT * FROM costs WHERE buildingId = :buildingId  AND charge_flag = 1")
+    suspend fun getCostsForBuildingWithChargeFlag(buildingId: Long): List<Costs>
+
+    @Query("""
+    SELECT * FROM costs c1
+    WHERE c1.buildingId IS NULL
+    and c1.cost_name NOT IN (
+        SELECT c2.cost_name FROM costs c2 WHERE c2.buildingId = :buildingId
+    )
+    AND c1.charge_flag = 1
+""")
+    suspend fun getChargesCostsNotInBuilding(buildingId: Long): List<Costs>
+
+
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId AND cost_name = :costName LIMIT 1")
-    suspend fun getCostByBuildingIdAndName(buildingId: Long, costName: String): Costs?
+    suspend fun getCostByBuildingIdAndName(buildingId: Long, costName: String= "شارژ"): Costs?
 
     @Update
     suspend fun updateCost(cost: Costs): Int
@@ -77,11 +98,15 @@ interface CostDao {
     @Query("SELECT * FROM costs WHERE buildingId IS NULL")
     suspend fun getCostsWithNullBuildingId(): List<Costs>
 
-    @Query("SELECT * FROM costs WHERE id = :costId LIMIT 1")
+
+    @Query("SELECT * FROM costs WHERE buildingId IS NULL and charge_flag = 1")
+    suspend fun getChargesCostsWithNullBuildingId(): List<Costs>
+
+    @Query("SELECT * FROM costs WHERE costId = :costId LIMIT 1")
     suspend fun getCostById(costId: Long): Costs
 
 
-    @Query("SELECT * FROM costs WHERE id in ( :costId )")
+    @Query("SELECT * FROM costs WHERE costId in ( :costId )")
     suspend fun getCostsByIds(costId: List<Long>): List<Costs>
 
     @Query("DELETE FROM costs WHERE buildingId = :buildingId")

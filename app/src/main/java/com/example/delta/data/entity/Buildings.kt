@@ -56,6 +56,5 @@ data class Buildings(
     val buildingTypeId: Long? = null,
     val buildingUsageId: Long? = null,
     val fund: Double,
-    val userId: Long,
-    val utilities: List<String>
+    val userId: Long
 ) : Parcelable
