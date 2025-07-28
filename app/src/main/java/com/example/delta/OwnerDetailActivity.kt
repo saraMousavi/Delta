@@ -144,7 +144,7 @@ fun OwnerOverviewTab(
             address = owner!!.address
         }
     }
-    var context = LocalContext.current
+    val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         Card(
@@ -154,225 +154,214 @@ fun OwnerOverviewTab(
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(containerColor = Color(context.getColor(R.color.primary_color)))
         ) {
-            Column(
+            LazyColumn(
                 modifier = Modifier
-                    .padding(16.dp)
                     .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                if (owner == null) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .padding(vertical = 24.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = context.getString(R.string.loading),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                } else {
-                    Text(
-                        text = context.getString(R.string.owner_details),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    // Editable fields
+                item {
+                    if (owner == null) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(vertical = 24.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = context.getString(R.string.loading),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+                    } else {
+                        Text(
+                            text = context.getString(R.string.owner_details),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                    }
+                }
+                if (owner != null) {
                     if (isEditing) {
-                        OutlinedTextField(
-                            value = firstName,
-                            onValueChange = { firstName = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.first_name),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = lastName,
-                            onValueChange = { lastName = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.last_name),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.last_name),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.phone_number),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = mobile,
-                            onValueChange = { mobile = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.mobile_number),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            label = {
-                                Text(
-                                    context.getString(R.string.address),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
-
-                        Row {
-                            Button(
-                                onClick = {
-                                    // Save changes
-                                    sharedViewModel.updateOwner(
-                                        owner!!.copy(
-                                            firstName = firstName,
-                                            lastName = lastName,
-                                            email = email,
-                                            phoneNumber = phone,
-                                            mobileNumber = mobile,
-                                            address = address,
-                                        ),
-                                        onError = {
-                                            Toast.makeText(context, context.getString(R.string.operation_problem),
-                                                Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                    isEditing = false
+                        // Editable fields as separate items:
+                        item {
+                            OutlinedTextField(
+                                value = firstName,
+                                onValueChange = { firstName = it },
+                                label = { Text(context.getString(R.string.first_name), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OutlinedTextField(
+                                value = lastName,
+                                onValueChange = { lastName = it },
+                                label = { Text(context.getString(R.string.last_name), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text(context.getString(R.string.email), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                label = { Text(context.getString(R.string.phone_number), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OutlinedTextField(
+                                value = mobile,
+                                onValueChange = { mobile = it },
+                                label = { Text(context.getString(R.string.mobile_number), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OutlinedTextField(
+                                value = address,
+                                onValueChange = { address = it },
+                                label = { Text(context.getString(R.string.address), style = MaterialTheme.typography.bodyLarge) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            Row {
+                                Button(
+                                    onClick = {
+                                        sharedViewModel.updateOwner(
+                                            owner!!.copy(
+                                                firstName = firstName,
+                                                lastName = lastName,
+                                                email = email,
+                                                phoneNumber = phone,
+                                                mobileNumber = mobile,
+                                                address = address,
+                                            ),
+                                            onError = {
+                                                Toast.makeText(context, context.getString(R.string.operation_problem), Toast.LENGTH_LONG).show()
+                                            }
+                                        )
+                                        isEditing = false
+                                    }
+                                ) {
+                                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
                                 }
-                            ) {
-                                Text(
-                                    context.getString(R.string.insert),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            OutlinedButton(onClick = { isEditing = false }) {
-                                Text(
-                                    context.getString(R.string.cancel),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Spacer(Modifier.width(8.dp))
+                                OutlinedButton(onClick = { isEditing = false }) {
+                                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                                }
                             }
                         }
                     } else {
-                        // Display fields
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Owner",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "${owner!!.firstName} ${owner!!.lastName}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                        // Display read-only fields as separate items:
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Owner",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "${owner!!.firstName} ${owner!!.lastName}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = "Email",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = owner!!.email.ifBlank { context.getString(R.string.no_email) },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Phone,
-                                contentDescription = "Phone",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = owner!!.phoneNumber.ifBlank { context.getString(R.string.no_phone) },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        item { Spacer(Modifier.height(16.dp)) }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.MobileFriendly,
-                                contentDescription = "Mobile",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = owner!!.mobileNumber.ifBlank { context.getString(R.string.no) },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = "Email",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = owner!!.email.ifBlank { context.getString(R.string.no_email) },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.HomeWork,
-                                contentDescription = "Address",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = owner!!.address.ifBlank { context.getString(R.string.no) },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        item { Spacer(Modifier.height(12.dp)) }
+
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "Phone",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = owner!!.phoneNumber.ifBlank { context.getString(R.string.no_phone) },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        item { Spacer(Modifier.height(12.dp)) }
+
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.MobileFriendly,
+                                    contentDescription = "Mobile",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = owner!!.mobileNumber.ifBlank { context.getString(R.string.no) },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        item { Spacer(Modifier.height(12.dp)) }
+
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.HomeWork,
+                                    contentDescription = "Address",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = owner!!.address.ifBlank { context.getString(R.string.no) },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // FAB for editing
         if (!isEditing && owner != null) {
             FloatingActionButton(
                 onClick = { isEditing = true },
@@ -387,6 +376,7 @@ fun OwnerOverviewTab(
         }
     }
 }
+
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable

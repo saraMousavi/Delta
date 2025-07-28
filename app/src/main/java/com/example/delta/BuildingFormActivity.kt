@@ -785,7 +785,8 @@ fun BuildingInfoPage(
                                     unitNumber = i.toString(),
                                     area = area,
                                     numberOfRooms = "1",
-                                    numberOfParking = "1"
+                                    numberOfParking = "1",
+                                    numberOfWarehouse = "1"
                                 )
                                 try {
                                     val unitId = unitsViewModel.insertUnit(newUnit)
@@ -2537,6 +2538,7 @@ fun UnitDialog(
     var area by remember { mutableStateOf("") }
     var numberOfRooms by remember { mutableStateOf("") }
     var numberOfParking by remember { mutableStateOf("") }
+    var numberOfWarhouse by remember { mutableStateOf("") }
 //    var selectedOwner by remember { mutableStateOf<Owners?>(null) }
     val context = LocalContext.current
 
@@ -2607,6 +2609,21 @@ fun UnitDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = numberOfWarhouse,
+                    onValueChange = { numberOfWarhouse = it },
+                    label = {
+                        Text(
+                            text = context.getString(R.string.number_of_warehouse),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 // Owner Selection
 
 
@@ -2619,7 +2636,8 @@ fun UnitDialog(
                         unitNumber = unitNumber,
                         area = area,
                         numberOfRooms = numberOfRooms,
-                        numberOfParking = numberOfParking
+                        numberOfParking = numberOfParking,
+                        numberOfWarehouse = numberOfWarhouse
                     )
                     onAddUnit(newUnit)
                 },
@@ -2659,6 +2677,7 @@ fun EditUnitDialog(
     var area by remember { mutableStateOf(unit.area) }
     var numberOfRooms by remember { mutableStateOf(unit.numberOfRooms) }
     var numberOfParking by remember { mutableStateOf(unit.numberOfParking) }
+    var numberOfWarehouse by remember { mutableStateOf(unit.numberOfParking) }
     val context = LocalContext.current
 
     AlertDialog(
@@ -2709,6 +2728,17 @@ fun EditUnitDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = numberOfWarehouse,
+                    onValueChange = { numberOfWarehouse = it },
+                    label = { Text(context.getString(R.string.number_of_warehouse)) },
+                    textStyle = MaterialTheme.typography.bodyLarge, // <-- This line is key!
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(8.dp))
             }
         },
@@ -2720,14 +2750,12 @@ fun EditUnitDialog(
                         area = area,
                         numberOfRooms = numberOfRooms,
                         unitId = unit.unitId,
-                        numberOfParking = numberOfParking
+                        numberOfParking = numberOfParking,
+                        numberOfWarehouse = numberOfWarehouse
                     )
                     onUpdateUnit(updatedUnit)
                     onDismiss()
                 }
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = Color(context.getColor(R.color.secondary_color))
-//                )
             ) {
                 Text(
                     text = context.getString(R.string.update),
@@ -3664,7 +3692,7 @@ fun EditTenantDialog(
     var startDate by remember { mutableStateOf(tenant.startDate) }
     var endDate by remember { mutableStateOf(tenant.endDate) }
     var numberOfTenants by remember { mutableStateOf(tenant.numberOfTenants ?: "") }
-    var selectedStatus by remember { mutableStateOf(tenant.status ?: context.getString(R.string.active)) }
+    var selectedStatus by remember { mutableStateOf(tenant.status) }
 //    var selectedUnit by remember { mutableStateOf(units.find { it.unitId == tenant.unitId }) }
     var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
     // Fetch the current unit for this tenant from DB

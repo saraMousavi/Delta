@@ -226,6 +226,30 @@ interface DebtsDao {
         ownerId: Long?
     ): Debts?
 
+    @Query("""
+        SELECT debts.* FROM debts
+        INNER JOIN tenants_units_cross_ref AS crossRef ON debts.unitId = crossRef.unitId
+        WHERE debts.unitId = :unitId
+          AND debts.costId = :costId
+          AND crossRef.tenantId = :tenantId
+        LIMIT 1
+    """)
+    suspend fun getDebtForTenantAndCost(
+        unitId: Long,
+        tenantId: Long,
+        costId: Long
+    ): Debts?
+
+    @Query("""
+        SELECT * FROM debts 
+        WHERE unitId = :unitId AND costId = :costId AND due_date = :dueDate LIMIT 1
+    """)
+    suspend fun getDebtForUnitCostAndDueDate(
+        unitId: Long,
+        costId: Long,
+        dueDate: String
+    ): Debts?
+
 
     data class UnitChargeAggregate(
         val unitId: Long?,

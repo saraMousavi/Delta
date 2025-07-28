@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "960c285858fc7c98b0f716e5e2a50da4",
+    "identityHash": "631bcb6a5a037e430daa133e023b11a8",
     "entities": [
       {
         "tableName": "building_types",
@@ -361,7 +361,7 @@
       },
       {
         "tableName": "units",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, `number_of_parking` TEXT NOT NULL, `excel_building_name` TEXT, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`unitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `ownerId` INTEGER, `unit_number` TEXT NOT NULL, `area` TEXT NOT NULL, `number_of_room` TEXT NOT NULL, `number_of_warehouse` TEXT NOT NULL, `number_of_parking` TEXT NOT NULL, `excel_building_name` TEXT, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`ownerId`) REFERENCES `owners`(`ownerId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "unitId",
@@ -394,6 +394,12 @@
           {
             "fieldPath": "numberOfRooms",
             "columnName": "number_of_room",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numberOfWarehouse",
+            "columnName": "number_of_warehouse",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -1781,7 +1787,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '960c285858fc7c98b0f716e5e2a50da4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '631bcb6a5a037e430daa133e023b11a8')"
     ]
   }
 }

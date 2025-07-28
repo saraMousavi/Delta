@@ -710,6 +710,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         onClick = {
                             val intent = Intent(context, TenantsDetailsActivity::class.java)
                             intent.putExtra("UNIT_DATA", unit.value!!.unitId)
+                            intent.putExtra("TENANT_DATA", tenant.tenantId)
                             context.startActivity(intent)
                         }
                     )

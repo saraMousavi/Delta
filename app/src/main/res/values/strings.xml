@@ -373,4 +373,6 @@
     <string name="charge_calcualted_successfully">محاسبه شارژ با موفقیت انجام شد و در کارتابل مالکین و ساکنین قرار گرفت.</string>
     <string name="failed">عملیات با خطا مواجه شد.لطفا دوباره امتحان کنید.</string>
     <string name="this_year_charge_calculated">شارژمحاسبه شده</string>
+    <string name="number_of_warehouse">انباری</string>
+    <string name="unit_info">اطلاعات واحد</string>
 </resources>

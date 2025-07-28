@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -94,6 +95,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val notificationDao = AppDatabase.getDatabase(application).notificationDao()
     private val cityComplexDao = AppDatabase.getDatabase(application).cityComplexDao()
 
+
     // State for Building Info Page
     var name by mutableStateOf("")
     var phone by mutableStateOf("")
@@ -112,7 +114,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var selectedChargeType by mutableStateOf(listOf<String>())
 
     var unitsAdded by mutableStateOf(false)
-    private val _buildingList = MutableStateFlow<List<BuildingWithTypesAndUsages>>(emptyList())
     var buildingTypeId by mutableIntStateOf(0)
     var buildingUsageId by mutableIntStateOf(0)
         // State for Owners Page
@@ -160,6 +161,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     var fixedAmount by mutableStateOf("")
         private set // Prevent external direct modification
+
+
+    val tenantRentDebtMap = mutableStateMapOf<Long, Double>()
+    val tenantMortgageDebtMap = mutableStateMapOf<Long, Double>()
 
 
     var chargeAmount by mutableStateOf("")
@@ -255,6 +260,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun updateDebt(debt: Debts) {
         viewModelScope.launch(Dispatchers.IO) {
             debtsDao.updateDebt(debt)
+        }
+    }
+
+
+    fun updateTenant(tenant: Tenants) {
+        viewModelScope.launch(Dispatchers.IO) {
+            tenantsDao.updateTenant(tenant)
         }
     }
 
@@ -478,6 +490,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getCost(costId: Long): Flow<Costs> = flow {
         val cost = costsDao.getCostById(costId)
+        emit(cost)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCostByBuildingIdAndName(buildingId: Long, costName: String): Flow<Costs?> = flow {
+        val cost = costsDao.getCostByBuildingIdAndName(buildingId, costName)
         emit(cost)
     }.flowOn(Dispatchers.IO)
 
@@ -1817,7 +1834,138 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+
+
     }
+
+    fun updateTenantWithCostsAndDebts(
+        tenantWithRelation: TenantWithRelation,
+        updatedTenant: Tenants,
+        rentAmount: Double,
+        mortgageAmount: Double
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val tenant = updatedTenant
+            val crossRef = tenantWithRelation.crossRef
+            val unitId = crossRef.unitId ?: return@launch
+            val buildingId =
+                unitsDao.getBuildingIdFromUnit(unitId) ?: return@launch  // Implement this method
+
+            // 1. Update tenant info
+            tenantsDao.updateTenant(tenant)
+
+            // 2. Ensure Rent cost exists or insert it
+            val rentCost = costsDao.getCostByBuildingIdAndName(buildingId, "اجاره") ?: let {
+                val newCost = Costs(
+                    buildingId = buildingId,
+                    costName = "اجاره",
+                    tempAmount = rentAmount,
+                    period = Period.MONTHLY,
+                    calculateMethod = CalculateMethod.EQUAL,
+                    paymentLevel = PaymentLevel.UNIT,
+                    responsible = Responsible.TENANT,
+                    fundFlag = FundFlag.NO_EFFECT,
+                    chargeFlag = false
+                )
+                val id = costsDao.insertCost(newCost)
+                newCost.copy(costId = id)
+            }
+
+            // If rentCost already exists, update amount if changed
+            if (rentCost.tempAmount != rentAmount) {
+                costsDao.updateCost(rentCost.copy(tempAmount = rentAmount))
+            }
+
+            // 3. Ensure Mortgage cost exists or insert it
+            val mortgageCost = costsDao.getCostByBuildingIdAndName(buildingId, "رهن") ?: let {
+                val newCost = Costs(
+                    buildingId = buildingId,
+                    costName = "رهن",
+                    tempAmount = mortgageAmount,
+                    period = Period.YEARLY,
+                    calculateMethod = CalculateMethod.EQUAL,
+                    paymentLevel = PaymentLevel.UNIT,
+                    responsible = Responsible.TENANT,
+                    fundFlag = FundFlag.NO_EFFECT,
+                    chargeFlag = false
+                )
+                val id = costsDao.insertCost(newCost)
+                newCost.copy(costId = id)
+            }
+
+            // If mortgageCost already exists, update amount if changed
+            if (mortgageCost.tempAmount != mortgageAmount) {
+                costsDao.updateCost(mortgageCost.copy(tempAmount = mortgageAmount))
+            }
+
+
+            val startDateCal = parsePersianDate(crossRef.startDate)
+            val endDateCal = parsePersianDate(crossRef.endDate)
+
+
+            if (startDateCal != null && endDateCal != null) {
+                // 4. Insert or update Rent debts - one debt per month within contract period
+                var currentCal = startDateCal
+                while (isDateLessOrEqual(currentCal, endDateCal)) {
+                    val dueDate = String.format(
+                        "%04d/%02d/%02d",
+                        currentCal!!.persianYear,
+                        currentCal!!.persianMonth,
+                        1
+                    )
+
+                    // Upsert rent debt
+                    val existingRentDebt =
+                        debtsDao.getDebtForUnitCostAndDueDate(unitId, rentCost.costId, dueDate)
+                    if (existingRentDebt == null) {
+                        debtsDao.insertDebt(
+                            Debts(
+                                unitId = unitId,
+                                costId = rentCost.costId,
+                                buildingId = buildingId,
+                                description = "اجاره",
+                                dueDate = dueDate,
+                                amount = rentAmount,
+                                paymentFlag = false
+                            )
+                        )
+                    } else {
+                        if (existingRentDebt.amount != rentAmount) {
+                            debtsDao.updateDebt(existingRentDebt.copy(amount = rentAmount))
+                        }
+                    }
+
+                    // Upsert mortgage debt
+                    val existingMortgageDebt = debtsDao.getDebtForUnitCostAndDueDate(
+                        unitId,
+                        mortgageCost.costId,
+                        dueDate
+                    )
+                    if (existingMortgageDebt == null) {
+                        debtsDao.insertDebt(
+                            Debts(
+                                unitId = unitId,
+                                costId = mortgageCost.costId,
+                                buildingId = buildingId,
+                                description = "رهن",
+                                dueDate = dueDate,
+                                amount = mortgageAmount,
+                                paymentFlag = false
+                            )
+                        )
+                    } else {
+                        if (existingMortgageDebt.amount != mortgageAmount) {
+                            debtsDao.updateDebt(existingMortgageDebt.copy(amount = mortgageAmount))
+                        }
+                    }
+
+                    // Increase month by 1 using your existing function
+                    currentCal = getNextMonthSameDaySafe(currentCal)
+                }
+            }
+        }
+    }
+
 
     private suspend fun updateTenantUnitCrossRef(tenant: Tenants, unit: Units) {
         // Check if relationship exists
@@ -2402,6 +2550,17 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }.toMap()
 
         return if (result.isEmpty()) null else result
+    }
+
+    // Function to load current rent & mortgage debt amounts for a given tenant + unit + costs
+    fun loadTenantDebtAmounts(unitId: Long, tenantId: Long, rentCostId: Long, mortgageCostId: Long) {
+        viewModelScope.launch {
+            val rentDebt = debtsDao.getDebtForTenantAndCost(unitId, tenantId, rentCostId)
+            tenantRentDebtMap[tenantId] = rentDebt?.amount ?: 0.0
+
+            val mortgageDebt = debtsDao.getDebtForTenantAndCost(unitId, tenantId, mortgageCostId)
+            tenantMortgageDebtMap[tenantId] = mortgageDebt?.amount ?: 0.0
+        }
     }
 
 }

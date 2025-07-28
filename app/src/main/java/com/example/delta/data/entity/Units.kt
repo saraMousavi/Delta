@@ -37,6 +37,7 @@ data class Units(
     @ColumnInfo(name = "unit_number") val unitNumber: String,
     @ColumnInfo(name = "area") val area: String,
     @ColumnInfo(name = "number_of_room") val numberOfRooms: String,
+    @ColumnInfo(name = "number_of_warehouse") val numberOfWarehouse: String,
     @ColumnInfo(name = "number_of_parking") val numberOfParking: String,
     @ColumnInfo(name = "excel_building_name") val excelBuildingName: String? = ""
 

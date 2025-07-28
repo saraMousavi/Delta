@@ -121,6 +121,12 @@ interface TenantDao {
 """)
     suspend fun getTenantForUserMobileNumber(mobileNumber: String): Tenants?
 
+    @Query("""
+        SELECT * FROM tenants_units_cross_ref
+        WHERE tenantId = :tenantId AND unitId = :unitId LIMIT 1
+    """)
+    suspend fun getCrossRefForTenantUnit(tenantId: Long, unitId: Long): TenantsUnitsCrossRef?
+
 }
 
 //      , active: String  AND status = :active
