@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "6e3edc2e8b50753daf5954575726917e",
+    "identityHash": "8ecfbb4796880d14197ad6122e0ce6d6",
     "entities": [
       {
         "tableName": "building_types",
@@ -1205,7 +1205,7 @@
       },
       {
         "tableName": "user",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mobile_number` TEXT NOT NULL, `password` TEXT NOT NULL, `roleId` INTEGER NOT NULL, FOREIGN KEY(`roleId`) REFERENCES `role`(`roleId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mobile_number` TEXT NOT NULL, `password` TEXT NOT NULL, `first_name` TEXT NOT NULL, `last_name` TEXT NOT NULL, `email` TEXT, `gender` TEXT, `roleId` INTEGER NOT NULL, `profile_photo` TEXT, `national_code` TEXT, `address` TEXT, FOREIGN KEY(`roleId`) REFERENCES `role`(`roleId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -1226,10 +1226,47 @@
             "notNull": true
           },
           {
+            "fieldPath": "firstName",
+            "columnName": "first_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastName",
+            "columnName": "last_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gender",
+            "columnName": "gender",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "roleId",
             "columnName": "roleId",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "profilePhoto",
+            "columnName": "profile_photo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nationalCode",
+            "columnName": "national_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -1846,7 +1883,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e3edc2e8b50753daf5954575726917e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8ecfbb4796880d14197ad6122e0ce6d6')"
     ]
   }
 }

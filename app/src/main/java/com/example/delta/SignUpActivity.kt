@@ -74,6 +74,7 @@ class SignUpActivity : ComponentActivity() {
                             // Go to BuildingFormActivity after successful sign up
                             Log.d("user.userId", user.userId.toString())
                             saveLoginState(this, true, userId = user.userId, mobile = user.mobileNumber)
+                            saveFirstLoginState(context = this, isFirstLoggedIn = true)
                             Log.d("BuildingFormActivity", "true")
                             val intent = Intent(this, ImportOrManualActivity::class.java)
                             startActivity(intent)

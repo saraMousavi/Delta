@@ -20,5 +20,12 @@ data class User(
     @PrimaryKey(autoGenerate = true) var userId: Long = 0,
     @ColumnInfo(name = "mobile_number") val mobileNumber: String,
     @ColumnInfo(name = "password") val password: String,
-    @ColumnInfo(name = "roleId") val roleId: Long, // owner, tenant, manager, guest
+    @ColumnInfo(name = "first_name") val firstName: String = "",
+    @ColumnInfo(name = "last_name") val lastName: String = "",
+    @ColumnInfo(name = "email") val email: String? = "",
+    @ColumnInfo(name = "gender") val gender: String? = "", // "male", "female", etc.
+    @ColumnInfo(name = "roleId") val roleId: Long, // ref to Role table or enum
+    @ColumnInfo(name = "profile_photo") val profilePhoto: String? = "", // uri or url
+    @ColumnInfo(name = "national_code") val nationalCode: String? = "",
+    @ColumnInfo(name = "address") val address: String? = ""
 )

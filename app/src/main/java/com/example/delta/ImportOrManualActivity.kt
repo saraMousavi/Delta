@@ -2,10 +2,8 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,10 +28,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.init.FileManagement
+import com.example.delta.screens.OnboardingScreen
 import com.example.delta.viewmodel.SharedViewModel
-//import org.apache.poi.ss.usermodel.Cell
-//import org.apache.poi.ss.usermodel.CellType
-//import org.apache.poi.ss.usermodel.DateUtil
 
 class ImportOrManualActivity : ComponentActivity() {
 
@@ -78,7 +74,15 @@ class ImportOrManualActivity : ComponentActivity() {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
-                        MainScreen()
+                        if (isFirstLoggedIn(this)) {
+                            OnboardingScreen {
+                                saveFirstLoginState(context = this, isFirstLoggedIn = false)
+                                val intent = Intent(this, ImportOrManualActivity::class.java)
+                                startActivity(intent)
+                            }
+                        } else {
+                            MainScreen()
+                        }
                     }
                 }
             }
@@ -92,7 +96,9 @@ class ImportOrManualActivity : ComponentActivity() {
         val thisActivity = this
 
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

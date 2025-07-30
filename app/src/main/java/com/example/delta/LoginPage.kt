@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import com.example.delta.enums.Roles
 import com.example.delta.init.Preference
+import com.example.delta.screens.OnboardingScreen
 import com.example.delta.viewmodel.SharedViewModel
 
 class LoginPage : ComponentActivity() {
@@ -46,27 +47,38 @@ class LoginPage : ComponentActivity() {
             setContent {
                 AppTheme {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        if (isUserLoggedIn(this)) {
-                            val userId = Preference().getUserId(context = this)
-                            val userRole by sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
-
-                            userRole?.let { role ->
-                                Log.d("role.roleName", role.roleName.toString())
-                                if (role.roleName == Roles.ADMIN || role.roleName == Roles.BUILDING_MANAGER || role.roleName == Roles.COMPLEX_MANAGER) {
-                                    startActivity(Intent(this, DashboardActivity::class.java))
-                                } else {
-                                    startActivity(Intent(this, HomePageActivity::class.java))
-                                }
-                                finish()
-                            } ?: run {
-                                // You can show a loading indicator here or do nothing yet
+                        if (isFirstLoggedIn(this)) {
+                            // Show onboarding activity first (or compose screen)
+                            OnboardingScreen {
+                                saveFirstLoginState(context = this, isFirstLoggedIn = false)
+                                val intent = Intent(this, ImportOrManualActivity::class.java)
+                                startActivity(intent)
                             }
 
                         } else {
-                            val users by sharedViewModel.getUsers()
-                                .collectAsState(initial = emptyList())
-                            Log.d("users", users.toString())
-                            LoginPageForm(users, viewModel)
+                            if (isUserLoggedIn(this)) {
+                                val userId = Preference().getUserId(context = this)
+                                val userRole by sharedViewModel.getRoleByUserId(userId)
+                                    .collectAsState(initial = null)
+
+                                userRole?.let { role ->
+                                    Log.d("role.roleName", role.roleName.toString())
+                                    if (role.roleName == Roles.ADMIN || role.roleName == Roles.BUILDING_MANAGER || role.roleName == Roles.COMPLEX_MANAGER) {
+                                        startActivity(Intent(this, DashboardActivity::class.java))
+                                    } else {
+                                        startActivity(Intent(this, HomePageActivity::class.java))
+                                    }
+                                    finish()
+                                } ?: run {
+                                    // You can show a loading indicator here or do nothing yet
+                                }
+
+                            } else {
+                                val users by sharedViewModel.getUsers()
+                                    .collectAsState(initial = emptyList())
+                                Log.d("users", users.toString())
+                                LoginPageForm(users, viewModel)
+                            }
                         }
                     }
                 }
@@ -252,12 +264,26 @@ fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile:S
     prefs.edit { putBoolean("is_logged_in", isLoggedIn)
         putLong("user_id", userId)
         putString("user_mobile", mobile)
+        putBoolean("first_login", true)
+    }
+}
+
+
+fun saveFirstLoginState(context: Context, isFirstLoggedIn: Boolean) {
+    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    prefs.edit {
+        putBoolean("first_login", isFirstLoggedIn)
     }
 }
 
 fun isUserLoggedIn(context: Context): Boolean {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
     return prefs.getBoolean("is_logged_in", false)
+}
+
+fun isFirstLoggedIn(context: Context): Boolean {
+    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    return prefs.getBoolean("first_login", false)
 }
 
 

@@ -1842,6 +1842,21 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    fun updateUser(
+        user: User,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                userDao.updateUser(user)
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.message ?: "Unknown error") }
+            }
+        }
+    }
+
+
     fun updateOwnerWithUnits(owner: Owners, units: List<OwnersUnitsCrossRef>) {
         viewModelScope.launch(Dispatchers.IO) {
             try {

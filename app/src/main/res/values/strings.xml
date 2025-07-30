@@ -398,4 +398,10 @@
     <string name="success_pay_tocapital_fund">پرداختی شما به صندوق عمرانی انتقال یافت.</string>
     <string name="chart_alarm">پیغام داشبورد</string>
     <string name="chart_alarm_info">اطلاعات مالی جهت نمایش داشبورد وجود ندارد.</string>
+    <string name="profile_image">عکس پروفایل</string>
+    <string name="edit_profile">ویرایش پروفایل</string>
+    <string name="start">شروع کنید</string>
+    <string name="app_features">معرفی امکانات برنامه</string>
+    <string name="easy_management">مدیریت آسان</string>
+    <string name="exact_info">اطلاعات دقیق</string>
 </resources>

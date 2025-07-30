@@ -123,7 +123,6 @@ fun DetailDrawer(
                     ModalNavigationDrawer(
                         drawerContent = {
                             ModalDrawerSheet {
-                                // ... your main menu content here (same as before) ...
                                 Column(
                                     modifier = Modifier
                                         .padding(horizontal = 16.dp)
@@ -155,7 +154,9 @@ fun DetailDrawer(
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.account)) },
                                         selected = false,
-                                        onClick = {}
+                                        onClick = {
+                                            context.startActivity(Intent(context, UserProfileActivity::class.java))
+                                        }
                                     )
                                     Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
