@@ -33,4 +33,17 @@ interface EarningsDao {
         SELECT SUM(amount) FROM earnings where buildingId = :buildingId
     """)
     fun sumPaidEarning(buildingId: Long): Flow<Double>
+
+    @Query("""
+        SELECT * FROM earnings
+        WHERE buildingId = :buildingId
+        AND (invoice_flag = 0 OR invoice_flag IS NULL)
+        ORDER BY due_date ASC
+    """)
+    fun getNotInvoicedEarnings(buildingId: Long): Flow<List<Earnings>>
+
+    @Query("""
+        UPDATE earnings SET invoice_flag = 1 WHERE earningsId = :earningId
+    """)
+    suspend fun markEarningAsInvoiced(earningId: Long)
 }

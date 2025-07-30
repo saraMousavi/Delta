@@ -2,7 +2,6 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -55,7 +54,7 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundFlag
+import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
@@ -386,12 +385,13 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             buildingId = selectedBuilding!!.buildingId,
                             costName = costName,
                             chargeFlag = true,
-                            fundFlag = FundFlag.POSITIVE_EFFECT,
+                            fundType = FundType.OPERATIONAL,
                             responsible = Responsible.TENANT,
                             paymentLevel = PaymentLevel.UNIT,
                             calculateMethod = CalculateMethod.EQUAL,
                             period = Period.YEARLY,
-                            tempAmount = 0.0
+                            tempAmount = 0.0,
+                            dueDate = ""
                         )
                         sharedViewModel.insertNewCost(newCost)
                         sharedViewModel.chargeCostsList.value += newCost

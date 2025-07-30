@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,6 +49,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,12 +62,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Units
-import com.example.delta.enums.PaymentLevel
-import com.example.delta.enums.Responsible
+import com.example.delta.enums.FundType
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
+import kotlinx.coroutines.launch
 
 class TenantsDetailsActivity : ComponentActivity() {
 
@@ -146,8 +145,7 @@ class TenantsDetailsActivity : ComponentActivity() {
                     0 -> OverviewSection(unit = unit.value!!, sharedViewModel = sharedViewModel)
                     1 -> DebtSection(
                         unitId = unit.value!!.unitId,
-                        sharedViewModel = sharedViewModel,
-                        onAddCostClick = { showAddCostDialog = true }
+                        sharedViewModel = sharedViewModel
                     ) // Pass SharedViewModel
                     2 -> PaymentsSection(
                         unitId = unit.value!!.unitId,
@@ -155,33 +153,32 @@ class TenantsDetailsActivity : ComponentActivity() {
                     ) // Pass SharedViewModel
                     3 -> ReportSection(unitId = unit.value!!.unitId)
                 }
-                if (showAddCostDialog) {
-                    AddCostDialog(
-                        buildingId = unit.value!!.buildingId ?: 0,
-                        sharedViewModel = sharedViewModel,
-                        onDismiss = { showAddCostDialog = false },
-                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, fundMinus ->
-                            // Insert cost and debts using selectedCost info
-
-                            sharedViewModel.insertDebtPerNewCost(
-                                buildingId = unit.value!!.buildingId ?: 0,
-                                amount = amount,
-                                name = selectedCost.costName,
-                                period = period,
-                                dueDate = dueDate,
-                                fundFlag = fundFlag,
-                                paymentLevel = PaymentLevel.UNIT,
-                                calculateMethod = calculatedMethod,
-                                calculatedUnitMethod = calculatedUnitMethod,
-                                responsible = Responsible.TENANT,
-                                selectedUnitIds = selectedUnits.map { it },
-                                fundMinus = fundMinus
-                            )
-
-                            showAddCostDialog = false
-                        }
-                    )
-                }
+//                if (showAddCostDialog) {
+//                    AddCostDialog(
+//                        buildingId = unit.value!!.buildingId ?: 0,
+//                        sharedViewModel = sharedViewModel,
+//                        onDismiss = { showAddCostDialog = false },
+//                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate ->
+//                            // Insert cost and debts using selectedCost info
+//
+//                            sharedViewModel.insertDebtPerNewCost(
+//                                buildingId = unit.value!!.buildingId ?: 0,
+//                                amount = amount,
+//                                name = selectedCost.costName,
+//                                period = period,
+//                                dueDate = dueDate,
+//                                fundType = fundFlag,
+//                                paymentLevel = PaymentLevel.UNIT,
+//                                calculateMethod = calculatedMethod,
+//                                calculatedUnitMethod = calculatedUnitMethod,
+//                                responsible = Responsible.TENANT,
+//                                selectedUnitIds = selectedUnits.map { it }
+//                            )
+//
+//                            showAddCostDialog = false
+//                        }
+//                    )
+//                }
             }
         }
         }
@@ -688,13 +685,13 @@ class TenantsDetailsActivity : ComponentActivity() {
     @Composable
     fun DebtSection(
         unitId: Long,
-        sharedViewModel: SharedViewModel,
-        onAddCostClick: () -> Unit
+        sharedViewModel: SharedViewModel
     ) {
         var selectedYear by rememberSaveable { mutableStateOf<Int?>(PersianCalendar().persianYear) }
         var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth) }
         var showPayAllDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
 
         val yearFilter = if (selectedYear == -1) null else selectedYear.toString()
         val monthFilter =
@@ -776,13 +773,28 @@ class TenantsDetailsActivity : ComponentActivity() {
                     // Show debts
                     sharedViewModel.unpaidDebtList.value.forEach { debt ->
                         DebtItem(debt = debt, onPayment = {
-                            val updatedDebt = debt.copy(paymentFlag = true)
-                            sharedViewModel.updateDebt(updatedDebt)
-                            sharedViewModel.updateDebtPaymentFlag(debt, true)
-                            Toast.makeText(
-                                context, context.getString(R.string.success_pay),
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            coroutineScope.launch {
+                                val updatedDebt = debt.copy(paymentFlag = true)
+                                sharedViewModel.updateDebt(updatedDebt)
+                                sharedViewModel.updateDebtPaymentFlag(debt, true)
+                                val amountDouble = debt.amount
+                                val success = sharedViewModel.increaseOperationalFund(
+                                    buildingId = debt.buildingId,
+                                    amountDouble,
+                                    fundType = FundType.OPERATIONAL
+                                )
+                                if (success) {
+                                    Toast.makeText(
+                                        context, context.getString(R.string.success_pay_tooperational_fund),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context, context.getString(R.string.failed),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         })
                     }
                 }
@@ -790,33 +802,33 @@ class TenantsDetailsActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Add Debt item at end of list
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onAddCostClick() },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = context.getString(R.string.add_new_debt),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = context.getString(R.string.add_new_debt),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
+//                Card(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .clickable { onAddCostClick() },
+//                    shape = RoundedCornerShape(8.dp),
+//                    colors = CardDefaults.cardColors(
+//                        containerColor = MaterialTheme.colorScheme.primaryContainer
+//                    )
+//                ) {
+//                    Row(
+//                        modifier = Modifier.padding(16.dp),
+//                        verticalAlignment = Alignment.CenterVertically,
+//                        horizontalArrangement = Arrangement.Center
+//                    ) {
+//                        Icon(
+//                            imageVector = Icons.Default.Add,
+//                            contentDescription = context.getString(R.string.add_new_debt),
+//                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+//                        )
+//                        Spacer(modifier = Modifier.width(8.dp))
+//                        Text(
+//                            text = context.getString(R.string.add_new_debt),
+//                            style = MaterialTheme.typography.bodyLarge,
+//                            color = MaterialTheme.colorScheme.onPrimaryContainer
+//                        )
+//                    }
+//                }
             }
         }
 

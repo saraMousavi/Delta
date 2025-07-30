@@ -1,9 +1,7 @@
 package com.example.delta.init
 
 import androidx.room.TypeConverter
-import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundFlag
-import com.example.delta.enums.NotificationType
+import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
@@ -30,17 +28,18 @@ class Converter {
             return gson.toJson(list ?: emptyList<String>())
         }
 
-        // --- FundFlag enum conversion using ordinal or value ---
         @JvmStatic
         @TypeConverter
-        fun fromIntToFundFlag(value: Int?): FundFlag {
-            return value?.let { FundFlag.fromValue(it) } ?: FundFlag.NO_EFFECT
+        fun fromIntToFundType(value: Int?): FundType {
+            return value?.let { v ->
+                FundType.entries.firstOrNull { it.resId == v } ?: FundType.OPERATIONAL
+            } ?: FundType.OPERATIONAL
         }
 
         @JvmStatic
         @TypeConverter
-        fun fromFundFlagToInt(flag: FundFlag?): Int {
-            return flag?.value ?: FundFlag.NO_EFFECT.value
+        fun fromFundTypeToInt(fundType: FundType?): Int {
+            return fundType?.resId ?: FundType.OPERATIONAL.resId
         }
 
         // --- PaymentLevel enum conversion by name ---

@@ -71,8 +71,7 @@ class EarningsActivity : ComponentActivity() {
                                     buildingId = 0,
                                     earningsName = name,
                                     amount = 0.0,
-                                    startDate = "",
-                                    endDate = "",
+                                    dueDate = "",
                                     period = Period.MONTHLY
                                 )
                             )

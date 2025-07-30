@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "631bcb6a5a037e430daa133e023b11a8",
+    "identityHash": "6e3edc2e8b50753daf5954575726917e",
     "entities": [
       {
         "tableName": "building_types",
@@ -225,7 +225,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_flag` INTEGER NOT NULL, `charge_flag` INTEGER, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_type` INTEGER NOT NULL, `charge_flag` INTEGER, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "costId",
@@ -275,8 +275,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "fundFlag",
-            "columnName": "fund_flag",
+            "fieldPath": "fundType",
+            "columnName": "fund_type",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -284,6 +284,17 @@
             "fieldPath": "chargeFlag",
             "columnName": "charge_flag",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "invoiceFlag",
+            "columnName": "invoice_flag",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "dueDate",
+            "columnName": "due_date",
+            "affinity": "TEXT",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -308,11 +319,11 @@
       },
       {
         "tableName": "earnings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`earningsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL)",
         "fields": [
           {
-            "fieldPath": "id",
-            "columnName": "id",
+            "fieldPath": "earningsId",
+            "columnName": "earningsId",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -340,14 +351,13 @@
             "notNull": true
           },
           {
-            "fieldPath": "startDate",
-            "columnName": "start_date",
-            "affinity": "TEXT",
-            "notNull": true
+            "fieldPath": "invoiceFlag",
+            "columnName": "invoice_flag",
+            "affinity": "INTEGER"
           },
           {
-            "fieldPath": "endDate",
-            "columnName": "end_date",
+            "fieldPath": "dueDate",
+            "columnName": "due_date",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -355,7 +365,7 @@
         "primaryKey": {
           "autoGenerate": true,
           "columnNames": [
-            "id"
+            "earningsId"
           ]
         }
       },
@@ -1710,6 +1720,55 @@
         }
       },
       {
+        "tableName": "funds",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fundId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `fund_type` INTEGER NOT NULL, `balance` REAL NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "fundId",
+            "columnName": "fundId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fundType",
+            "columnName": "fund_type",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balance",
+            "columnName": "balance",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "fundId"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "buildings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "buildingId"
+            ],
+            "referencedColumns": [
+              "buildingId"
+            ]
+          }
+        ]
+      },
+      {
         "tableName": "users_buildings_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `roleName` TEXT NOT NULL, PRIMARY KEY(`userId`, `buildingId`), FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1787,7 +1846,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '631bcb6a5a037e430daa133e023b11a8')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e3edc2e8b50753daf5954575726917e')"
     ]
   }
 }

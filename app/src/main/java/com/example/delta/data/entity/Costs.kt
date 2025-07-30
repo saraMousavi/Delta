@@ -7,7 +7,7 @@ import androidx.room.ForeignKey
 import androidx.room.ForeignKey.Companion.CASCADE
 import androidx.room.PrimaryKey
 import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundFlag
+import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
@@ -34,6 +34,8 @@ data class Costs(
     @ColumnInfo(name = "calculate_method") val calculateMethod: CalculateMethod, //fixed, automatic
     @ColumnInfo(name = "payment_level") val paymentLevel: PaymentLevel, // units, building
     @ColumnInfo(name = "responsible") val responsible: Responsible, // owner, tenant
-    @ColumnInfo(name = "fund_flag") var fundFlag: FundFlag,
-    @ColumnInfo(name = "charge_flag") var chargeFlag: Boolean?= false
+    @ColumnInfo(name = "fund_type") var fundType: FundType,
+    @ColumnInfo(name = "charge_flag") var chargeFlag: Boolean?= false,
+    @ColumnInfo(name = "invoice_flag") var invoiceFlag: Boolean?= false,
+    @ColumnInfo(name = "due_date") val dueDate: String, // Due date of the debt
 ) : Parcelable

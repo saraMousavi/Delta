@@ -50,6 +50,11 @@ android {
     kotlinOptions {
         jvmTarget = '11'
     }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.6.1" // or a version compatible with your Compose version
+    }
+
     buildFeatures {
         compose true
         viewBinding true

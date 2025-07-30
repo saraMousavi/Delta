@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -28,6 +29,7 @@ import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
+import com.example.delta.data.entity.Funds
 import com.example.delta.data.entity.Notification
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
@@ -46,7 +48,7 @@ import com.example.delta.data.entity.UsersBuildingsCrossRef
 import com.example.delta.data.entity.UsersNotificationCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundFlag
+import com.example.delta.enums.FundType
 import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
@@ -60,9 +62,11 @@ import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -72,6 +76,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import kotlin.math.min
+
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -93,7 +98,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val uploadedFileDao = AppDatabase.getDatabase(application).uploadedFileDao()
     private val phonebookDao = AppDatabase.getDatabase(application).phonebookDao()
     private val notificationDao = AppDatabase.getDatabase(application).notificationDao()
+    private val fundsDao = AppDatabase.getDatabase(application).fundsDao()
     private val cityComplexDao = AppDatabase.getDatabase(application).cityComplexDao()
+
+    private val _invoiceResult = MutableSharedFlow<Boolean>() // true=success, false=failure
+    val invoiceResult = _invoiceResult.asSharedFlow()
 
 
     // State for Building Info Page
@@ -155,8 +164,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var fillCostsByBuilding by mutableStateOf(false)
     var chargeFundFlagChecked by mutableStateOf(false)
     var rentMortgageFundFlagChecked by mutableStateOf(false)
+
+    // State to hold current balance of operational fund
+    private val _operationalFundBalance = mutableStateOf(0.0)
+    val operationalFundBalance: State<Double> = _operationalFundBalance
+
+    // State to hold current balance of capital fund
+    private val _capitalFundBalance = mutableStateOf(0.0)
+    val capitalFundBalance: State<Double> = _capitalFundBalance
+
     var sameCosts by mutableStateOf(true)
-    var fundMinus by mutableStateOf(false)
     var currentRoleId by mutableLongStateOf(0L)
 
     var fixedAmount by mutableStateOf("")
@@ -193,6 +210,20 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         loadCosts()
         loadBuildingsWithTypesAndUsages()
 //        loadDefaultCosts()
+    }
+
+    /**
+     * Loads the current balances of operational and capital funds for the given building.
+     * Updates the public states that UI observes.
+     */
+    fun loadFundBalances(buildingId: Long) {
+        viewModelScope.launch {
+            val opFund = fundsDao.getFundByType(buildingId, FundType.OPERATIONAL)
+            val capFund = fundsDao.getFundByType(buildingId, FundType.CAPITAL)
+
+            _operationalFundBalance.value = opFund?.balance ?: 0.0
+            _capitalFundBalance.value = capFund?.balance ?: 0.0
+        }
     }
 
 
@@ -233,6 +264,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             )
             emit(debts)
         }
+    }.flowOn(Dispatchers.IO)
+
+    fun getDebtsForEachCost(costId: Long): Flow<List<Debts>> = flow {
+        val debts = debtsDao.getDebtsForEachCost(
+            costId = costId
+        )
+        emit(debts)
     }.flowOn(Dispatchers.IO)
 
 
@@ -448,12 +486,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-    fun getCostsForBuilding(buildingId: Long): Flow<List<Costs>> = flow {
-        val costs = costsDao.getCostsForBuildingWithFundFlag(
-            buildingId, FundFlag.NO_EFFECT
+    fun getCostsByFundTypeForBuilding(buildingId: Long, fundType: FundType): Flow<List<Costs>> =
+        flow {
+            val costs = costsDao.getCostsByFundTypeForBuilding(
+                buildingId, fundType
         )
         emit(costs)
     }.flowOn(Dispatchers.IO)
+
 
     fun getCostsForBuildingWithChargeFlag(buildingId: Long): Flow<List<Costs>> = flow {
         val costs = costsDao.getCostsForBuildingWithChargeFlag(
@@ -466,6 +506,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         val costs = costsDao.getChargesCostsNotInBuilding(
             buildingId
         )
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCostByBuildingIdAndName(buildingId: Long): Flow<Costs?> = flow {
+        val costs = costsDao.getCostByBuildingIdAndName(
+            buildingId
+        )
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun getChargesCostsWithNullBuildingId(): Flow<List<Costs>> = flow {
+        val costs = costsDao.getChargesCostsWithNullBuildingId()
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
@@ -494,13 +546,24 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
     fun getCostByBuildingIdAndName(buildingId: Long, costName: String): Flow<Costs?> = flow {
-        val cost = costsDao.getCostByBuildingIdAndName(buildingId, costName)
+        val cost = costsDao.getDefaultCostByBuildingIdAndName(buildingId, costName)
         emit(cost)
     }.flowOn(Dispatchers.IO)
 
 
     fun checkCostNameExists(buildingId: Long, costName: String): Flow<Boolean> = flow {
         val costs = costsDao.costNameExists(buildingId, costName)
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun getPendingCostsByFundType(buildingId: Long, fundType: FundType): Flow<List<Costs>> = flow {
+        val costs = costsDao.getPendingCostsByFundType(buildingId, fundType)
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getInvoicedCostsByFundType(buildingId: Long, fundType: FundType): Flow<List<Costs>> = flow {
+        val costs = costsDao.getInvoicedCostsByFundType(buildingId, fundType)
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
@@ -519,7 +582,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-    fun getOwner(ownerId: Long): Flow<Owners> = flow {
+    fun getOwner(ownerId: Long): Flow<Owners?> = flow {
         val owners = ownersDao.getOwnerById(ownerId)
         emit(owners)
     }.flowOn(Dispatchers.IO)
@@ -643,6 +706,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
 
+    fun getOperationalOrCapitalFundBalance(buildingId: Long, fundType: FundType): Flow<Double?> =
+        flow {
+            val balance = fundsDao.getOperationalOrCapitalFundBalance(buildingId, fundType)
+            emit(balance)
+        }.flowOn(Dispatchers.IO)
+
+
     fun getUsers(): Flow<List<User>> = flow {
         val user = userDao.getUsers()
         emit(user)
@@ -710,6 +780,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getTenantUnitRelationshipsOfUnit(unitId: Long): Flow<List<TenantWithRelation>> = flow {
         emit(tenantsDao.getTenantsWithRelationForUnit(unitId))
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getActiveTenantsWithRelationForUnit(unitId: Long): Flow<TenantWithRelation?> = flow {
+        emit(tenantsDao.getActiveTenantsWithRelationForUnit(unitId))
     }.flowOn(Dispatchers.IO)
 
 
@@ -889,7 +964,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     val responsible = if (activeTenantsForFiscalYear.isNotEmpty())
                         Responsible.TENANT else Responsible.OWNER
 
-                    val charge = costsDao.getCostByBuildingIdAndName(buildingId = buildingId)
+                    val charge = costsDao.getDefaultCostByBuildingIdAndName(buildingId = buildingId)
                         ?: run {
                             Log.e("insertDebtForCharge", "No cost found for buildingId $buildingId")
                             return@forEach
@@ -991,11 +1066,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         paymentLevel: PaymentLevel,
         calculateMethod: CalculateMethod,
         calculatedUnitMethod: CalculateMethod,
-        fundFlag: FundFlag,
+        fundType: FundType,
         responsible: Responsible,
         selectedUnitIds: List<Long> = emptyList(),
-        selectedOwnerIds: List<Long> = emptyList(),
-        fundMinus: FundFlag
+        selectedOwnerIds: List<Long> = emptyList()
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val parsedAmount = amount.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
@@ -1006,40 +1080,35 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             var newResponsible = responsible
             var paymentFlag = false
             var newPaymentLevel = paymentLevel
-            if (fundMinus == FundFlag.NEGATIVE_EFFECT) {
-                newResponsible = Responsible.ALL
-                paymentFlag = true
-                newPaymentLevel = PaymentLevel.BUILDING
-
-            }
             var costId: Long = 0
-            if (existingCost != null) {
-                // Update existing cost
-                if (newResponsible == Responsible.TENANT) {
-                    cost = existingCost.copy(
-                        tempAmount = parsedAmount,
-                        period = period,
-                        paymentLevel = newPaymentLevel,
-                        calculateMethod = calculatedUnitMethod,
-                        responsible = newResponsible,
-                        fundFlag = fundFlag
-                    )
-                    costsDao.updateCost(cost)
-                    costId = cost.costId
-                } else {
-                    cost = existingCost.copy(
-                        tempAmount = parsedAmount,
-                        period = period,
-                        paymentLevel = newPaymentLevel,
-                        calculateMethod = calculateMethod,
-                        responsible = newResponsible,
-                        fundFlag = fundFlag
-                    )
-                    costsDao.updateCost(cost)
-                    costId = cost.costId
-                }
-
-            } else {
+            Log.d("existingCost", existingCost.toString())
+//            if (existingCost != null) {
+//                // Update existing cost
+//                if (newResponsible == Responsible.TENANT) {
+//                    cost = existingCost.copy(
+//                        tempAmount = parsedAmount,
+//                        period = period,
+//                        paymentLevel = newPaymentLevel,
+//                        calculateMethod = calculatedUnitMethod,
+//                        responsible = newResponsible,
+//                        fundType = fundType
+//                    )
+//                    costsDao.updateCost(cost)
+//                    costId = cost.costId
+//                } else {
+//                    cost = existingCost.copy(
+//                        tempAmount = parsedAmount,
+//                        period = period,
+//                        paymentLevel = newPaymentLevel,
+//                        calculateMethod = calculateMethod,
+//                        responsible = newResponsible,
+//                        fundType = fundType
+//                    )
+//                    costsDao.updateCost(cost)
+//                    costId = cost.costId
+//                }
+//
+//            } else {
                 // Insert new cost
                 if (newResponsible == Responsible.TENANT) {
                     cost = Costs(
@@ -1050,9 +1119,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         calculateMethod = calculatedUnitMethod,
                         paymentLevel = newPaymentLevel,
                         responsible = newResponsible,
-                        fundFlag = fundFlag
+                        fundType = fundType,
+                        dueDate = dueDate
                     )
-                    costsDao.insertCost(cost)
+
+                    Log.d("new cost", cost.toString())
+                    costId = costsDao.insertCost(cost)
                 } else {
                     cost = Costs(
                         buildingId = buildingId,
@@ -1062,53 +1134,57 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         calculateMethod = calculateMethod,
                         paymentLevel = newPaymentLevel,
                         responsible = newResponsible,
-                        fundFlag = fundFlag
+                        fundType = fundType,
+                        dueDate = dueDate
                     )
-                    costsDao.insertCost(cost)
+                    Log.d("new cost", cost.toString())
+                    costId = costsDao.insertCost(cost)
                 }
 
-            }
+//            }
 
             // Get units depending on responsible and selected units
             when {
                 newResponsible == Responsible.TENANT && selectedUnitIds.isNotEmpty() -> {
                     val units = unitsDao.getUnitsByIds(selectedUnitIds)
-                    var newDueDate = ""
-                    if (period == Period.NONE) {
-                        newDueDate = dueDate
-                    } else {
-                        //@TODO loop of period
-                        newDueDate = getNextMonthSameDaySafe().persianShortDate
-                    }
+//                    var newDueDate = ""
+//                    if (period == Period.NONE) {
+//                        newDueDate = dueDate
+//                    } else {
+//                        //@TODO loop of period
+//                        newDueDate = getNextMonthSameDaySafe().persianShortDate
+//                    }
                     //@todo amount per unit based on people , area, fixed
 
                     val numberOfUnits = units.size
                     val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
 
                     // Insert debts for each unit
+                    Log.d("dueDate", dueDate)
                     units.forEach { unit ->
                         val debt = Debts(
                             unitId = unit.unitId,
                             costId = costId,
                             buildingId = buildingId,
                             description = name,
-                            dueDate = newDueDate,
+                            dueDate = dueDate,
                             amount = amountPerUnit,
-                            paymentFlag = paymentFlag
+                            paymentFlag = false
                         )
+                        Log.d("new debt", debt.toString())
                         debtsDao.insertDebt(debt)
                     }
 
                 }
 
                 newResponsible == Responsible.OWNER && selectedOwnerIds.isNotEmpty() -> {
-                    var newDueDate = ""
-                    if (period == Period.NONE) {
-                        newDueDate = dueDate
-                    } else {
-                        //@TODO loop of period
-                        newDueDate = getNextMonthSameDaySafe().persianShortDate
-                    }
+//                    var newDueDate = ""
+//                    if (period == Period.NONE) {
+//                        newDueDate = dueDate
+//                    } else {
+//                        //@TODO loop of period
+//                        newDueDate = getNextMonthSameDaySafe().persianShortDate
+//                    }
                     val owners = ownersDao.getOwnersForBuilding(buildingId)
                     val units = unitsDao.getUnits(buildingId)
                     val ownersUnitsCrossRefs = ownersDao.getOwnersWithUnitsList(selectedOwnerIds)
@@ -1125,13 +1201,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         val debt = Debts(
                             unitId = null,
                             ownerId = ownerId,
-                            costId = cost.costId,
+                            costId = costId,
                             buildingId = buildingId,
                             description = cost.costName,
-                            dueDate = newDueDate, // set appropriately
+                            dueDate = dueDate, // set appropriately
                             amount = amount,
-                            paymentFlag = paymentFlag
+                            paymentFlag = false
                         )
+                        Log.d("owner debt", debt.toString())
                         debtsDao.insertDebt(debt)
                     }
                 }
@@ -1147,7 +1224,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     val debt = Debts(
                         unitId = null,
                         ownerId = null,
-                        costId = cost.costId,
+                        costId = costId,
                         buildingId = buildingId,
                         description = cost.costName,
                         dueDate = newDueDate, // set appropriately
@@ -1193,7 +1270,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         name: String,
         period: Period,
         paymentLevel: PaymentLevel,
-        fundFlag: FundFlag
+        fundFlag: FundType
     ) {
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1214,7 +1291,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 calculateMethod = CalculateMethod.EQUAL,
                 paymentLevel = paymentLevel,
                 responsible = Responsible.TENANT,
-                fundFlag = fundFlag
+                fundType = fundFlag,
+                dueDate = ""
             )
 
             val costId = costsDao.insertCost(cost)
@@ -1855,7 +1933,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             tenantsDao.updateTenant(tenant)
 
             // 2. Ensure Rent cost exists or insert it
-            val rentCost = costsDao.getCostByBuildingIdAndName(buildingId, "اجاره") ?: let {
+            val rentCost = costsDao.getDefaultCostByBuildingIdAndName(buildingId, "اجاره") ?: let {
                 val newCost = Costs(
                     buildingId = buildingId,
                     costName = "اجاره",
@@ -1864,8 +1942,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     calculateMethod = CalculateMethod.EQUAL,
                     paymentLevel = PaymentLevel.UNIT,
                     responsible = Responsible.TENANT,
-                    fundFlag = FundFlag.NO_EFFECT,
-                    chargeFlag = false
+                    fundType = FundType.OPERATIONAL,
+                    chargeFlag = false,
+                    dueDate = ""
                 )
                 val id = costsDao.insertCost(newCost)
                 newCost.copy(costId = id)
@@ -1877,7 +1956,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             // 3. Ensure Mortgage cost exists or insert it
-            val mortgageCost = costsDao.getCostByBuildingIdAndName(buildingId, "رهن") ?: let {
+            val mortgageCost =
+                costsDao.getDefaultCostByBuildingIdAndName(buildingId, "رهن") ?: let {
                 val newCost = Costs(
                     buildingId = buildingId,
                     costName = "رهن",
@@ -1886,8 +1966,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     calculateMethod = CalculateMethod.EQUAL,
                     paymentLevel = PaymentLevel.UNIT,
                     responsible = Responsible.TENANT,
-                    fundFlag = FundFlag.NO_EFFECT,
-                    chargeFlag = false
+                    fundType = FundType.OPERATIONAL,
+                    chargeFlag = false,
+                    dueDate = ""
                 )
                 val id = costsDao.insertCost(newCost)
                 newCost.copy(costId = id)
@@ -2180,9 +2261,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun updateCostFundFlag(newValue: FundFlag) {
+    fun updateCostFundFlag(newValue: FundType) {
         costsList.value = costsList.value.filter { it.buildingId == null }.map {
-            it.copy(fundFlag = newValue)
+            it.copy(fundType = newValue)
         }
     }
 
@@ -2406,9 +2487,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun updateFundFlagCharge(newValue: FundFlag) {
+    fun updateFundFlagCharge(newValue: FundType) {
         charge.value = charge.value.filter { it.buildingId == null }.map {
-            it.copy(fundFlag = newValue)
+            it.copy(fundType = newValue)
         }
     }
 
@@ -2562,6 +2643,129 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             tenantMortgageDebtMap[tenantId] = mortgageDebt?.amount ?: 0.0
         }
     }
+
+
+    fun invoiceCostIfEnoughFund(cost: Costs) {
+        viewModelScope.launch {
+            val buildingId = cost.buildingId ?: return@launch
+            val fundType = cost.fundType
+            val costAmount = cost.tempAmount
+
+            // Get current fund record
+            val fund = fundsDao.getFundByType(buildingId, fundType)
+
+            if (fund == null) {
+                // No fund record found - treat as no funds available
+                _invoiceResult.emit(false)
+                return@launch
+            }
+
+            if (fund.balance >= costAmount) {
+                // Enough fund - update cost and fund
+
+                // Mark cost as invoiced
+                costsDao.markCostAsInvoiced(cost.costId)
+
+                // Decrease fund balance
+                val updatedFund = fund.copy(balance = fund.balance - costAmount)
+                fundsDao.updateFunds(updatedFund)
+
+                _invoiceResult.emit(true) // Success
+            } else {
+                // Not enough funds
+                _invoiceResult.emit(false)
+            }
+        }
+    }
+
+    fun getNotInvoicedEarnings(buildingId: Long) = earningsDao.getNotInvoicedEarnings(buildingId)
+
+    /**
+     * Invoice an earning: mark earning as invoiced and increase fund balance accordingly.
+     */
+    fun invoiceEarning(earning: Earnings) {
+        viewModelScope.launch {
+            // Mark earning as invoiced
+            earningsDao.markEarningAsInvoiced(earning.earningsId)
+
+            // Add the amount to the related fund balance
+            val fund = fundsDao.getFundByType(earning.buildingId ?: 0, FundType.OPERATIONAL)
+                ?: Funds(
+                    buildingId = earning.buildingId ?: 0,
+                    fundType = FundType.OPERATIONAL,
+                    balance = 0.0
+                )
+                    .also { fundsDao.insertFunds(it) }
+
+            val updatedFund = fund.copy(balance = fund.balance + earning.amount)
+            fundsDao.updateFunds(updatedFund)
+
+            // (Optional) handle periodical earnings: generate next dueDate/earning if applicable
+            if (earning.period != Period.NONE) {
+                scheduleNextEarning(earning)
+            }
+        }
+    }
+
+    private suspend fun scheduleNextEarning(currentEarning: Earnings) {
+        // Calculate next due date based on period, create a new earning with next due date & invoiceFlag=false
+        val nextDueDate = calculateNextDueDate(currentEarning.dueDate, currentEarning.period)
+        val newEarning = currentEarning.copy(
+            earningsId = 0,  // allow auto generate id
+            dueDate = nextDueDate,
+            invoiceFlag = false
+        )
+        earningsDao.insertEarnings(newEarning)
+    }
+
+    private fun calculateNextDueDate(currentDueDate: String, period: Period): String {
+        // Implement date calculation based on your date format and Period enum
+        // e.g. parse currentDueDate, add period duration, format back to string
+        return "" // implement this!
+    }
+
+    suspend fun decreaseOperationalFund(buildingId: Long, amount: Double, fundType:FundType): Boolean {
+        var fund = fundsDao.getFundByType(buildingId, fundType)
+        if (fund == null) {
+            // Insert new fund with 0 balance
+            val newFund = Funds(
+                buildingId = buildingId,
+                fundType = fundType,
+                balance = 0.0
+            )
+            fundsDao.insertFunds(newFund)
+            fund = newFund
+        }
+        return if (fund.balance >= amount) {
+            fundsDao.updateFunds(fund.copy(balance = fund.balance - amount))
+            true
+        } else {
+            false
+        }
+    }
+
+    suspend fun increaseOperationalFund(buildingId: Long, amount: Double, fundType:FundType): Boolean {
+        try {
+            var fund = fundsDao.getFundByType(buildingId, fundType)
+            if (fund == null) {
+                // Insert new fund with initial balance = amount since we're increasing
+                val newFund = Funds(
+                    buildingId = buildingId,
+                    fundType = fundType,
+                    balance = amount
+                )
+                fundsDao.insertFunds(newFund)
+                return true // Insert done, balance is amount
+            }
+            // Fund exists, update by increasing balance
+            fundsDao.updateFunds(fund.copy(balance = fund.balance + amount))
+            return true
+        } catch (e: Exception) {
+            Log.e("increaseFund", e.toString())
+            return false
+        }
+    }
+
 
 }
 

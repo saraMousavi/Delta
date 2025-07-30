@@ -124,7 +124,7 @@ class Building {
             put("calculateMethod", cost.calculateMethod)
             put("paymentLevel", cost.paymentLevel)
             put("responsible", cost.responsible)
-            put("fundFlag", cost.fundFlag)
+            put("fundType", cost.fundType)
         }
     }
 

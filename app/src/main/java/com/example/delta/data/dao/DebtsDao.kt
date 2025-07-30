@@ -60,6 +60,15 @@ interface DebtsDao {
     @Query("""
     SELECT debts.* 
     FROM debts
+    WHERE debts.costId = :costId
+""")
+    fun getDebtsForEachCost(
+        costId: Long
+    ): List<Debts>
+
+    @Query("""
+    SELECT debts.* 
+    FROM debts
     WHERE debts.ownerId = :ownerId 
       AND payment_flag = 0
 """)
@@ -163,24 +172,25 @@ interface DebtsDao {
 
 
         // Sum of debts.amount where cost.fundFlag = +1 and debts.paymentFlag = 1 for given building
+    //@todo AND c.fund_flag = 1
         @Query(
             """
         SELECT SUM(d.amount) FROM debts d
         INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 
-          AND c.fund_flag = 1
           AND d.payment_flag = 1
     """
         )
         fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double>
 
         // Sum of debts.amount where cost.fundFlag = -1 and debts.paymentFlag = 0 for given building
+        //@todo AND c.fund_flag = -1
         @Query(
             """
         SELECT SUM(d.amount) FROM debts d
         INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 
-          AND c.fund_flag = -1
+          
           AND d.payment_flag = 0
     """
         )

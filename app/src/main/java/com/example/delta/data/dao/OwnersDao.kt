@@ -52,7 +52,7 @@ interface OwnersDao {
 
     // Helper function to get owner details
     @Query("SELECT * FROM Owners WHERE ownerId = :ownerId")
-    suspend fun getOwnerById(ownerId: Long): Owners
+    suspend fun getOwnerById(ownerId: Long): Owners?
 
 
     @Query("""

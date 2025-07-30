@@ -85,7 +85,7 @@
     <string name="number_of_units">تعداد واحدها</string>
     <string name="number_of_owners">تعداد مالکین</string>
     <string name="overview">اطلاعات اولیه</string>
-    <string name="funds">صندوق</string>
+    <string name="operation_funds">صندوق جاری</string>
     <string name="reports">گزارش</string>
     <string name="owners">مالکین</string>
     <string name="units">واحدها</string>
@@ -156,7 +156,8 @@
     <string name="title">عنوان</string>
     <string name="add_costs">ثبت هزینه</string>
     <string name="add_income">ثبت درآمد</string>
-    <string name="due">مهلت پرداخت</string>
+    <string name="due">تاریخ سررسید</string>
+    <string name="invoices">ثبت فاکتور</string>
     <!-- Persian Numbers -->
     <string name="zero_persian">صفر</string>
     <string name="one_persian">یک</string>
@@ -375,4 +376,24 @@
     <string name="this_year_charge_calculated">شارژمحاسبه شده</string>
     <string name="number_of_warehouse">انباری</string>
     <string name="unit_info">اطلاعات واحد</string>
+    <string name="capital_funds">صندوق عمرانی</string>
+    <string name="operational">جاری</string>
+    <string name="capital">عمرانی</string>
+    <string name="no_capital_cost">هیچ هزینه عمرانی ثبت نشده است.</string>
+    <string name="no_operation_cost">هیچ هزینه جاری ثبت نشده است.</string>
+    <string name="funds">صندوق</string>
+    <string name="fund_type">نوع هزینه</string>
+    <string name="transaction">تراکنش ها</string>
+    <string name="no_transactions_recorded">هیچ تراکنشی ثبت نشده است.</string>
+    <string name="invoiced_succesfully">ثبت فاکتور با موفقیت انجام شد و در قسمت تراکنش ها قابل مشاهده می باشد.</string>
+    <string name="insufficient_fund_balance">موجودی صندوق عمرانی جهت ثبت فاکتور کافی نمی باشد.</string>
+    <string name="no_earnings_pending">هیچ درآمدی ثبت نشده است.</string>
+    <string name="fund_decreased_successfully">برداشت از صندوق انجام شد برای مشاهده جزئیات به تب تراکنش ها مراجعه فرمایید.</string>
+    <string name="insufficient_fund">موجودی صندوق کافی نمی باشد.</string>
+    <string name="invoice">ثبت فاکتور</string>
+    <string name="not_paid">در انتظار پرداخت</string>
+    <string name="fund_usage_dialog_message">این عملیات به منظور پرداخت فاکتور و برداشت از صندوق می باشد.</string>
+    <string name="unknown_person">نامشخص</string>
+    <string name="success_pay_tooperational_fund">پرداختی شما به صندوق جاری انتقال یافت.</string>
+    <string name="success_pay_tocapital_fund">پرداختی شما به صندوق عمرانی انتقال یافت.</string>
 </resources>

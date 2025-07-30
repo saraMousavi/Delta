@@ -4,8 +4,7 @@ import androidx.room.*
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Units
-import com.example.delta.enums.FundFlag
-import com.example.delta.enums.PaymentLevel
+import com.example.delta.enums.FundType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -70,9 +69,12 @@ interface CostDao {
     @Query("SELECT c.cost_name FROM costs c where charge_flag = 1")
     suspend fun getCostsOfCharges(): List<String>
 
-    @Query("SELECT * FROM costs WHERE buildingId = :buildingId  AND fund_flag != :fundFlag and charge_flag = 0" +
-            " and cost_name != 'شارژ'")
-    suspend fun getCostsForBuildingWithFundFlag(buildingId: Long, fundFlag: FundFlag): List<Costs>
+    @Query(
+        "SELECT * FROM costs WHERE buildingId = :buildingId AND fund_type != :fundType " +
+                "and cost_name != 'شارژ'"
+    )
+    suspend fun getCostsByFundTypeForBuilding(buildingId: Long, fundType: FundType): List<Costs>
+
 
 
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId  AND charge_flag = 1")
@@ -90,6 +92,9 @@ interface CostDao {
 
 
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId AND cost_name = :costName LIMIT 1")
+    suspend fun getDefaultCostByBuildingIdAndName(buildingId: Long, costName: String= "شارژ"): Costs?
+
+    @Query("SELECT * FROM costs WHERE buildingId = :buildingId AND cost_name = :costName and charge_flag = 0 LIMIT 1")
     suspend fun getCostByBuildingIdAndName(buildingId: Long, costName: String= "شارژ"): Costs?
 
     @Update
@@ -114,5 +119,45 @@ interface CostDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM costs WHERE buildingId = :buildingId AND cost_name = :costName)")
     suspend fun costNameExists(buildingId: Long, costName: String): Boolean
+
+    /**
+     * Get costs for a building that are NOT invoiced yet (invoiceFlag == false or null)
+     * Optionally filter by fund type if needed (capital or operational).
+     */
+    @Query("""
+        SELECT * FROM costs
+        WHERE buildingId = :buildingId
+        AND (invoice_flag IS NULL OR invoice_flag = 0)
+        AND fund_type = :fundType
+        and charge_flag = 0
+        and cost_name != 'شارژ' 
+        ORDER BY due_date ASC
+    """)
+    suspend fun getPendingCostsByFundType(buildingId: Long, fundType: FundType): List<Costs>
+
+
+    /**
+     * Get costs for a building that ARE invoiced (invoiceFlag == true)
+     * Optionally filter by fund type.
+     */
+    @Query("""
+        SELECT * FROM costs
+        WHERE buildingId = :buildingId
+        AND invoice_flag = 1
+        AND fund_type = :fundType
+        ORDER BY due_date DESC
+    """)
+    suspend fun getInvoicedCostsByFundType(buildingId: Long, fundType: FundType): List<Costs>
+
+
+    /**
+     * Mark a specific cost as invoiced (set invoiceFlag = true)
+     */
+    @Query("""
+        UPDATE costs
+        SET invoice_flag = 1
+        WHERE costId = :costId
+    """)
+    suspend fun markCostAsInvoiced(costId: Long)
 
 }

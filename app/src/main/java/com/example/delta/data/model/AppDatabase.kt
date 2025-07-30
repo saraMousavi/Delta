@@ -13,6 +13,7 @@ import com.example.delta.data.dao.CityComplexDao
 import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
+import com.example.delta.data.dao.FundsDao
 import com.example.delta.data.dao.NotificationDao
 import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.dao.PhonebookDao
@@ -34,6 +35,7 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.EmergencyNumber
+import com.example.delta.data.entity.Funds
 import com.example.delta.data.entity.Notification
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
@@ -65,6 +67,7 @@ import com.example.delta.init.Converter
         PhonebookEntry::class, EmergencyNumber::class,
         Notification::class, UsersNotificationCrossRef::class,
         CityComplex::class,
+        Funds::class,
         UsersBuildingsCrossRef::class],
     version = 1,
     exportSchema = true
@@ -87,6 +90,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun phonebookDao() : PhonebookDao
     abstract fun notificationDao() : NotificationDao
     abstract fun cityComplexDao() : CityComplexDao
+    abstract fun fundsDao() : FundsDao
 
 
     companion object {

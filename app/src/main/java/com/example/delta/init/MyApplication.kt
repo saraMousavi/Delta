@@ -20,7 +20,7 @@ import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundFlag
+import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
@@ -185,81 +185,89 @@ class MyApplication : Application() {
                         costName = getString(R.string.charge),
                         period = Period.MONTHLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.AREA,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = false
+                        chargeFlag = false,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.gas),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.AREA,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.electricity),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.AREA,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.water),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.PEOPLE,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.elevator),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.EQUAL,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.fire_protection),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.EQUAL,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.internet),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.EQUAL,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                     Costs(
                         costName = getString(R.string.net),
                         period = Period.YEARLY,
                         paymentLevel = PaymentLevel.UNIT,
-                        fundFlag = FundFlag.POSITIVE_EFFECT,
+                        fundType = FundType.OPERATIONAL,
                         calculateMethod = CalculateMethod.EQUAL,
                         responsible = Responsible.TENANT,
                         tempAmount = 0.0,
-                        chargeFlag = true
+                        chargeFlag = true,
+                        dueDate = ""
                     ),
                 )
                 defaultCosts.forEach {
@@ -273,9 +281,9 @@ class MyApplication : Application() {
             val earnings = earningsDao.getEarnings().firstOrNull()
             if (earnings == null) {
                 val defaultEarnings = listOf(
-                    Earnings(earningsName = getString(R.string.parking), amount = 0.0, startDate = "", endDate = "", period = Period.MONTHLY),
-                    Earnings(earningsName = getString(R.string.co_working_space), amount = 0.0, startDate = "", endDate = "", period = Period.YEARLY),
-                    Earnings(earningsName = getString(R.string.pool), amount = 0.0, startDate = "", endDate = "", period = Period.YEARLY)
+                    Earnings(earningsName = getString(R.string.parking), amount = 0.0, dueDate =  "", period = Period.MONTHLY),
+                    Earnings(earningsName = getString(R.string.co_working_space), amount = 0.0,  dueDate = "", period = Period.YEARLY),
+                    Earnings(earningsName = getString(R.string.pool), amount = 0.0,  dueDate = "", period = Period.YEARLY)
                 )
                 defaultEarnings.forEach {
                     earningsDao.insertEarnings(it)

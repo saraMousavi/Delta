@@ -1294,7 +1294,7 @@ fun YearMonthSelector(
 
 
 @Composable
-fun FundInfoBox(formattedFund: String, context: Context) {
+fun FundInfoBox(formattedFund: String, context: Context, title: String) {
     Surface(
         tonalElevation = 4.dp,
         shape = RoundedCornerShape(12.dp),
@@ -1310,7 +1310,7 @@ fun FundInfoBox(formattedFund: String, context: Context) {
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "${context.getString(R.string.fund_lbl)}: ${formattedFund.englishToPersianDigits()} ${
+                text = "${title}: ${formattedFund.englishToPersianDigits()} ${
                     context.getString(
                         R.string.toman
                     )

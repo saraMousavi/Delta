@@ -95,6 +95,14 @@ interface TenantDao {
 """)
     suspend fun getTenantsWithRelationForUnit(unitId: Long): List<TenantWithRelation>
 
+    @Query("""
+    SELECT tenants.*, crossRef.startDate, crossRef.endDate, crossRef.status
+    FROM tenants
+    INNER JOIN tenants_units_cross_ref AS crossRef ON tenants.tenantId = crossRef.tenantId
+    WHERE crossRef.unitId = :unitId and crossRef.status = "فعال"  LIMIT 1
+""")
+    suspend fun getActiveTenantsWithRelationForUnit(unitId: Long): TenantWithRelation?
+
 
 
 
