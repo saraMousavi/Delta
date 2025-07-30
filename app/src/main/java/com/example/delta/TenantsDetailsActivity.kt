@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.TenantWithRelation
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.FundType
-import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
@@ -93,7 +92,7 @@ class TenantsDetailsActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun UnitDetailsScreen(unitId: Long, tenantId: Long) {
-        var context = LocalContext.current
+        val context = LocalContext.current
 
         val unit = sharedViewModel.getUnit(unitId).collectAsState(initial = null)
         val tenant = sharedViewModel.getTenant(tenantId).collectAsState(initial = null)
@@ -101,8 +100,7 @@ class TenantsDetailsActivity : ComponentActivity() {
         val tabTitles = listOf(
             context.getString(R.string.overview),
             context.getString(R.string.debt),
-            context.getString(R.string.payments),
-            context.getString(R.string.report)
+            context.getString(R.string.payments)
         )
         var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -140,7 +138,6 @@ class TenantsDetailsActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                var showAddCostDialog by remember { mutableStateOf(false) }
                 when (selectedTab) {
                     0 -> OverviewSection(unit = unit.value!!, sharedViewModel = sharedViewModel)
                     1 -> DebtSection(
@@ -151,34 +148,7 @@ class TenantsDetailsActivity : ComponentActivity() {
                         unitId = unit.value!!.unitId,
                         sharedViewModel = sharedViewModel
                     ) // Pass SharedViewModel
-                    3 -> ReportSection(unitId = unit.value!!.unitId)
                 }
-//                if (showAddCostDialog) {
-//                    AddCostDialog(
-//                        buildingId = unit.value!!.buildingId ?: 0,
-//                        sharedViewModel = sharedViewModel,
-//                        onDismiss = { showAddCostDialog = false },
-//                        onSave = { selectedCost, amount, period, fundFlag, calculatedMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate ->
-//                            // Insert cost and debts using selectedCost info
-//
-//                            sharedViewModel.insertDebtPerNewCost(
-//                                buildingId = unit.value!!.buildingId ?: 0,
-//                                amount = amount,
-//                                name = selectedCost.costName,
-//                                period = period,
-//                                dueDate = dueDate,
-//                                fundType = fundFlag,
-//                                paymentLevel = PaymentLevel.UNIT,
-//                                calculateMethod = calculatedMethod,
-//                                calculatedUnitMethod = calculatedUnitMethod,
-//                                responsible = Responsible.TENANT,
-//                                selectedUnitIds = selectedUnits.map { it }
-//                            )
-//
-//                            showAddCostDialog = false
-//                        }
-//                    )
-//                }
             }
         }
         }
@@ -318,7 +288,7 @@ class TenantsDetailsActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Show Edit button for tenant when not editing
-                if (!(tenantEditStates[tenantId] ?: false)) {
+                if (tenantEditStates[tenantId] != true) {
                     Button(onClick = { tenantEditStates[tenantId] = true }) {
                         Text(
                             text = context.getString(R.string.edit),
@@ -385,17 +355,6 @@ class TenantsDetailsActivity : ComponentActivity() {
                 && endDate.isNotBlank()
                 && selectedStatus.isNotBlank()
 
-//        var rentAmount by remember(costInput.costId) { mutableStateOf(costInput.tempAmount.toString()) }
-        val transformation = remember { NumberCommaTransformation() }
-// Convert to words
-//        val amountInWords = remember(amount) {
-//            derivedStateOf {
-//                transformation.numberToWords(
-//                    context,
-//                    amount.toLongOrNull() ?: 0L
-//                )
-//            }
-//        }
         LaunchedEffect(rentInitial) {
             rentText = rentInitial?.toString() ?: ""
         }
@@ -677,10 +636,6 @@ class TenantsDetailsActivity : ComponentActivity() {
         }
     }
 
-    @Composable
-    fun ReportSection(unitId: Long) {
-        Text(text = "Reports for Unit $unitId")
-    }
 
     @Composable
     fun DebtSection(
@@ -688,7 +643,7 @@ class TenantsDetailsActivity : ComponentActivity() {
         sharedViewModel: SharedViewModel
     ) {
         var selectedYear by rememberSaveable { mutableStateOf<Int?>(PersianCalendar().persianYear) }
-        var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth) }
+        var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
         var showPayAllDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()

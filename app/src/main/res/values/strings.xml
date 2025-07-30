@@ -142,9 +142,9 @@
     <string name="fixed">مساوی</string>
     <string name="tenant">ساکن</string>
     <string name="title_activity_main">MainActivity</string>
-    <string name="title_home">Home</string>
-    <string name="title_dashboard">Dashboard</string>
-    <string name="title_notifications">Notifications</string>
+    <string name="title_home">خانه</string>
+    <string name="title_dashboard">داشبورد</string>
+    <string name="title_notifications">نوتیفیکیشن</string>
     <string name="fixed_amount">مبلغ شارژ</string>
     <string name="setting">تنظیمات</string>
     <string name="upload">آپلود مدارک</string>
@@ -396,4 +396,6 @@
     <string name="unknown_person">نامشخص</string>
     <string name="success_pay_tooperational_fund">پرداختی شما به صندوق جاری انتقال یافت.</string>
     <string name="success_pay_tocapital_fund">پرداختی شما به صندوق عمرانی انتقال یافت.</string>
+    <string name="chart_alarm">پیغام داشبورد</string>
+    <string name="chart_alarm_info">اطلاعات مالی جهت نمایش داشبورد وجود ندارد.</string>
 </resources>

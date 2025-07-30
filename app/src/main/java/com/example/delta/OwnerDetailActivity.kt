@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
@@ -67,7 +64,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.example.delta.enums.FundType
 import com.example.delta.sharedui.DebtItem
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
@@ -419,8 +415,7 @@ fun OwnerOverviewTab(
 fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
     val context = LocalContext.current
     var selectedYear by rememberSaveable { mutableStateOf<Int?>(PersianCalendar().persianYear) }
-    var selectedMonth by rememberSaveable { mutableStateOf(PersianCalendar().persianMonth) }
-    var showDebtDialog by remember { mutableStateOf(false) }
+    var selectedMonth by rememberSaveable { mutableIntStateOf(PersianCalendar().persianMonth) }
     var showSumDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -533,34 +528,6 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-//            // Add Debt item at end of list
-//            Card(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .clickable { showDebtDialog = true },
-//                shape = RoundedCornerShape(8.dp),
-//                colors = CardDefaults.cardColors(
-//                    containerColor = MaterialTheme.colorScheme.primaryContainer
-//                )
-//            ) {
-//                Row(
-//                    modifier = Modifier.padding(16.dp),
-//                    verticalAlignment = Alignment.CenterVertically,
-//                    horizontalArrangement = Arrangement.Center
-//                ) {
-//                    Icon(
-//                        imageVector = Icons.Default.Add,
-//                        contentDescription = context.getString(R.string.add_new_debt),
-//                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-//                    )
-//                    Spacer(modifier = Modifier.width(8.dp))
-//                    Text(
-//                        text = context.getString(R.string.add_new_debt),
-//                        style = MaterialTheme.typography.bodyLarge,
-//                        color = MaterialTheme.colorScheme.onPrimaryContainer
-//                    )
-//                }
-//            }
         }
     }
 
@@ -599,9 +566,6 @@ fun OwnerDebtTab(ownerId: Long, sharedViewModel: SharedViewModel) {
         )
     }
 
-    if (showDebtDialog) {
-        // Your existing dialog code here
-    }
 }
 
 

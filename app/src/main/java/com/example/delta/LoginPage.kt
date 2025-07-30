@@ -33,6 +33,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
+import com.example.delta.enums.Roles
+import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
 
 class LoginPage : ComponentActivity() {
@@ -40,21 +42,35 @@ class LoginPage : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (isUserLoggedIn(this)) {
-            startActivity(Intent(this, HomePageActivity::class.java))
-            finish()
-            return
-        } else {
+
             setContent {
                 AppTheme {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        val users by sharedViewModel.getUsers().collectAsState(initial = emptyList())
-                        Log.d("users", users.toString())
-                        LoginPageForm(users, viewModel)
+                        if (isUserLoggedIn(this)) {
+                            val userId = Preference().getUserId(context = this)
+                            val userRole by sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
+
+                            userRole?.let { role ->
+                                Log.d("role.roleName", role.roleName.toString())
+                                if (role.roleName == Roles.ADMIN || role.roleName == Roles.BUILDING_MANAGER || role.roleName == Roles.COMPLEX_MANAGER) {
+                                    startActivity(Intent(this, DashboardActivity::class.java))
+                                } else {
+                                    startActivity(Intent(this, HomePageActivity::class.java))
+                                }
+                                finish()
+                            } ?: run {
+                                // You can show a loading indicator here or do nothing yet
+                            }
+
+                        } else {
+                            val users by sharedViewModel.getUsers()
+                                .collectAsState(initial = emptyList())
+                            Log.d("users", users.toString())
+                            LoginPageForm(users, viewModel)
+                        }
                     }
                 }
             }
-        }
     }
 }
 
@@ -207,7 +223,7 @@ suspend fun handleLogin(
             intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
             context.startActivity(intent)
         } else {
-            val intent = Intent(context, HomePageActivity::class.java)
+            val intent = Intent(context, DashboardActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             intent.putExtra("user_id", user.userId)  // optional, if you want to pass userId explicitly
             context.startActivity(intent)

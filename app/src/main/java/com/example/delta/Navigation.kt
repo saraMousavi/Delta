@@ -157,11 +157,6 @@ fun DetailDrawer(
                                         selected = false,
                                         onClick = {}
                                     )
-                                    NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.account)) },
-                                        selected = false,
-                                        onClick = {}
-                                    )
                                     Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.customizing)) },
