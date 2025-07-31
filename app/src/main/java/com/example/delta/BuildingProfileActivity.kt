@@ -16,6 +16,7 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,12 +40,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBackIos
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -253,17 +262,15 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
-                ScrollableTabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
-                    tabs.forEachIndexed { index, tabItem ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(text = tabItem.title, style = MaterialTheme.typography.bodyLarge) }
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
+                BuildingProfileSectionSelector(
+                    tabs = tabs,
+                    selectedIndex = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 when (tabs.getOrNull(selectedTab)?.type) {
                     TabType.OVERVIEW -> OverviewTab(sharedViewModel, building, currentRoleId)
@@ -296,6 +303,73 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         }
     }
+
+    @Composable
+    fun BuildingProfileSectionSelector(
+        tabs: List<TabItem>,
+        selectedIndex: Int,
+        onTabSelected: (Int) -> Unit,
+        modifier: Modifier = Modifier
+    ) {
+        LazyRow(
+            modifier = modifier.padding(vertical = 4.dp, horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(tabs) { index, tab ->
+                val isSelected = index == selectedIndex
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier
+                        .width(90.dp)
+                        .clickable { onTabSelected(index) }
+                        .border(
+                            width = if (isSelected) 2.dp else 0.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            shape = MaterialTheme.shapes.medium
+                        ),
+                    elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),  // padding only vertical - NO horizontal padding
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = when (tab.type) {
+                                TabType.OVERVIEW -> Icons.Default.Info
+                                TabType.OWNERS -> Icons.Default.Person
+                                TabType.UNITS -> Icons.Default.Home
+                                TabType.TENANTS -> Icons.Default.Group
+                                TabType.FUNDS -> Icons.Default.AccountBalanceWallet
+                                TabType.TRANSACTIONS -> Icons.Default.ReceiptLong
+                                TabType.PHONEBOOK_TAB -> Icons.Default.Contacts
+                            },
+                            contentDescription = tab.title,
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = tab.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+    }
+
 
 
     @Composable
@@ -681,7 +755,9 @@ class BuildingProfileActivity : ComponentActivity() {
                             )
                         } else {
                             LazyColumn(
-                                modifier = Modifier.heightIn(max = 220.dp).padding(16.dp)
+                                modifier = Modifier
+                                    .heightIn(max = 220.dp)
+                                    .padding(16.dp)
                             ) {
                                 items(capitalCosts) { cost ->
                                     CostListItem(cost = cost) {
