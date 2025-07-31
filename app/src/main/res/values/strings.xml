@@ -336,7 +336,7 @@
     <string name="admin">مدیرسیستم</string>
     <string name="choose_role">انتخاب نقش</string>
     <string name="guest_user">کاربر مهمان</string>
-    <string name="guest_dialog_info">شما به عنوان کاربر مهمان وارد شده اید و \nتمامی این اطلاعات به صورت موفقت می باشد برای اینکه اطلاعات شما به \nصورت دائمی در سرور ذخیره شود لطفا ثبت نام کنید.</string>
+    <string name="guest_dialog_info">شما به عنوان کاربر مهمان وارد شده اید و \nتمامی این اطلاعات به صورت موفقت می باشد برای اینکه اطلاعات شما به صورت دائمی در سرور ذخیره شود لطفا ثبت نام کنید.</string>
     <string name="confirm">تایید</string>
     <string name="create_notification">ایجاد نوتیفیکیشن</string>
     <string name="no_manager_notification">هیچ نوتیفیکیشنی از سمت مدیر ساختمان ثبت نشده است.</string>
@@ -404,4 +404,16 @@
     <string name="app_features">معرفی امکانات برنامه</string>
     <string name="easy_management">مدیریت آسان</string>
     <string name="exact_info">اطلاعات دقیق</string>
+    <string name="failed_opening">خطا در باز کردن فایل</string>
+    <string name="login_as_guest">ورود به عنوان مهمان</string>
+    <string name="select_role_for_different_feature">برای مشاهده امکانات برنامه نقش خود را انتخاب نمایید.</string>
+    <string name="continue_to">ادامه</string>
+    <string name="select_data_input_method">روش های ثبت اطلاعات</string>
+    <string name="enter_data_manually">فرم ثبت ساختمان</string>
+    <string name="import_from_excel">بارگذاری از طریق اکسل</string>
+    <string name="template_download">دانلود تمپلیت اکسل</string>
+    <string name="full_name">نام و نام خانوادگی</string>
+    <string name="gender">جنسیت</string>
+    <string name="male">آقا</string>
+    <string name="female">خانم</string>
 </resources>

@@ -8,15 +8,40 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +52,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.delta.data.entity.User
+import com.example.delta.enums.Gender
 import com.example.delta.enums.Roles
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
@@ -81,7 +107,6 @@ class UserProfileActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun UserProfileScreen(
     initialUser: User,
@@ -91,7 +116,10 @@ fun UserProfileScreen(
     var userState by remember { mutableStateOf(initialUser) }
     val context = LocalContext.current
     val profilePhoto = userState.profilePhoto
-    // For scrolling if content is large
+
+    // Helper to show text or placeholder
+    fun displayValue(value: String?): String = value?.takeIf { it.isNotBlank() } ?: "--"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -99,20 +127,14 @@ fun UserProfileScreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            shape = MaterialTheme.shapes.medium
-        ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile photo with circle shape and border
-                if (userState.profilePhoto != null && profilePhoto!!.isNotBlank()) {
-                    // Use Coil/Glide or your preferred image loader composable
+                // Profile Image Section
+                if (!profilePhoto.isNullOrBlank()) {
                     AsyncImage(
-                        model = userState.profilePhoto,
+                        model = profilePhoto,
                         contentDescription = stringResource(id = R.string.profile_image),
                         modifier = Modifier
                             .size(120.dp)
@@ -134,35 +156,73 @@ fun UserProfileScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (!isEditing) {
-                    Text(
-                        text = "${userState.firstName} ${userState.lastName}",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(userState.mobileNumber, style = MaterialTheme.typography.bodyMedium)
-                    userState.email?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                    // Display all fields with dividers and consistent spacing
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Full Name
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.full_name),
+                            value = "${displayValue(userState.firstName)} ${displayValue(userState.lastName)}"
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.mobile_number),
+                            value = displayValue(userState.mobileNumber)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.email),
+                            value = displayValue(userState.email)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.gender),
+                            value = displayValue(
+                                userState.gender?.getDisplayName(context)
+                                    ?: Gender.FEMALE.getDisplayName(context)
+                            )
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.role),
+                            value = roleDisplayFromId(userState.roleId, context = context)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.national_code),
+                            value = displayValue(userState.nationalCode)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UserProfileDisplayRow(
+                            label = stringResource(R.string.address),
+                            value = displayValue(userState.address)
+                        )
                     }
-                    Text(roleDisplayFromId(userState.roleId, context = context), style = MaterialTheme.typography.bodyMedium)
-                    userState.nationalCode?.takeIf { it.isNotBlank() }?.let {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Divider()
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("${context.getString(R.string.national_code)}: $it", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    userState.address?.takeIf { it.isNotBlank() }?.let {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("${context.getString(R.string.address)}: $it", style = MaterialTheme.typography.bodyMedium)
-                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
+
+                    // Edit button at the bottom
                     Button(
                         onClick = { isEditing = true },
-                        modifier = Modifier.fillMaxWidth(0.6f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
                     ) {
                         Text(text = stringResource(id = R.string.edit_profile), style = MaterialTheme.typography.bodyLarge)
                     }
                 } else {
-                    // Editable fields with labels and some vertical spacing
+                    // Editable fields (your existing implementation unchanged)
                     UserProfileEditableField(
                         label = stringResource(id = R.string.first_name),
                         value = userState.firstName,
@@ -177,6 +237,19 @@ fun UserProfileScreen(
                         label = stringResource(id = R.string.email),
                         value = userState.email ?: "",
                         onValueChange = { userState = userState.copy(email = it) }
+                    )
+                    GenderDropdown(
+                        selectedGender = userState.gender?.let {
+                            Gender.fromDisplayName(
+                                context,
+                                it.getDisplayName(context)
+                            )
+                        },
+                        onGenderSelected = { gender ->
+                            userState = userState.copy(gender = gender)
+                        },
+                        label = stringResource(id = R.string.gender),
+                        modifier = Modifier.fillMaxWidth()
                     )
                     UserProfileEditableField(
                         label = stringResource(id = R.string.mobile_number),
@@ -205,9 +278,14 @@ fun UserProfileScreen(
                                 isEditing = false
                                 userState = initialUser // revert changes
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
                         ) {
-                            Text(text = stringResource(id = R.string.cancel))
+                            Text(
+                                text = stringResource(id = R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Button(
@@ -222,7 +300,30 @@ fun UserProfileScreen(
                     }
                 }
             }
-        }
+    }
+}
+
+@Composable
+private fun UserProfileDisplayRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }
 
@@ -252,6 +353,30 @@ fun roleDisplayFromId(roleId: Long, context: Context): String = when (roleId) {
     7L -> Roles.GUEST_PROPERTY_TENANT.getDisplayName(context = context)
     else -> Roles.GUEST_INDEPENDENT_USER.getDisplayName(context = context)
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GenderDropdown(
+    selectedGender: Gender?,
+    onGenderSelected: (Gender) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String
+) {
+    val context = LocalContext.current
+
+    ExposedDropdownMenuBoxExample(
+        items = Gender.entries.toList(),
+        selectedItem = selectedGender,
+        onItemSelected = { selected ->
+            onGenderSelected(selected)
+        },
+        label = label,
+        modifier = modifier,
+        itemLabel = { it.getDisplayName(context) }
+    )
+}
+
+
 
 
 

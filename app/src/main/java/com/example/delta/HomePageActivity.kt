@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -46,7 +45,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +62,6 @@ import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.User
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.Preference
-import com.example.delta.interfaces.RolePermissionsManager
 import kotlinx.coroutines.flow.first
 
 
@@ -182,10 +179,23 @@ fun BuildingList(
                 TextButton(
                     onClick = {
                         showGuestDialog = false
+                        context.startActivity(Intent(context, LoginPage::class.java))
                     }
                 ) {
                     Text(
-                        LocalContext.current.getString(R.string.confirm),
+                        LocalContext.current.getString(R.string.sign_up),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showGuestDialog = false
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.continue_to),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }

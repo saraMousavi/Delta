@@ -39,7 +39,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -102,8 +103,8 @@ dependencies {
     implementation(libs.accompanist.pager)
     implementation(libs.accompanist.pager.indicators)
     implementation(libs.mpandroidchart)
-//    implementation(libs.apache.poi)
-//    implementation(libs.apache.poi.ooxml)
+    implementation(libs.apache.poi)
+    implementation(libs.apache.poi.ooxml)
 //    implementation (libs.firebase)
     testImplementation libs.junit
     // Mockito for mocking dependencies

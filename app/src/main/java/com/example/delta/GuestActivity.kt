@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -10,81 +11,131 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
-import com.example.delta.data.entity.UserRoleCrossRef
+import androidx.core.content.edit
+import com.example.delta.data.dao.AuthorizationDao
+import com.example.delta.data.dao.RoleDao
+import com.example.delta.data.entity.AuthorizationField
+import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
+import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.AuthObject
+import com.example.delta.enums.BuildingProfileFields
+import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Roles
 import com.example.delta.init.FileManagement
 import com.example.delta.viewmodel.SharedViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
+
+private lateinit var roleDao: RoleDao // Initialize these DAOs as needed
+private lateinit var authorizationDao: AuthorizationDao
 
 class GuestActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val database = AppDatabase.getDatabase(this)
+
+        roleDao = database.roleDao() // Initialize Role DAO
+        authorizationDao = database.authorizationDao() // Initialize Role DAO
         setContent {
             AppTheme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    var context = LocalContext.current
+                    val context = LocalContext.current
                     Scaffold(
-                       topBar = {
-                           CenterAlignedTopAppBar(
-                               title = {
-                                   Text(
-                                       text = getString(R.string.guest_display),
-                                       style = MaterialTheme.typography.bodyLarge
-                                   )
-                               },
-                               navigationIcon = {
-                                   IconButton(onClick = { startActivity(Intent(context, LoginPage::class.java)) }) {
-                                       Icon(
-                                           Icons.AutoMirrored.Filled.ArrowBack,
-                                           contentDescription = "Back"
-                                       )
-                                   }
-                               }
-                           )
-                       }
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = getString(R.string.guest_display),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = { startActivity(Intent(context, LoginPage::class.java)) }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
+                                }
+                            )
+                        }
                     ) { innerPadding ->
-                           GuestScreen(Modifier.padding(innerPadding), sharedViewModel)
-                       }
+                        GuestScreen(modifier = Modifier.padding(innerPadding), sharedViewModel)
+                    }
                 }
             }
         }
     }
 }
 
-
 @SuppressLint("ContextCastToActivity")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
-    var showRoleDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val thisActivity = LocalContext.current as Activity
 
-    val user = sharedViewModel.getUserByRoleId(6L).collectAsState(initial = null)
+    var showRoleDialog by remember { mutableStateOf(false) }
+    var selectedRole by remember { mutableStateOf<Roles?>(null) }
+    var confirmedRole by remember { mutableStateOf<Roles?>(null) }
+
+    val roles = listOf(
+        Roles.GUEST_BUILDING_MANAGER,
+        Roles.GUEST_PROPERTY_OWNER,
+        Roles.GUEST_PROPERTY_TENANT,
+        Roles.GUEST_INDEPENDENT_USER
+    )
+
+    var isLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(confirmedRole) {
+        confirmedRole?.let { role ->
+
+            try {
+                isLoading = true
+                insertUserBasedOnRole(confirmedRole, context)
+                insertingSampleBuilding(context, sharedViewModel)
+            } catch (e: Exception) {
+//                Toast.makeText(context, context.getString(R.string.failed_opening), Toast.LENGTH_SHORT).show()
+                Log.e("GuestScreen", "Error inserting sample building: $e")
+            } finally {
+                isLoading = false
+            }
+            confirmedRole = null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -110,9 +161,8 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Banner
             Image(
-                painter = painterResource(R.drawable.banner),
+                painter = painterResource(R.drawable.banner_first),
                 contentDescription = "Banner",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -123,10 +173,6 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Features section
             Text(
                 text = context.getString(R.string.features),
                 style = MaterialTheme.typography.bodyLarge,
@@ -140,25 +186,24 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 FeatureItem(
-                    icon = Icons.Default.Receipt,
-                    text = context.getString(R.string.building_charge),
-                    onClick = { /* Handle feature if needed */ }
+                    icon = Icons.Default.Notifications,
+                    text = context.getString(R.string.title_notifications),
+                    onClick = {}
                 )
                 FeatureItem(
                     icon = Icons.Default.AttachMoney,
                     text = context.getString(R.string.cost_managing),
-                    onClick = { /* Handle feature if needed */ }
+                    onClick = {}
                 )
                 FeatureItem(
                     icon = Icons.Default.BarChart,
                     text = context.getString(R.string.reporting),
-                    onClick = { /* Handle feature if needed */ }
+                    onClick = {}
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Guest message
             Text(
                 text = context.getString(R.string.guest_message),
                 style = MaterialTheme.typography.bodyLarge,
@@ -168,116 +213,82 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
             )
 
             Spacer(modifier = Modifier.weight(1f))
+            Column(
+                modifier = Modifier.fillMaxWidth(0.7f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
 
-            // دکمه انتخاب نقش کاربر
+                if (isLoading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Dialog(onDismissRequest = {}) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .background(Color.White, shape = RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { showRoleDialog = true },
-                modifier = Modifier.fillMaxWidth(0.7f),
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(text = context.getString(R.string.select_role),
-                    style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = context.getString(R.string.login_as_guest),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
 
         if (showRoleDialog) {
-
-            RoleSelectionDialog(
-                onDismiss = { showRoleDialog = false },
-                onRoleSelected = { selectedRole ->
+            RoleSelectionBottomSheet(
+                roles = roles,
+                initialSelectedRole = selectedRole,
+                onDismissRequest = { showRoleDialog = false },
+                onConfirm = { confirmedRoleSelected ->
+                    confirmedRole = confirmedRoleSelected
                     showRoleDialog = false
-
-                    when (selectedRole) {
-                        Roles.GUEST_BUILDING_MANAGER -> {
-                            //@todo check it to be done once
-                            val guestBuilding = sharedViewModel.getBuildingsForUser(user.value!!.userId)
-                            saveLoginState(thisActivity, true, userId = user.value!!.userId, mobile = user.value!!.mobileNumber)
-                            //Insert Sample Building for guest
-                            Log.d("userid", user.value!!.userId.toString())
-                            val inputStream: InputStream = thisActivity.resources.openRawResource(R.raw.export_delta_template_guest)
-                            val file = File(thisActivity.cacheDir, "export_delta_template_guest.xlsx")
-                            inputStream.use { input ->
-                                FileOutputStream(file).use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-
-                            val fileUri = FileProvider.getUriForFile(
-                                thisActivity,
-                                "${thisActivity.packageName}.fileprovider",
-                                file
-                            )
-                            val selectFileIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                type = "*/*" // یا "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                            }
-                            val uri = selectFileIntent.data
-                            Log.d("fileUri", fileUri.toString())
-                            if(fileUri != null) {
-                                val inputStream1 = context.contentResolver.openInputStream(fileUri)
-                                Log.d("inputStream ", inputStream1.toString())
-                                if (inputStream1 != null) {
-                                    FileManagement().handleExcelFile(
-                                        inputStream1,
-                                        thisActivity,
-                                        sharedViewModel
-                                    )
-                                    inputStream1.close()
-                                } else {
-                                    Toast.makeText(thisActivity, "Unable to open selected file", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                            }
-                        }
-                        Roles.GUEST_COMPLEX_MANAGER -> {
-//                            context.startActivity(Intent(context, ComplexManagerHomeActivity::class.java))
-                        }
-                        Roles.GUEST_INDEPENDENT_USER -> {
-//                            context.startActivity(Intent(context, IndependentUserHomeActivity::class.java))
-                        }
-                        else -> {
-
-                        }
-                    }
                 }
             )
         }
+
     }
 }
 
-
-@Composable
-fun RoleSelectionDialog(
-    onDismiss: () -> Unit,
-    onRoleSelected: (Roles) -> Unit
-) {
-    val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(context.getString(R.string.choose_role), style = MaterialTheme.typography.bodyLarge) },
-        text = {
-            Column {
-                RoleOption(text = Roles.GUEST_BUILDING_MANAGER.getDisplayName(context), onClick = { onRoleSelected(Roles.GUEST_BUILDING_MANAGER) })
-                RoleOption(text = Roles.GUEST_COMPLEX_MANAGER.getDisplayName(context), onClick = { onRoleSelected(Roles.GUEST_COMPLEX_MANAGER) })
-                RoleOption(text = Roles.GUEST_INDEPENDENT_USER.getDisplayName(context), onClick = { onRoleSelected(Roles.GUEST_INDEPENDENT_USER) })
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
-            }
+private fun insertUserBasedOnRole(role: Roles?, context: Context) {
+    when (role) {
+        Roles.GUEST_BUILDING_MANAGER -> {
+            // Save login state etc.
+            saveLoginState(context, true, userId = 1, mobile = "01111111111")
+            saveFirstLoginState(context = context, isFirstLoggedIn = true)
         }
-    )
-}
 
-@Composable
-fun RoleOption(text: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(vertical = 8.dp)
-    ) {
-        Text(text, style = MaterialTheme.typography.bodyLarge)
+        Roles.GUEST_PROPERTY_OWNER -> {
+            saveLoginState(context, true, userId = 2, mobile = "0222222222")
+            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+        }
+
+        Roles.GUEST_PROPERTY_TENANT -> {
+            saveLoginState(context, true, userId = 3, mobile = "03333333333")
+            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+        }
+
+        Roles.GUEST_INDEPENDENT_USER -> {
+            saveLoginState(context, true, userId = 4, mobile = "04444444444")
+            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+        }
+
+        else -> {
+            // No action or error handling
+        }
     }
 }
 
@@ -310,3 +321,195 @@ fun FeatureItem(icon: ImageVector, text: String, onClick: () -> Unit) {
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RoleSelectionBottomSheet(
+    roles: List<Roles>,
+    initialSelectedRole: Roles?,
+    onDismissRequest: () -> Unit,
+    onConfirm: (Roles) -> Unit,
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var selectedRole by remember { mutableStateOf(initialSelectedRole) }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = context.getString(R.string.select_role_for_different_feature), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            ExposedDropdownMenuBoxExample(
+                items = roles,
+                selectedItem = selectedRole,
+                onItemSelected = {
+                    selectedRole = it
+                },
+                label = context.getString(R.string.select_role),
+                modifier = Modifier
+                    .fillMaxWidth(1f),
+                itemLabel = { it.getDisplayName(context) }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Buttons row: Cancel and Confirm
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        sheetState.hide()
+                        onDismissRequest()
+                    }
+                }) {
+                    Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                TextButton(
+                    onClick = {
+                        selectedRole?.let {
+                            coroutineScope.launch {
+                                sheetState.hide()
+                                onConfirm(it)
+                            }
+                        }
+                    },
+                    enabled = selectedRole != null
+                ) {
+                    Text(text = context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
+    }
+}
+
+
+suspend fun insertingSampleBuilding(context: Context, sharedViewModel: SharedViewModel) {
+    val prefs = context.getSharedPreferences("guest_prefs", Context.MODE_PRIVATE)
+    val alreadyInserted = prefs.getBoolean("excel_inserted_guest", false)
+
+    if (!alreadyInserted) {
+        try {
+            val file = File(context.cacheDir, "export_delta_template_guest.xlsx")
+
+            withContext(Dispatchers.IO) {
+                context.resources.openRawResource(R.raw.export_delta_template_guest).use { input ->
+                    FileOutputStream(file).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+
+            val fileUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
+                withContext(Dispatchers.IO) {
+
+                    FileManagement().handleExcelFile(
+                        inputStream,
+                        context as Activity,
+                        sharedViewModel
+                    )
+                }
+            }
+            CoroutineScope(Dispatchers.Default).launch {
+                insertDefaultAuthorizationData()
+
+                prefs.edit {
+                    putBoolean("excel_inserted_guest", true)
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e("GuestScreen1", "Error inserting sample building: $e")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.failed_opening),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+}
+
+private suspend fun insertDefaultAuthorizationData() {
+    withContext(Dispatchers.IO) {
+        val rolesList = roleDao.getRoles()
+        val roleMap = rolesList.associateBy { it.roleName }
+
+        suspend fun insertCrossRefs(
+            roleId: Long,
+            objectId: Long,
+            fields: List<AuthorizationField>,
+            permission: PermissionLevel
+        ) {
+            fields.forEach { field ->
+                Log.d("field", field.toString())
+                Log.d("roleId", roleId.toString())
+                authorizationDao.insertRoleAuthorizationFieldCrossRef(
+                    RoleAuthorizationObjectFieldCrossRef(
+                        roleId = roleId,
+                        objectId = objectId,
+                        fieldId = field.fieldId,
+                        permissionLevel = permission.value
+                    )
+                )
+            }
+        }
+
+        val adminManagerRoles = listOf(Roles.GUEST_BUILDING_MANAGER)
+        adminManagerRoles.forEach { roleName ->
+            val role = roleMap[roleName] ?: return@forEach
+            AuthObject.getAll().forEach { authObject ->
+                val fields = authorizationDao.getFieldsForObject(authObject.id)
+                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
+            }
+        }
+
+        roleMap[Roles.GUEST_PROPERTY_TENANT]?.let { tenantRole ->
+            val tenantFieldNames = listOf(
+                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+                BuildingProfileFields.TENANTS_TAB.fieldNameRes
+            )
+            val allFields = authorizationDao.getFieldsForObject(3L)
+            val tenantFields = allFields.filter { it.name in tenantFieldNames }
+            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
+        }
+
+        roleMap[Roles.GUEST_PROPERTY_OWNER]?.let { ownerRole ->
+            val ownerFieldNames = listOf(
+                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
+                BuildingProfileFields.OWNERS_TAB.fieldNameRes
+            )
+            val allFields = authorizationDao.getFieldsForObject(3L)
+            val ownerFields = allFields.filter { it.name in ownerFieldNames }
+            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
+        }
+    }
+}
+
