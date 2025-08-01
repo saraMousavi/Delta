@@ -42,6 +42,7 @@ import kotlinx.parcelize.Parcelize
         Index("complexId")
     ]
 )
+
 @Parcelize
 data class Buildings(
     @PrimaryKey(autoGenerate = true) val buildingId: Long = 0,

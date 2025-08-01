@@ -19,6 +19,8 @@ interface BuildingsDao {
     @Insert
     suspend fun insertBuilding(building: Buildings): Long
 
+    @Update
+    suspend fun updateBuilding(buildings: Buildings)
 
     @Delete
     suspend fun deleteBuildings(buildings: Buildings)

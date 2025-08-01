@@ -224,6 +224,7 @@ fun BuildingList(
                 building = buildingWithTypesAndUsages.building,
                 sharedViewModel = sharedViewModel,
                 onClick = {
+                    Log.d(".building", buildingWithTypesAndUsages.building.toString())
                     val intent = Intent(context, BuildingProfileActivity::class.java).apply {
                         putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
                         putExtra(

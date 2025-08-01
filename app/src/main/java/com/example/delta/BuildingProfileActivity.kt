@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.ArrowBackIos
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -68,6 +69,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
@@ -104,7 +106,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
+import com.example.delta.data.entity.BuildingTypes
+import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
@@ -122,16 +127,21 @@ import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Responsible
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.AuthUtils
+import com.example.delta.init.IranianLocations
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
+import com.example.delta.viewmodel.BuildingTypeViewModel
+import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.NumberFormat
 import java.util.Locale
@@ -145,6 +155,8 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
     val sharedViewModel: SharedViewModel by viewModels()
+    private val buildingTypeViewModel: BuildingTypeViewModel by viewModels()
+    private val buildingUsageViewModel: BuildingUsageViewModel by viewModels()
     var buildingTypeName: String = ""
     var buildingUsageName: String = ""
 
@@ -273,7 +285,27 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 when (tabs.getOrNull(selectedTab)?.type) {
-                    TabType.OVERVIEW -> OverviewTab(sharedViewModel, building, currentRoleId)
+                    TabType.OVERVIEW -> {
+                        OverviewTab(
+                            sharedViewModel, building, currentRoleId,
+                            onUpdateBuilding = { updatedBuilding ->
+                                coroutineScope.launch {
+                                    try {
+                                        sharedViewModel.updateBuilding(updatedBuilding)
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, context.getString(R.string.success_update), Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            Log.e("error", e.message.toString())
+                                            Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+
+                        )
+                    }
                     TabType.OWNERS -> OwnersTab(building, sharedViewModel)
                     TabType.UNITS -> UnitsTab(building, sharedViewModel)
                     TabType.TENANTS -> TenantsTab(building, sharedViewModel)
@@ -360,7 +392,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodyLarge,
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth(),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            textAlign = TextAlign.Center,
                             maxLines = 1
                         )
                     }
@@ -370,21 +402,45 @@ class BuildingProfileActivity : ComponentActivity() {
 
     }
 
-
-
     @Composable
     fun OverviewTab(
         sharedViewModel: SharedViewModel,
         building: Buildings,
-        roleId: Long
+        roleId: Long,
+        onUpdateBuilding: (Buildings) -> Unit
     ) {
         val context = LocalContext.current
-        val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
+
+        var isEditing by remember { mutableStateOf(false) }
+        // Initialize editableBuilding from building param on building change:
+        var editableBuilding by remember(building) { mutableStateOf(building) }
+
+        val userId = Preference().getUserId(context)
+
+        val buildingTypes by buildingTypeViewModel.getAllBuildingType()
             .collectAsState(initial = emptyList())
-        var selectedImagePath by remember { mutableStateOf<String?>(null) }
-        val chargesCost by sharedViewModel.getCostsForBuildingWithChargeFlag(buildingId = building.buildingId)
+        val buildingUsages by buildingUsageViewModel.getAllBuildingUsage()
             .collectAsState(initial = emptyList())
-        val userId = Preference().getUserId(context = context)
+
+        val cityComplexes by sharedViewModel.getAllCityComplex().collectAsState(initial = emptyList())
+        // Maintain local selected items for dropdowns
+        val selectedBuildingType = remember(buildingTypes, editableBuilding.buildingTypeId) {
+            buildingTypes.find { it.buildingTypeId == editableBuilding.buildingTypeId }
+        }
+
+        val selectedBuildingUsage = remember(buildingUsages, editableBuilding.buildingUsageId) {
+            buildingUsages.find { it.buildingUsageId == editableBuilding.buildingUsageId }
+        }
+
+        val selectedCityComplex = remember(cityComplexes, editableBuilding.complexId) {
+            cityComplexes.find { it.complexId == editableBuilding.complexId }
+        }
+
+
+        val buildingTypeName = context.getString(R.string.city_complex)
+        var showAddCityComplexDialog by remember { mutableStateOf(false) }
+        var showBuildingTypeDialog by remember { mutableStateOf(false) }
+        var showBuildingUsageDialog by remember { mutableStateOf(false) }
         val permissionLevelBuildingName = AuthUtils.checkFieldPermission(
             userId,
             BuildingProfileFields.BUILDING_NAME.fieldNameRes,
@@ -396,215 +452,427 @@ class BuildingProfileActivity : ComponentActivity() {
             sharedViewModel
         )
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
 
-            item {
-                Card(
+        val chargesCost by sharedViewModel.getCostsForBuildingWithChargeFlag(buildingId = building.buildingId)
+            .collectAsState(initial = emptyList())
+        val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
+            .collectAsState(initial = emptyList())
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column {
+                LazyColumn(
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
-                    )
+                        .padding(16.dp),
+                    contentPadding = PaddingValues(bottom = 72.dp) // Padding for bottom buttons
                 ) {
-                    Column(modifier = Modifier.padding(4.dp)) {
-
-                        if (permissionLevelBuildingName == PermissionLevel.FULL || permissionLevelBuildingName == PermissionLevel.WRITE) {
-                            Text(
-                                text = "${context.getString(R.string.building_name)}: ${building.name}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "${context.getString(R.string.street)}: ${building.street}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "${context.getString(R.string.post_code)}: ${building.postCode}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(
-                            text = "${context.getString(R.string.province)}: ${building.province}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "${context.getString(R.string.state)}: ${building.state}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(
-                            text = "${context.getString(R.string.building_type)}: $buildingTypeName",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "${context.getString(R.string.building_usage)}: $buildingUsageName",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(context.getColor(R.color.primary_color)) // Example: Light blue background
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(
-                            text = context.getString(R.string.charges_parameter),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        chargesCost.forEach { cost ->
-                            Text(
-                                text = cost.costName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-
-                    }
-                }
-            }
-            if (fileList.isNotEmpty() && ( permissionLevelDoc == PermissionLevel.FULL || permissionLevelDoc == PermissionLevel.WRITE) ) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(context.getColor(R.color.primary_color))
-                        )
-                    ) {
-                        Row(modifier = Modifier.padding(8.dp)) {
-                            fileList.forEach { file ->
-                                val fileObj = File(file.fileUrl)
-                                val extension = fileObj.extension.lowercase()
-                                val painter = when (extension) {
-                                    "jpg", "jpeg", "png", "gif", "bmp", "webp" -> rememberAsyncImagePainter(
-                                        fileObj
-                                    )
-
-                                    else -> null
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            // Open file externally on click
-                                            openFile(context, file.fileUrl)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (painter != null) {
-                                        Image(
-                                            painter = painter,
-                                            contentDescription = "Image file",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                    // Group 1: Building Name & Address
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (permissionLevelBuildingName == PermissionLevel.FULL || permissionLevelBuildingName == PermissionLevel.WRITE) {
+                                    if (isEditing) {
+                                        OutlinedTextField(
+                                            value = editableBuilding.name,
+                                            onValueChange = {
+                                                editableBuilding = editableBuilding.copy(name = it)
+                                            },
+                                            label = { Text(context.getString(R.string.building_name)) },
+                                            modifier = Modifier.fillMaxWidth()
                                         )
                                     } else {
-                                        // Show icon for non-image files
-                                        val icon = when (extension) {
-                                            "pdf" -> Icons.Default.PictureAsPdf
-                                            "xls", "xlsx" -> Icons.Default.TableChart // or your custom Excel icon
-                                            "doc", "docx" -> Icons.Default.Description // or your custom Word icon
-                                            else -> Icons.Default.InsertDriveFile
-                                        }
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = "File icon",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(32.dp)
+                                        Text(
+                                            text = "${context.getString(R.string.building_name)}: ${editableBuilding.name}",
+                                            style = MaterialTheme.typography.bodyLarge
                                         )
                                     }
                                 }
-
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.height(8.dp))
+                                if (isEditing) {
+                                    OutlinedTextField(
+                                        value = editableBuilding.street,
+                                        onValueChange = {
+                                            editableBuilding = editableBuilding.copy(street = it)
+                                        },
+                                        label = {
+                                            Text(
+                                                context.getString(R.string.street),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${context.getString(R.string.street)}: ${editableBuilding.street}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                if (isEditing) {
+                                    OutlinedTextField(
+                                        value = editableBuilding.postCode,
+                                        onValueChange = {
+                                            editableBuilding = editableBuilding.copy(postCode = it)
+                                        },
+                                        label = {
+                                            Text(
+                                                context.getString(R.string.post_code),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${context.getString(R.string.post_code)}: ${editableBuilding.postCode}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         }
                     }
 
+                    // Group 2: Province & State
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (isEditing) {
+                                    // Get the list of all provinces
+                                    val provinces = IranianLocations.provinces.keys.toList()
+                                    val availableStates =
+                                        IranianLocations.provinces[editableBuilding.province]
+                                            ?: emptyList()
+                                    ExposedDropdownMenuBoxExample(
+                                        items = provinces,
+                                        selectedItem = editableBuilding.province,
+                                        onItemSelected = { selectedProvince ->
+                                            editableBuilding =
+                                                editableBuilding.copy(province = selectedProvince)
+                                        },
+                                        label = context.getString(R.string.province),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        itemLabel = { it }
+                                    )
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // State Selector
+                                    ExposedDropdownMenuBoxExample(
+                                        items = availableStates,
+                                        selectedItem = editableBuilding.state,
+                                        onItemSelected = { selectedState ->
+                                            editableBuilding =
+                                                editableBuilding.copy(state = selectedState)
+                                        },
+                                        label = context.getString(R.string.state),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        itemLabel = { it }
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${context.getString(R.string.province)}: ${editableBuilding.province}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "${context.getString(R.string.state)}: ${editableBuilding.state}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Group 3: Building Type & Usage
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (isEditing) {
+                                    ExposedDropdownMenuBoxExample(
+                                        items = buildingTypes + BuildingTypes(0, context.getString(R.string.addNew)),
+                                        selectedItem = selectedBuildingType,
+                                        onItemSelected = {
+                                            if (it.buildingTypeName == context.getString(R.string.addNew)) {
+                                                showBuildingTypeDialog = true
+                                            } else {
+                                                editableBuilding = editableBuilding.copy(buildingTypeId = it.buildingTypeId)
+                                            }
+                                        },
+                                        label = context.getString(R.string.building_type),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        itemLabel = { it.buildingTypeName }
+                                    )
+
+                                    if (selectedBuildingType?.buildingTypeName == buildingTypeName) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            ExposedDropdownMenuBoxExample(
+                                                items = cityComplexes + CityComplex(
+                                                    complexId = 0L,
+                                                    name = context.getString(R.string.addNew),
+                                                    address = null
+                                                ),
+                                                selectedItem = selectedCityComplex,
+                                                onItemSelected = {
+                                                    if (it.name == context.getString(R.string.addNew)) {
+                                                        showAddCityComplexDialog = true
+                                                    } else {
+                                                        editableBuilding =
+                                                            editableBuilding.copy(complexId = it.complexId)
+                                                    }
+                                                },
+                                                label = context.getString(R.string.city_complex),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                itemLabel = { it.name }
+                                            )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    ExposedDropdownMenuBoxExample(
+                                        items = buildingUsages + BuildingUsages(
+                                            0,
+                                            context.getString(R.string.addNew)
+                                        ), // Add "Add New" option
+                                        selectedItem = selectedBuildingUsage,
+                                        onItemSelected = {
+                                            if (it.buildingUsageName == context.getString(R.string.addNew)) {
+                                                // Open dialog to add new building usage
+                                                showBuildingUsageDialog = true
+                                            } else {
+                                                editableBuilding =
+                                                    editableBuilding.copy(buildingUsageId = it.buildingUsageId)
+                                            }
+                                        },
+                                        label = context.getString(R.string.building_usage),
+                                        modifier = Modifier
+                                            .fillMaxWidth(1f),
+                                        itemLabel = { it.buildingUsageName }
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${context.getString(R.string.building_type)}: ${selectedBuildingType?.buildingTypeName ?: "-"}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    if (selectedBuildingType?.buildingTypeName == buildingTypeName) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                        Text(
+                                            text = "${context.getString(R.string.city_complex_name)}: ${selectedCityComplex?.name ?: "-"}",
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "${context.getString(R.string.building_usage)}: ${selectedBuildingUsage?.buildingUsageName ?: "-"}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Group 4: Charges Parameter
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = context.getString(R.string.charges_parameter),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                chargesCost.forEachIndexed { index, cost ->
+                                    Text(
+                                        text = cost.costName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                    if (index != chargesCost.lastIndex) {
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Group 5: Documents
+                    if (fileList.isNotEmpty() && (permissionLevelDoc == PermissionLevel.FULL || permissionLevelDoc == PermissionLevel.WRITE)) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                                shape = RoundedCornerShape(8.dp),
+                                elevation = CardDefaults.cardElevation(0.dp)
+                            ) {
+                                Row(modifier = Modifier.padding(16.dp)) {
+                                    fileList.forEach { file ->
+                                        val fileObj = File(file.fileUrl)
+                                        val extension = fileObj.extension.lowercase()
+                                        val painter = when (extension) {
+                                            "jpg", "jpeg", "png", "gif", "bmp", "webp" ->
+                                                rememberAsyncImagePainter(fileObj)
+
+                                            else -> null
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { openFile(context, file.fileUrl) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (painter != null) {
+                                                Image(
+                                                    painter = painter,
+                                                    contentDescription = "Image file",
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                val icon = when (extension) {
+                                                    "pdf" -> Icons.Default.PictureAsPdf
+                                                    "xls", "xlsx" -> Icons.Default.TableChart
+                                                    "doc", "docx" -> Icons.Default.Description
+                                                    else -> Icons.Default.InsertDriveFile
+                                                }
+                                                Icon(
+                                                    imageVector = icon,
+                                                    contentDescription = "File icon",
+                                                    tint = Color.Gray,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Editing action buttons at bottom
+                if (isEditing) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                isEditing = false
+                                editableBuilding = building // revert changes
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = context.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                isEditing = false
+                                onUpdateBuilding(editableBuilding)
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = context.getString(R.string.insert),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
                 }
             }
 
+            // Floating Action Button to toggle editing
+            if (!isEditing) {
+                FloatingActionButton(
+                    onClick = { isEditing = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+                }
+            }
+        }
+        if (showAddCityComplexDialog) {
+            AddCityComplexDialog(
+                onDismiss = { showAddCityComplexDialog = false },
+                onInsert = { newName, newAddress ->
+                    val newComplex = CityComplex(name = newName, address = newAddress)
+                    sharedViewModel.insertCityComplex(newComplex) { id ->
+                        val insertedComplex = cityComplexes.find { it.complexId == id }
+                        if (insertedComplex != null) {
+//                            selectedCityComplex = insertedComplex
+                        }
+                    }
+                    showAddCityComplexDialog = false
+                }
+            )
+        }
+
+        if (showBuildingTypeDialog) {
+            AddItemDialog(
+                onDismiss = { showBuildingTypeDialog = false },
+                onInsert = { newItem ->
+                    val newType = BuildingTypes(buildingTypeName = newItem)
+                    buildingTypeViewModel.insertBuildingType(newType) // Add the new item to the list
+                }
+            )
+        }
+
+        if (showBuildingUsageDialog) {
+            AddItemDialog(
+                onDismiss = { showBuildingUsageDialog = false },
+                onInsert = { name ->
+                    val newUsage = BuildingUsages(buildingUsageName = name)
+                    buildingUsageViewModel.insertBuildingUsage(newUsage)
+                }
+            )
         }
 
     }
+
 
     @Composable
     fun FundsTab(
@@ -1147,7 +1415,6 @@ class BuildingProfileActivity : ComponentActivity() {
         building: Buildings,
         sharedViewModel: SharedViewModel
     ) {
-        val context = LocalContext.current
         val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
             .collectAsState(initial = emptyList())
 

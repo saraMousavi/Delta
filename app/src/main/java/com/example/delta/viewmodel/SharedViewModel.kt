@@ -301,6 +301,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateBuilding(building: Buildings) {
+        viewModelScope.launch(Dispatchers.IO) {
+            buildingDao.updateBuilding(building)
+        }
+    }
+
 
     fun updateTenant(tenant: Tenants) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -798,6 +804,15 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(units)
     }.flowOn(Dispatchers.IO)
 
+    fun getBuildingUsages(buildingUsageId: Long): Flow<BuildingUsages?> = flow {
+        val buildingUsage = buildingUsagesDao.getBuildingUsages(buildingUsageId)
+        emit(buildingUsage)
+    }.flowOn(Dispatchers.IO)
+
+    fun getBuildingTypes(buildingTypeId: Long): Flow<BuildingTypes?> = flow {
+        val buildingType = buildingTypesDao.getBuildingTypes(buildingTypeId)
+        emit(buildingType)
+    }.flowOn(Dispatchers.IO)
 
     fun getAllUsers(): Flow<List<User>> = flow {
         val users = userDao.getUsers()
