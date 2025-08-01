@@ -1,7 +1,7 @@
 package com.example.delta.data.entity
 
-data class TabItem(val title: String, val type: TabType)
+data class BuildingTabItem(val title: String, val type: BuildingTabType)
 
-enum class TabType {
+enum class BuildingTabType {
     OVERVIEW, OWNERS, UNITS, TENANTS, FUNDS,TRANSACTIONS, PHONEBOOK_TAB
 }

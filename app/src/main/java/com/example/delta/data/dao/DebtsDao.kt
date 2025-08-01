@@ -160,6 +160,10 @@ interface DebtsDao {
     @Query("SELECT * FROM debts")
     suspend fun getAllDebts(): List<Debts>
 
+
+    @Query("SELECT * FROM debts where debtId =:debtId")
+    suspend fun getDebt(debtId: Long): Debts?
+
     @Update
     suspend fun updateDebt(debt: Debts)
 

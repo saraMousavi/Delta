@@ -295,6 +295,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             emit(debts)
         }.flowOn(Dispatchers.IO)
 
+    suspend fun getDebtById(id: Long): Debts? = debtsDao.getDebt(id) // suspend function in DAO
+
+    fun getDebt(debtId: Long): Flow<Debts?> =
+        flow {
+            val debts = debtsDao.getDebt(debtId)
+            emit(debts)
+        }.flowOn(Dispatchers.IO)
+
     fun updateDebt(debt: Debts) {
         viewModelScope.launch(Dispatchers.IO) {
             debtsDao.updateDebt(debt)
@@ -545,6 +553,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         val debts = debtsDao.getPaysForBuilding(buildingId)
         emit(debts)
     }.flowOn(Dispatchers.IO)
+
+
+    suspend fun getCostById(id: Long): Costs? = costsDao.getCostById(id) // suspend function in DAO
 
     fun getCost(costId: Long): Flow<Costs> = flow {
         val cost = costsDao.getCostById(costId)
@@ -2774,7 +2785,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    suspend fun increaseOperationalFund(buildingId: Long, amount: Double, fundType:FundType): Boolean {
+    suspend fun increaseBalanceFund(buildingId: Long, amount: Double, fundType:FundType): Boolean {
         try {
             var fund = fundsDao.getFundByType(buildingId, fundType)
             if (fund == null) {

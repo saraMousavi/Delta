@@ -96,6 +96,7 @@ class TenantsDetailsActivity : ComponentActivity() {
 
         val unit = sharedViewModel.getUnit(unitId).collectAsState(initial = null)
         val tenant = sharedViewModel.getTenant(tenantId).collectAsState(initial = null)
+        Log.d("tenant", tenant.toString())
         if (unit.value != null) {
         val tabTitles = listOf(
             context.getString(R.string.overview),
@@ -733,7 +734,7 @@ class TenantsDetailsActivity : ComponentActivity() {
                                 sharedViewModel.updateDebt(updatedDebt)
                                 sharedViewModel.updateDebtPaymentFlag(debt, true)
                                 val amountDouble = debt.amount
-                                val success = sharedViewModel.increaseOperationalFund(
+                                val success = sharedViewModel.increaseBalanceFund(
                                     buildingId = debt.buildingId,
                                     amountDouble,
                                     fundType = FundType.OPERATIONAL

@@ -115,8 +115,8 @@ import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.PhonebookEntry
-import com.example.delta.data.entity.TabItem
-import com.example.delta.data.entity.TabType
+import com.example.delta.data.entity.BuildingTabItem
+import com.example.delta.data.entity.BuildingTabType
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.CalculateMethod
@@ -220,37 +220,37 @@ class BuildingProfileActivity : ComponentActivity() {
 
 
         val tabs = listOfNotNull(
-            TabItem(context.getString(R.string.overview), TabType.OVERVIEW),
+            BuildingTabItem(context.getString(R.string.overview), BuildingTabType.OVERVIEW),
             if (permissionLevelOwnerTab == PermissionLevel.FULL || permissionLevelOwnerTab == PermissionLevel.WRITE
                 || permissionLevelOwnerTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.owners), TabType.OWNERS)
+                BuildingTabItem(context.getString(R.string.owners), BuildingTabType.OWNERS)
             } else null,
             if (permissionLevelUnitsTab == PermissionLevel.FULL || permissionLevelUnitsTab == PermissionLevel.WRITE
                 || permissionLevelUnitsTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.units), TabType.UNITS)
+                BuildingTabItem(context.getString(R.string.units), BuildingTabType.UNITS)
             } else null,
             if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
                 || permissionLevelTenantsTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.tenants), TabType.TENANTS)
+                BuildingTabItem(context.getString(R.string.tenants), BuildingTabType.TENANTS)
             } else null,
             if (permissionLevelFundTab == PermissionLevel.FULL || permissionLevelFundTab == PermissionLevel.WRITE
                 || permissionLevelFundTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.funds), TabType.FUNDS)
+                BuildingTabItem(context.getString(R.string.funds), BuildingTabType.FUNDS)
             }
             else null,
             if (permissionLevelTransactionTab == PermissionLevel.FULL || permissionLevelTransactionTab == PermissionLevel.WRITE
                 || permissionLevelTransactionTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.transaction), TabType.TRANSACTIONS)
+                BuildingTabItem(context.getString(R.string.transaction), BuildingTabType.TRANSACTIONS)
             } else null,
             if (permissionLevelPhonebookTab == PermissionLevel.FULL || permissionLevelPhonebookTab == PermissionLevel.WRITE
                 || permissionLevelPhonebookTab == PermissionLevel.READ
             ) {
-                TabItem(context.getString(R.string.phone_number), TabType.PHONEBOOK_TAB)
+                BuildingTabItem(context.getString(R.string.phone_number), BuildingTabType.PHONEBOOK_TAB)
             }
             else null
         )
@@ -285,7 +285,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 when (tabs.getOrNull(selectedTab)?.type) {
-                    TabType.OVERVIEW -> {
+                    BuildingTabType.OVERVIEW -> {
                         OverviewTab(
                             sharedViewModel, building, currentRoleId,
                             onUpdateBuilding = { updatedBuilding ->
@@ -306,10 +306,10 @@ class BuildingProfileActivity : ComponentActivity() {
 
                         )
                     }
-                    TabType.OWNERS -> OwnersTab(building, sharedViewModel)
-                    TabType.UNITS -> UnitsTab(building, sharedViewModel)
-                    TabType.TENANTS -> TenantsTab(building, sharedViewModel)
-                    TabType.FUNDS -> FundsTab(
+                    BuildingTabType.OWNERS -> OwnersTab(building, sharedViewModel)
+                    BuildingTabType.UNITS -> UnitsTab(building, sharedViewModel)
+                    BuildingTabType.TENANTS -> TenantsTab(building, sharedViewModel)
+                    BuildingTabType.FUNDS -> FundsTab(
                         building = building, sharedViewModel = sharedViewModel,
                         onOpenCostDetail = { costId, fundType ->
 
@@ -327,8 +327,8 @@ class BuildingProfileActivity : ComponentActivity() {
 
                         })
 
-                    TabType.TRANSACTIONS -> TransactionHistoryTab(building, sharedViewModel)
-                    TabType.PHONEBOOK_TAB -> PhonebookTab(building, sharedViewModel, permissionLevelPhonebookTab!!)
+                    BuildingTabType.TRANSACTIONS -> TransactionHistoryTab(building, sharedViewModel)
+                    BuildingTabType.PHONEBOOK_TAB -> PhonebookTab(building, sharedViewModel, permissionLevelPhonebookTab!!)
                     null -> {} // Handle invalid index if needed
                 }
 
@@ -336,71 +336,6 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-    @Composable
-    fun BuildingProfileSectionSelector(
-        tabs: List<TabItem>,
-        selectedIndex: Int,
-        onTabSelected: (Int) -> Unit,
-        modifier: Modifier = Modifier
-    ) {
-        LazyRow(
-            modifier = modifier.padding(vertical = 4.dp, horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(tabs) { index, tab ->
-                val isSelected = index == selectedIndex
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    modifier = Modifier
-                        .width(90.dp)
-                        .clickable { onTabSelected(index) }
-                        .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            shape = MaterialTheme.shapes.medium
-                        ),
-                    elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),  // padding only vertical - NO horizontal padding
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = when (tab.type) {
-                                TabType.OVERVIEW -> Icons.Default.Info
-                                TabType.OWNERS -> Icons.Default.Person
-                                TabType.UNITS -> Icons.Default.Home
-                                TabType.TENANTS -> Icons.Default.Group
-                                TabType.FUNDS -> Icons.Default.AccountBalanceWallet
-                                TabType.TRANSACTIONS -> Icons.Default.ReceiptLong
-                                TabType.PHONEBOOK_TAB -> Icons.Default.Contacts
-                            },
-                            contentDescription = tab.title,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(32.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = tab.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-        }
-
-    }
 
     @Composable
     fun OverviewTab(
@@ -3009,5 +2944,72 @@ fun calculateBuildingFundFlow(
     ) { sumPositive, sumNegative, unitCount, earning, fundMinus ->
         (sumPositive + earning) - (sumNegative + fundMinus)
     }
+}
+
+
+@Composable
+fun BuildingProfileSectionSelector(
+    tabs: List<BuildingTabItem>,
+    selectedIndex: Int,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier.padding(vertical = 4.dp, horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(tabs) { index, tab ->
+            val isSelected = index == selectedIndex
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                modifier = Modifier
+                    .width(90.dp)
+                    .clickable { onTabSelected(index) }
+                    .border(
+                        width = if (isSelected) 2.dp else 0.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        shape = MaterialTheme.shapes.medium
+                    ),
+                elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),  // padding only vertical - NO horizontal padding
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = when (tab.type) {
+                            BuildingTabType.OVERVIEW -> Icons.Default.Info
+                            BuildingTabType.OWNERS -> Icons.Default.Person
+                            BuildingTabType.UNITS -> Icons.Default.Home
+                            BuildingTabType.TENANTS -> Icons.Default.Group
+                            BuildingTabType.FUNDS -> Icons.Default.AccountBalanceWallet
+                            BuildingTabType.TRANSACTIONS -> Icons.Default.ReceiptLong
+                            BuildingTabType.PHONEBOOK_TAB -> Icons.Default.Contacts
+                        },
+                        contentDescription = tab.title,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = tab.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+
 }
 
