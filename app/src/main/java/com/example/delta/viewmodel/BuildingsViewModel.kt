@@ -17,7 +17,8 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
     private val earningsDao = database.earningsDao()
 
     val showEarningsDialog = mutableStateOf(false)
-    val showCostDialog = mutableStateOf(false)
+    val showCapitalCostDialog = mutableStateOf(false)
+    val showOperationalCostDialog = mutableStateOf(false)
     val showUnitsDialog = mutableStateOf(false)
 
     private val buildingsDao = database.buildingsDao()
@@ -46,7 +47,8 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun showCostDialog(buildingId: Long) {
         _selectedBuildingId.value = buildingId
-        showCostDialog.value = true
+        showCapitalCostDialog.value = true
+        showOperationalCostDialog.value = true
     }
 
     fun showUnitsDialog(buildingId: Long) {
@@ -56,7 +58,8 @@ class BuildingsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun hideDialogs() {
         showEarningsDialog.value = false
-        showCostDialog.value = false
+        showCapitalCostDialog.value = false
+        showOperationalCostDialog.value = false
         showUnitsDialog.value = false
     }
 

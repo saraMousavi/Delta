@@ -131,6 +131,8 @@ interface CostDao {
         AND fund_type = :fundType
         and charge_flag = 0
         and cost_name != 'شارژ' 
+        and cost_name != 'رهن' 
+        and cost_name != 'اجاره' 
         ORDER BY due_date ASC
     """)
     suspend fun getPendingCostsByFundType(buildingId: Long, fundType: FundType): List<Costs>

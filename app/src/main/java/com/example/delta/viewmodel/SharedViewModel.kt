@@ -495,6 +495,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(tenants)
     }.flowOn(Dispatchers.IO)
 
+    fun getTenantUnitRelationships(unitId: Long): Flow<List<TenantsUnitsCrossRef>> = flow {
+        val tenants = tenantsDao.getTenantUnitRelationships(unitId)
+        emit(tenants)
+    }.flowOn(Dispatchers.IO)
+
     fun getBuildingsForUnit(unitId: Long): Flow<Buildings> = flow {
         val owners = unitsDao.getBuildingForUnit(unitId)
         emit(owners)
@@ -1082,7 +1087,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-
     fun insertDebtPerNewCost(
         buildingId: Long,
         amount: String,
@@ -1100,123 +1104,123 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             val parsedAmount = amount.persianToEnglishDigits().toDoubleOrNull() ?: 0.0
 
-            // Check if cost with the same name exists for this building
+            // Try find existing cost - optional update logic commented out
             val existingCost = costsDao.getCostByBuildingIdAndName(buildingId, name)
             val cost: Costs
             var newResponsible = responsible
-            var paymentFlag = false
             var newPaymentLevel = paymentLevel
             var costId: Long = 0
-            Log.d("existingCost", existingCost.toString())
-//            if (existingCost != null) {
-//                // Update existing cost
-//                if (newResponsible == Responsible.TENANT) {
-//                    cost = existingCost.copy(
-//                        tempAmount = parsedAmount,
-//                        period = period,
-//                        paymentLevel = newPaymentLevel,
-//                        calculateMethod = calculatedUnitMethod,
-//                        responsible = newResponsible,
-//                        fundType = fundType
-//                    )
-//                    costsDao.updateCost(cost)
-//                    costId = cost.costId
-//                } else {
-//                    cost = existingCost.copy(
-//                        tempAmount = parsedAmount,
-//                        period = period,
-//                        paymentLevel = newPaymentLevel,
-//                        calculateMethod = calculateMethod,
-//                        responsible = newResponsible,
-//                        fundType = fundType
-//                    )
-//                    costsDao.updateCost(cost)
-//                    costId = cost.costId
-//                }
-//
-//            } else {
-                // Insert new cost
-                if (newResponsible == Responsible.TENANT) {
-                    cost = Costs(
-                        buildingId = buildingId,
-                        costName = name,
-                        tempAmount = parsedAmount,
-                        period = period,
-                        calculateMethod = calculatedUnitMethod,
-                        paymentLevel = newPaymentLevel,
-                        responsible = newResponsible,
-                        fundType = fundType,
-                        dueDate = dueDate
-                    )
 
-                    Log.d("new cost", cost.toString())
-                    costId = costsDao.insertCost(cost)
-                } else {
-                    cost = Costs(
-                        buildingId = buildingId,
-                        costName = name,
-                        tempAmount = parsedAmount,
-                        period = period,
-                        calculateMethod = calculateMethod,
-                        paymentLevel = newPaymentLevel,
-                        responsible = newResponsible,
-                        fundType = fundType,
-                        dueDate = dueDate
-                    )
-                    Log.d("new cost", cost.toString())
-                    costId = costsDao.insertCost(cost)
+            Log.d("existingCost", existingCost.toString())
+
+            // Special case: if responsible is TENANT and fundType is OPERATIONAL, check for active tenant per unit
+            if (fundType == FundType.OPERATIONAL && newResponsible == Responsible.TENANT && selectedUnitIds.isNotEmpty()) {
+                var tenantFoundForAllUnits = true
+
+                // Check each selected unit if it has an active tenant
+                selectedUnitIds.forEach { unitId ->
+                    val activeTenant = tenantsDao.getActiveTenantForUnit(unitId)
+                    if (activeTenant == null) {
+                        tenantFoundForAllUnits = false
+                        return@forEach
+                    }
                 }
 
-//            }
+                if (!tenantFoundForAllUnits) {
+                    Log.d("insertDebtPerNewCost", "No active tenant for all units, switching responsible to OWNER")
+                    newResponsible = Responsible.OWNER
+                }
+            }
 
-            // Get units depending on responsible and selected units
+            // Insert the cost row with updated responsible
+            cost = Costs(
+                buildingId = buildingId,
+                costName = name,
+                tempAmount = parsedAmount,
+                period = period,
+                calculateMethod = if (newResponsible == Responsible.TENANT) calculatedUnitMethod else calculateMethod,
+                paymentLevel = newPaymentLevel,
+                responsible = newResponsible,
+                fundType = fundType,
+                dueDate = dueDate
+            )
+            costId = costsDao.insertCost(cost)
+
+            // Insert debts according to responsible and units/owners selected
             when {
                 newResponsible == Responsible.TENANT && selectedUnitIds.isNotEmpty() -> {
                     val units = unitsDao.getUnitsByIds(selectedUnitIds)
-//                    var newDueDate = ""
-//                    if (period == Period.NONE) {
-//                        newDueDate = dueDate
-//                    } else {
-//                        //@TODO loop of period
-//                        newDueDate = getNextMonthSameDaySafe().persianShortDate
-//                    }
-                    //@todo amount per unit based on people , area, fixed
+                    for (unit in units) {
+                        val activeTenant = tenantsDao.getActiveTenantForUnit(unit.unitId)
 
-                    val numberOfUnits = units.size
-                    val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
+                        if (activeTenant != null) {
+                            // Unit is active, insert debt for unit
 
-                    // Insert debts for each unit
-                    Log.d("dueDate", dueDate)
-                    units.forEach { unit ->
-                        val debt = Debts(
-                            unitId = unit.unitId,
-                            costId = costId,
-                            buildingId = buildingId,
-                            description = name,
-                            dueDate = dueDate,
-                            amount = amountPerUnit,
-                            paymentFlag = false
-                        )
-                        Log.d("new debt", debt.toString())
-                        debtsDao.insertDebt(debt)
+                            // Calculate amount for this unit by calculation method
+                            val getTenantCountForUnit: (Long) -> Int = { unitId ->
+                                tenantsDao.getActiveTenantForUnit(unitId)?.numberOfTenants?.toIntOrNull() ?: 0 // Implement this DAO method if needed
+                            }
+                            val amountForUnit = Calculation().calculateAmountByMethod(
+                                costAmount = parsedAmount,
+                                unit = unit,
+                                allUnits = unitsDao.getUnits(buildingId),
+                                getTenantCountForUnit = getTenantCountForUnit,
+                                calculationMethod = calculatedUnitMethod  // use your method for per-unit calculation
+                            )
+                            val debt = Debts(
+                                unitId = unit.unitId,
+                                costId = costId,
+                                buildingId = buildingId,
+                                description = name,
+                                dueDate = dueDate,
+                                amount = amountForUnit,
+                                paymentFlag = false
+                            )
+                            Log.d("new debt (unit)", debt.toString())
+                            debtsDao.insertDebt(debt)
+                        } else {
+// Unit inactive, find owners of this unit and insert debt for owners
+
+                            val ownersForUnit = ownersDao.getOwnersForUnits(listOf(unit.unitId))
+                            val ownersUnitsCrossRefs = ownersDao.getOwnersWithUnitsList(ownersForUnit.map { it.ownerId })
+                            val areaByOwner = Calculation().calculateAreaByOwners(
+                                owners = ownersForUnit,
+                                units = listOf(unit),
+                                ownersUnitsCrossRefs = ownersUnitsCrossRefs
+                            )
+                            val ownerPayments = Calculation().calculateOwnerPaymentsPerCost(
+                                cost = cost,
+                                totalAmount = parsedAmount, // You may want to split amount here by units or pass full amount for each owner? Adjust business rule.
+                                areaByOwner = areaByOwner,
+                                ownersUnitsCrossRefs = ownersUnitsCrossRefs
+                            )
+
+                            ownerPayments.forEach { (ownerId, amount) ->
+                                val debt = Debts(
+                                    unitId = null,
+                                    ownerId = ownerId,
+                                    costId = costId,
+                                    buildingId = buildingId,
+                                    description = name,
+                                    dueDate = dueDate,
+                                    amount = amount,
+                                    paymentFlag = false
+                                )
+                                Log.d("new debt (owner for inactive unit)", debt.toString())
+                                debtsDao.insertDebt(debt)
+                            }
+                        }
                     }
 
                 }
 
                 newResponsible == Responsible.OWNER && selectedOwnerIds.isNotEmpty() -> {
-//                    var newDueDate = ""
-//                    if (period == Period.NONE) {
-//                        newDueDate = dueDate
-//                    } else {
-//                        //@TODO loop of period
-//                        newDueDate = getNextMonthSameDaySafe().persianShortDate
-//                    }
                     val owners = ownersDao.getOwnersForBuilding(buildingId)
                     val units = unitsDao.getUnits(buildingId)
                     val ownersUnitsCrossRefs = ownersDao.getOwnersWithUnitsList(selectedOwnerIds)
                     val areaByOwner =
                         Calculation().calculateAreaByOwners(owners, units, ownersUnitsCrossRefs)
-                    // Calculate amount per owner
+
                     val ownerPayments = Calculation().calculateOwnerPaymentsPerCost(
                         cost = cost,
                         totalAmount = cost.tempAmount,
@@ -1230,7 +1234,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             costId = costId,
                             buildingId = buildingId,
                             description = cost.costName,
-                            dueDate = dueDate, // set appropriately
+                            dueDate = dueDate,
                             amount = amount,
                             paymentFlag = false
                         )
@@ -1240,55 +1244,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 newResponsible == Responsible.ALL -> {
-                    var newDueDate: String
-                    if (period == Period.NONE) {
-                        newDueDate = dueDate
-                    } else {
-                        //@TODO loop of period
-                        newDueDate = getNextMonthSameDaySafe().persianShortDate
-                    }
+                    val newDueDate = if (period == Period.NONE) dueDate else getNextMonthSameDaySafe().persianShortDate
+
                     val debt = Debts(
                         unitId = null,
                         ownerId = null,
                         costId = costId,
                         buildingId = buildingId,
                         description = cost.costName,
-                        dueDate = newDueDate, // set appropriately
+                        dueDate = newDueDate,
                         amount = parsedAmount,
                         paymentFlag = true
                     )
                     debtsDao.insertDebt(debt)
                 }
-
             }
-
-//            var newDueDate = ""
-//            if (period == Period.NONE) {
-//                newDueDate = dueDate
-//            } else {
-//                //@TODO loop of period
-//                newDueDate = getNextMonthSameDaySafe().persianShortDate
-//            }
-//            val units = unitsDao.getUnitsByIds(selectedUnitIds)
-//            val numberOfUnits = units.size
-//            val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
-//
-//            // Insert debts for each unit
-//            units.forEach { unit ->
-//                val debt = Debts(
-//                    unitId = unit.unitId,
-//                    costId = costId,
-//                    buildingId = buildingId,
-//                    description = name,
-//                    dueDate = newDueDate,
-//                    amount = amountPerUnit,
-//                    paymentFlag = false
-//                )
-//                debtsDao.insertDebt(debt)
-//            }
         }
     }
-
 
     fun insertDebtPerNewEarnings(
         buildingId: Long,

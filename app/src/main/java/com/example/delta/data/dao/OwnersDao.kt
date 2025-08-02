@@ -101,7 +101,15 @@ interface OwnersDao {
     @Query("SELECT * FROM owners_units_cross_ref")
     fun getOwnersUnitsCrossRef(): List<OwnersUnitsCrossRef>
 
+    @Query("""
+        SELECT * FROM owners
+        WHERE ownerId IN (
+            SELECT ownerId FROM owners_units_cross_ref WHERE unitId IN (:unitIds)
+        )
+    """)
+    suspend fun getOwnersForUnits(unitIds: List<Long>): List<Owners>
 
-
+    @Query("SELECT * FROM owners WHERE ownerId IN (:ownerIds)")
+    suspend fun getOwnersByIds(ownerIds: List<Long>): List<Owners>
 
 }

@@ -290,6 +290,7 @@
     <string name="operation_problem">عملیات با خطا مواجه شد</string>
     <string name="calculate_method">مبنای محاسبه</string>
     <string name="no">...</string>
+    <string name="nothing">هیچ</string>
     <string name="manager_teams">هیئت مدیره</string>
     <string name="fund_minus">پرداخت از صندوق</string>
     <string name="all">همه</string>
@@ -417,4 +418,10 @@
     <string name="male">آقا</string>
     <string name="female">خانم</string>
     <string name="balance">مانده</string>
+    <string name="detail">جزئیات</string>
+    <string name="recorded">ثبت نشده است.</string>
+    <string name="see_less">مشاهده کمتر</string>
+    <string name="see_more">مشاهده بیشتر</string>
+    <string name="operational_costs">هزینه های جاری</string>
+    <string name="capital_costs">هزینه های عمرانی</string>
 </resources>
