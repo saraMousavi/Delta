@@ -2025,9 +2025,43 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val endDateCal = parsePersianDate(crossRef.endDate)
 
 
+
             if (startDateCal != null && endDateCal != null) {
                 // 4. Insert or update Rent debts - one debt per month within contract period
                 var currentCal = startDateCal
+                val currDate = String.format(
+                    "%04d/%02d/%02d",
+                    currentCal.persianYear,
+                    currentCal.persianMonth,
+                    1
+                )
+
+                // Upsert mortgage debt
+                val existingMortgageDebt = debtsDao.getDebtForUnitCostAndDueDate(
+                    unitId,
+                    mortgageCost.costId,
+                    currDate
+                )
+                if(mortgageAmount > 0) {
+                    if (existingMortgageDebt == null) {
+                        debtsDao.insertDebt(
+                            Debts(
+                                unitId = unitId,
+                                costId = mortgageCost.costId,
+                                buildingId = buildingId,
+                                description = "رهن",
+                                dueDate = currDate,
+                                amount = mortgageAmount,
+                                paymentFlag = false
+                            )
+                        )
+                    } else {
+                        if (existingMortgageDebt.amount != mortgageAmount) {
+                            debtsDao.updateDebt(existingMortgageDebt.copy(amount = mortgageAmount))
+                        }
+                    }
+                }
+
                 while (isDateLessOrEqual(currentCal, endDateCal)) {
                     val dueDate = String.format(
                         "%04d/%02d/%02d",
@@ -2039,47 +2073,26 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     // Upsert rent debt
                     val existingRentDebt =
                         debtsDao.getDebtForUnitCostAndDueDate(unitId, rentCost.costId, dueDate)
-                    if (existingRentDebt == null) {
-                        debtsDao.insertDebt(
-                            Debts(
-                                unitId = unitId,
-                                costId = rentCost.costId,
-                                buildingId = buildingId,
-                                description = "اجاره",
-                                dueDate = dueDate,
-                                amount = rentAmount,
-                                paymentFlag = false
+                    if (rentAmount > 0) {
+                        if (existingRentDebt == null) {
+                            debtsDao.insertDebt(
+                                Debts(
+                                    unitId = unitId,
+                                    costId = rentCost.costId,
+                                    buildingId = buildingId,
+                                    description = "اجاره",
+                                    dueDate = dueDate,
+                                    amount = rentAmount,
+                                    paymentFlag = false
+                                )
                             )
-                        )
-                    } else {
-                        if (existingRentDebt.amount != rentAmount) {
-                            debtsDao.updateDebt(existingRentDebt.copy(amount = rentAmount))
+                        } else {
+                            if (existingRentDebt.amount != rentAmount) {
+                                debtsDao.updateDebt(existingRentDebt.copy(amount = rentAmount))
+                            }
                         }
                     }
 
-                    // Upsert mortgage debt
-                    val existingMortgageDebt = debtsDao.getDebtForUnitCostAndDueDate(
-                        unitId,
-                        mortgageCost.costId,
-                        dueDate
-                    )
-                    if (existingMortgageDebt == null) {
-                        debtsDao.insertDebt(
-                            Debts(
-                                unitId = unitId,
-                                costId = mortgageCost.costId,
-                                buildingId = buildingId,
-                                description = "رهن",
-                                dueDate = dueDate,
-                                amount = mortgageAmount,
-                                paymentFlag = false
-                            )
-                        )
-                    } else {
-                        if (existingMortgageDebt.amount != mortgageAmount) {
-                            debtsDao.updateDebt(existingMortgageDebt.copy(amount = mortgageAmount))
-                        }
-                    }
 
                     // Increase month by 1 using your existing function
                     currentCal = getNextMonthSameDaySafe(currentCal)
@@ -2679,9 +2692,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val rentDebt = debtsDao.getDebtForTenantAndCost(unitId, tenantId, rentCostId)
             tenantRentDebtMap[tenantId] = rentDebt?.amount ?: 0.0
+            Log.d("tenantRentDebtMap[tenantId]", tenantRentDebtMap[tenantId].toString())
 
             val mortgageDebt = debtsDao.getDebtForTenantAndCost(unitId, tenantId, mortgageCostId)
             tenantMortgageDebtMap[tenantId] = mortgageDebt?.amount ?: 0.0
+            Log.d("tenantMortgageDebtMap[tenantId]", tenantMortgageDebtMap[tenantId].toString())
         }
     }
 

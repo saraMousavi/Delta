@@ -38,6 +38,7 @@ interface TenantDao {
     @Query("SELECT * FROM tenants WHERE tenantId = :tenantId")
     suspend fun getTenantWithUnits(tenantId: Long): TenantsWithUnits
 
+
     @Query("""
     SELECT t.* FROM tenants t
     JOIN tenants_units_cross_ref tuc ON t.tenantId = tuc.tenantId
