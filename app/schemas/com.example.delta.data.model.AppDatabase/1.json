@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "8ecfbb4796880d14197ad6122e0ce6d6",
+    "identityHash": "9f3133c230a8e26ded11745fc0153108",
     "entities": [
       {
         "tableName": "building_types",
@@ -319,7 +319,7 @@
       },
       {
         "tableName": "earnings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`earningsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`earningsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `invoice_flag` INTEGER, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "earningsId",
@@ -356,8 +356,14 @@
             "affinity": "INTEGER"
           },
           {
-            "fieldPath": "dueDate",
-            "columnName": "due_date",
+            "fieldPath": "startDate",
+            "columnName": "start_date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "end_date",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -1806,6 +1812,104 @@
         ]
       },
       {
+        "tableName": "credits",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`creditsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earningsId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `description` TEXT NOT NULL, `due_date` TEXT NOT NULL, `amount` REAL NOT NULL, `receipt_flag` INTEGER NOT NULL, FOREIGN KEY(`earningsId`) REFERENCES `earnings`(`earningsId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "creditsId",
+            "columnName": "creditsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "earningsId",
+            "columnName": "earningsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buildingId",
+            "columnName": "buildingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDate",
+            "columnName": "due_date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiptFlag",
+            "columnName": "receipt_flag",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "creditsId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_credits_earningsId",
+            "unique": false,
+            "columnNames": [
+              "earningsId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_credits_earningsId` ON `${TABLE_NAME}` (`earningsId`)"
+          },
+          {
+            "name": "index_credits_buildingId",
+            "unique": false,
+            "columnNames": [
+              "buildingId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_credits_buildingId` ON `${TABLE_NAME}` (`buildingId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "earnings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "earningsId"
+            ],
+            "referencedColumns": [
+              "earningsId"
+            ]
+          },
+          {
+            "table": "buildings",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "buildingId"
+            ],
+            "referencedColumns": [
+              "buildingId"
+            ]
+          }
+        ]
+      },
+      {
         "tableName": "users_buildings_cross_ref",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` INTEGER NOT NULL, `buildingId` INTEGER NOT NULL, `roleName` TEXT NOT NULL, PRIMARY KEY(`userId`, `buildingId`), FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
@@ -1883,7 +1987,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8ecfbb4796880d14197ad6122e0ce6d6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9f3133c230a8e26ded11745fc0153108')"
     ]
   }
 }

@@ -281,9 +281,9 @@ class MyApplication : Application() {
             val earnings = earningsDao.getEarnings().firstOrNull()
             if (earnings == null) {
                 val defaultEarnings = listOf(
-                    Earnings(earningsName = getString(R.string.parking), amount = 0.0, dueDate =  "", period = Period.MONTHLY),
-                    Earnings(earningsName = getString(R.string.co_working_space), amount = 0.0,  dueDate = "", period = Period.YEARLY),
-                    Earnings(earningsName = getString(R.string.pool), amount = 0.0,  dueDate = "", period = Period.YEARLY)
+                    Earnings(earningsName = getString(R.string.parking), amount = 0.0, startDate =  "", endDate = "", period = Period.MONTHLY),
+                    Earnings(earningsName = getString(R.string.co_working_space), amount = 0.0, startDate =  "", endDate = "", period = Period.YEARLY),
+                    Earnings(earningsName = getString(R.string.pool), amount = 0.0, startDate =  "", endDate = "", period = Period.YEARLY)
                 )
                 defaultEarnings.forEach {
                     earningsDao.insertEarnings(it)

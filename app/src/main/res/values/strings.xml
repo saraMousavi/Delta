@@ -424,4 +424,12 @@
     <string name="see_more">مشاهده بیشتر</string>
     <string name="operational_costs">هزینه های جاری</string>
     <string name="capital_costs">هزینه های عمرانی</string>
+    <string name="earnings_conflict_error">این درآمد در این بازه زمانی تکراری می باشد.</string>
+    <string name="not_receipt">دریافت نشده</string>
+    <string name="receipt">دریافت شده</string>
+    <string name="earning_name_exists">درآمد وارد شده تکراری است.</string>
+    <string name="date">تاریخ</string>
+    <string name="transfer_to_operational">مبلغ دریافتی به صندوق جاری انتقال یافت.</string>
+    <string name="receipt_money">دریافت شود</string>
+    <string name="insufficient_operational_fund_balance">موجودی صندوق جاری جهت ثبت فاکتور کافی نمی باشد.</string>
 </resources>

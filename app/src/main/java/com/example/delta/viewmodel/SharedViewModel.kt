@@ -27,6 +27,7 @@ import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Credits
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Funds
@@ -76,6 +77,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import kotlin.math.min
+import kotlinx.coroutines.flow.combine
+
 
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
@@ -100,6 +103,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val notificationDao = AppDatabase.getDatabase(application).notificationDao()
     private val fundsDao = AppDatabase.getDatabase(application).fundsDao()
     private val cityComplexDao = AppDatabase.getDatabase(application).cityComplexDao()
+    private val creditsDao = AppDatabase.getDatabase(application).creditsDao()
 
     private val _invoiceResult = MutableSharedFlow<Boolean>() // true=success, false=failure
     val invoiceResult = _invoiceResult.asSharedFlow()
@@ -145,6 +149,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var fileList = mutableStateListOf<UploadedFileEntity>()
 
     // These represent the selected items from your dropdowns
+    private val _selectedCredits = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedCredits: StateFlow<Set<Long>> = _selectedCredits
+    private val _creditsForEarning = MutableStateFlow<List<Credits>>(emptyList())
+    val creditsForEarning: StateFlow<List<Credits>> = _creditsForEarning
+
     var selectedBuildingTypes by mutableStateOf<BuildingTypes?>(null)
     var selectedCityComplex by mutableStateOf<CityComplex?>(null)
     var selectedBuildingUsages by mutableStateOf<BuildingUsages?>(null)
@@ -228,9 +237,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     // Function to insert new cost name into DB
-    suspend fun insertNewCost(cost: Costs) {
+   fun insertNewCost(cost: Costs) {
         viewModelScope.launch(Dispatchers.IO) {
             costsDao.insertCost(cost)
+        }
+    }
+    fun insertNewEarnings(earning: Earnings) {
+        viewModelScope.launch(Dispatchers.IO) {
+            earningsDao.insertEarnings(earning)
         }
     }
 
@@ -249,6 +263,32 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getDebtsOneUnit(unitId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getDebtsOneUnit(unitId)
         emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getCreditsOfBuilding(buildingId: Long): Flow<List<Credits>> = flow {
+        val debts = creditsDao.getCreditsForBuilding(buildingId)
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCredit(creditId: Long): Flow<Credits?> = flow {
+        val credit = creditsDao.getCredit(creditId)
+        emit(credit)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCreditFromEarning(earningId: Long): Flow<List<Credits>> = flow {
+        val credit = creditsDao.getCreditFromEarning(earningId)
+        emit(credit)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCreditOfBuilding(buildingsId: Long): Flow<List<Credits>> = flow {
+        val credit = creditsDao.getCreditsForBuilding(buildingsId)
+        emit(credit)
+    }.flowOn(Dispatchers.IO)
+
+    fun sumAllCreditAmount(buildingsId: Long): Flow<Double> = flow {
+        val credit = creditsDao.sumAllCreditAmount(buildingsId)
+        emit(credit)
     }.flowOn(Dispatchers.IO)
 
     // New function to get debts for a specific unit and month
@@ -547,6 +587,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(earnings)
     }.flowOn(Dispatchers.IO)
 
+    fun getEarning(earningId: Long): Flow<Earnings?> = flow {
+        val earnings = earningsDao.getEarning(
+            earningId
+        )
+        emit(earnings)
+    }.flowOn(Dispatchers.IO)
+
 
     fun getDebtsForBuilding(buildingId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getDebtsForBuilding(buildingId)
@@ -575,6 +622,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun checkCostNameExists(buildingId: Long, costName: String): Flow<Boolean> = flow {
         val costs = costsDao.costNameExists(buildingId, costName)
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun earningNameExists(buildingId: Long, earningName: String): Flow<Boolean> = flow {
+        val costs = earningsDao.earningNameExists(buildingId, earningName)
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
@@ -2678,7 +2730,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val buildingId = cost.buildingId ?: return@launch
             val fundType = cost.fundType
             val costAmount = cost.tempAmount
-
+            Log.d("cost", cost.toString())
+            Log.d("fundType", fundType.toString())
             // Get current fund record
             val fund = fundsDao.getFundByType(buildingId, fundType)
 
@@ -2687,7 +2740,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 _invoiceResult.emit(false)
                 return@launch
             }
-
+            Log.d("fund.balance", fund.balance.toString())
+            Log.d("costAmount", costAmount.toString())
             if (fund.balance >= costAmount) {
                 // Enough fund - update cost and fund
 
@@ -2708,42 +2762,64 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getNotInvoicedEarnings(buildingId: Long) = earningsDao.getNotInvoicedEarnings(buildingId)
 
-    /**
-     * Invoice an earning: mark earning as invoiced and increase fund balance accordingly.
-     */
-    fun invoiceEarning(earning: Earnings) {
-        viewModelScope.launch {
-            // Mark earning as invoiced
-            earningsDao.markEarningAsInvoiced(earning.earningsId)
 
-            // Add the amount to the related fund balance
-            val fund = fundsDao.getFundByType(earning.buildingId ?: 0, FundType.OPERATIONAL)
-                ?: Funds(
-                    buildingId = earning.buildingId ?: 0,
-                    fundType = FundType.OPERATIONAL,
-                    balance = 0.0
+
+    suspend fun insertEarningsWithCredits(
+        earnings: Earnings
+    ) {
+        val conflictCount = creditsDao.countConflictingCredits(
+            buildingId = earnings.buildingId ?: return,
+            earningsName = earnings.earningsName,
+            startDate = earnings.startDate,
+            endDate = earnings.endDate
+        )
+
+        if (conflictCount > 0) {
+            // Signal conflict (e.g., throw exception or return failure status)
+            throw IllegalStateException("Earnings conflict with existing credits")
+        } else {
+            // Insert the Earnings
+            val earningsId = earningsDao.insertEarnings(earnings)
+            val startLocalDate = parsePersianDate(earnings.startDate)
+            val endLocalDate = parsePersianDate(earnings.endDate)
+
+            if (earnings.period == Period.MONTHLY) {
+                // Insert a Credit row for each month between start and end dates
+                var current = startLocalDate
+                if (current != null && endLocalDate != null) {
+                    while (isDateLessOrEqual(current, endLocalDate)) {
+                        val dueDate = String.format(
+                            "%04d/%02d/%02d",
+                            current!!.persianYear,
+                            current.persianMonth,
+                            1
+                        )
+                        val credit = Credits(
+                            earningsId = earningsId,
+                            buildingId = earnings.buildingId,
+                            description = earnings.earningsName,
+                            dueDate = dueDate,
+                            amount = earnings.amount,
+                            receiptFlag = false
+                        )
+                        creditsDao.insertCredit(credit)
+                        current = getNextMonthSameDaySafe(current)
+                    }
+                }
+            } else {
+                // Insert a single Credit covering the whole period or whichever logic you want
+                creditsDao.insertCredit(
+                    Credits(
+                        earningsId = earningsId,
+                        buildingId = earnings.buildingId!!,
+                        description = earnings.earningsName,
+                        dueDate = earnings.startDate,
+                        amount = earnings.amount,
+                        receiptFlag = false
+                    )
                 )
-                    .also { fundsDao.insertFunds(it) }
-
-            val updatedFund = fund.copy(balance = fund.balance + earning.amount)
-            fundsDao.updateFunds(updatedFund)
-
-            // (Optional) handle periodical earnings: generate next dueDate/earning if applicable
-            if (earning.period != Period.NONE) {
-                scheduleNextEarning(earning)
             }
         }
-    }
-
-    private suspend fun scheduleNextEarning(currentEarning: Earnings) {
-        // Calculate next due date based on period, create a new earning with next due date & invoiceFlag=false
-        val nextDueDate = calculateNextDueDate(currentEarning.dueDate, currentEarning.period)
-        val newEarning = currentEarning.copy(
-            earningsId = 0,  // allow auto generate id
-            dueDate = nextDueDate,
-            invoiceFlag = false
-        )
-        earningsDao.insertEarnings(newEarning)
     }
 
     private fun calculateNextDueDate(currentDueDate: String, period: Period): String {
@@ -2793,6 +2869,47 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             return false
         }
     }
+
+    fun updateCredits(credits: List<Credits>) {
+        _creditsForEarning.value = credits
+    }
+
+    fun toggleCreditSelection(creditId: Long) {
+        val credit = _creditsForEarning.value.find { it.creditsId == creditId } ?: return
+        if (credit.receiptFlag == true) return  // Don't toggle if already received
+
+        val currentSelection = _selectedCredits.value.toMutableSet()
+        if (currentSelection.contains(creditId)) {
+            currentSelection.remove(creditId)
+        } else {
+            currentSelection.add(creditId)
+        }
+        _selectedCredits.value = currentSelection
+    }
+
+
+    val sumSelectedAmount = combine(_creditsForEarning, _selectedCredits) { credits, selectedIds ->
+        credits.filter { selectedIds.contains(it.creditsId) }.sumOf { it.amount }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
+
+    // Update selected credits as receiptFlag=1 (received)
+    fun markSelectedAsReceived(earningId:Long) {
+            viewModelScope.launch {
+                val selectedIds = _selectedCredits.value.toList()
+                creditsDao.updateReceiptFlagByIds(selectedIds, true)
+
+                // Reload credits from DB again after update
+                val updatedCredits = creditsDao.getCreditsFromEarning(earningId)
+                val building = earningsDao.getBuildingFromEarning(earningId)
+                increaseBalanceFund(building?.buildingId ?: 0,sumSelectedAmount.value, FundType.OPERATIONAL)
+                _creditsForEarning.value = updatedCredits
+
+                // Clear selections
+                _selectedCredits.value = emptySet()
+            }
+
+    }
+
 
 
 }

@@ -18,5 +18,6 @@ data class Earnings(
     @ColumnInfo(name = "amount") val amount: Double,
     @ColumnInfo(name = "period") val period: Period,//weekly , monthly , yearly
     @ColumnInfo(name = "invoice_flag") var invoiceFlag: Boolean?= false,
-    @ColumnInfo(name = "due_date") val dueDate: String, // Due date of the debt
+    @ColumnInfo(name = "start_date") val startDate: String, // Due date of the debt
+    @ColumnInfo(name = "end_date") val endDate: String, // Due date of the debt
     ) : Parcelable

@@ -1,6 +1,7 @@
 package com.example.delta.data.dao
 
 import androidx.room.*
+import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Earnings
 import kotlinx.coroutines.flow.Flow
 
@@ -8,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface EarningsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertEarnings(earnings: Earnings)
+    suspend fun insertEarnings(earnings: Earnings) : Long
 
     @Delete()
     suspend fun deleteEarnings(earnings: Earnings)
@@ -16,14 +17,27 @@ interface EarningsDao {
     @Query("SELECT * FROM earnings")
     fun getAllEarnings(): Flow<List<Earnings>>
 
+
+    @Query("SELECT EXISTS(SELECT 1 FROM earnings WHERE buildingId = :buildingId AND earnings_name = :earningName)")
+    suspend fun earningNameExists(buildingId: Long, earningName: String): Boolean
+
     @Query("SELECT * FROM earnings")
     fun getEarnings(): List<Earnings>
+
+    @Query("SELECT b.* FROM earnings e " +
+            "inner join buildings b on " +
+            "b.buildingId = e.buildingId" +
+            " where e.earningsId = :earningsId")
+    suspend fun getBuildingFromEarning(earningsId: Long): Buildings?
 
     @Query("SELECT * FROM earnings where buildingId IS NULL")
     suspend fun getAllMenuEarnings(): List<Earnings>
 
     @Query("SELECT * FROM earnings WHERE buildingId = :buildingId")
     suspend fun getEarningsForBuilding(buildingId: Long): List<Earnings>
+
+    @Query("SELECT * FROM earnings WHERE earningsId = :earningsId")
+    suspend fun getEarning(earningsId: Long): Earnings?
 
     @Query("SELECT * FROM earnings WHERE buildingId = :buildingId")
     fun getFlowEarningsForBuilding(buildingId: Long): Flow<List<Earnings>>
@@ -35,15 +49,15 @@ interface EarningsDao {
     fun sumPaidEarning(buildingId: Long): Flow<Double>
 
     @Query("""
-        SELECT * FROM earnings
-        WHERE buildingId = :buildingId
-        AND (invoice_flag = 0 OR invoice_flag IS NULL)
-        ORDER BY due_date ASC
-    """)
+    SELECT * FROM earnings e
+    WHERE e.buildingId = :buildingId
+    AND EXISTS (
+        SELECT 1 FROM credits c
+        WHERE c.earningsId = e.earningsId
+          AND c.receipt_flag = 0
+    )
+    ORDER BY e.start_date ASC
+""")
     fun getNotInvoicedEarnings(buildingId: Long): Flow<List<Earnings>>
 
-    @Query("""
-        UPDATE earnings SET invoice_flag = 1 WHERE earningsId = :earningId
-    """)
-    suspend fun markEarningAsInvoiced(earningId: Long)
 }

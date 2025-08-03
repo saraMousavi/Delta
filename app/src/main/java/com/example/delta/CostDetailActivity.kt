@@ -119,12 +119,17 @@ fun CostDetailScreen(
     val activity = LocalActivity.current
     // Listen to invoice result events to show feedback (success or error in snackbar)
     LaunchedEffect(sharedViewModel.invoiceResult) {
+        Log.d("sharedViewModel.invoiceResult", sharedViewModel.invoiceResult.toString())
         sharedViewModel.invoiceResult.collectLatest { success ->
             if (success) {
                 snackbarHostState.showSnackbar(context.getString(R.string.invoiced_succesfully))
                 showFundDialog = false // close dialog on success
             } else {
-                snackbarHostState.showSnackbar(context.getString(R.string.insufficient_fund_balance))
+                if(cost.fundType == FundType.OPERATIONAL){
+                    snackbarHostState.showSnackbar(context.getString(R.string.insufficient_operational_fund_balance))
+                } else {
+                    snackbarHostState.showSnackbar(context.getString(R.string.insufficient_fund_balance))
+                }
             }
         }
     }
