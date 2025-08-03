@@ -154,6 +154,34 @@ interface DebtsDao {
             "WHERE costs.buildingId = :buildingId and payment_flag = 1  ORDER BY due_date ASC")
     suspend fun getPaysForBuilding(buildingId: Long): List<Debts>
 
+    data class CostAmountSummary(
+        val costName: String,
+        val totalAmount: Double
+    )
+
+    @Query("""
+    SELECT costs.cost_name AS costName, SUM(debts.amount) AS totalAmount
+    FROM debts 
+    INNER JOIN costs ON costs.costId = debts.costId
+    WHERE costs.buildingId = :buildingId 
+      AND payment_flag = 0
+    GROUP BY costs.cost_name
+    ORDER BY costs.cost_name
+""")
+    suspend fun getDebtsGroupedByCostName(buildingId: Long): List<CostAmountSummary>
+
+    @Query("""
+    SELECT costs.cost_name AS costName, SUM(debts.amount) AS totalAmount
+    FROM debts 
+    INNER JOIN costs ON costs.costId = debts.costId
+    WHERE costs.buildingId = :buildingId 
+      AND payment_flag = 1
+    GROUP BY costs.cost_name
+    ORDER BY costs.cost_name
+""")
+    suspend fun getPaysGroupedByCostName(buildingId: Long): List<CostAmountSummary>
+
+
     @Query("SELECT * FROM debts WHERE unitId = :unitId and payment_flag = 1")
     fun getPaysForUnit(unitId: Long): List<Debts>
 

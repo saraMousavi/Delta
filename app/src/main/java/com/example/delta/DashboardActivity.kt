@@ -2,17 +2,39 @@ package com.example.delta
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -21,8 +43,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
-import com.example.delta.data.entity.*
+import com.example.delta.data.entity.Buildings
+import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.components.XAxis
@@ -33,8 +57,8 @@ import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
 import com.github.mikephil.charting.listener.OnChartValueSelectedListener
-import androidx.compose.ui.viewinterop.AndroidView
-import com.example.delta.init.Preference
+import java.text.NumberFormat
+import java.util.Locale
 
 class DashboardActivity : ComponentActivity() {
 
@@ -62,6 +86,7 @@ class DashboardActivity : ComponentActivity() {
 }
 
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsActivityScreen(
@@ -69,214 +94,227 @@ fun ReportsActivityScreen(
     onHomeClick: () -> Unit
 ) {
     val context = LocalContext.current
-    // Hold the buildings list in state, initially empty
     var buildings by remember { mutableStateOf<List<Buildings>>(emptyList()) }
-
-    // Hold the selected building ID in state
-    // Initialize with -1L or null and update once buildings loaded
     var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
-    // Launch coroutine to fetch user's buildings once on entry
     var showNoDataChartDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val userId = Preference().getUserId(context = context)
+        val userId = Preference().getUserId(context)
         sharedViewModel.getBuildingsForUser(userId).collect { buildingsList ->
             buildings = buildingsList
-            // When buildings load, if selectedBuildingId is not set or invalid, select first building
             if (selectedBuildingId == null || buildings.none { it.buildingId == selectedBuildingId }) {
                 selectedBuildingId = buildings.firstOrNull()?.buildingId
             }
         }
     }
 
-
-
     val selectedBuilding = buildings.find { it.buildingId == selectedBuildingId }
         ?: buildings.firstOrNull()
 
-    val yekanTypeface = remember {
-        ResourcesCompat.getFont(context, R.font.yekan)
-    }
-
+    val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
     val buildingId = selectedBuilding?.buildingId ?: -1L
 
-    // Collect data for charts
     val debtsList by sharedViewModel.getDebtsForBuilding(buildingId).collectAsState(initial = emptyList())
     val paysList by sharedViewModel.getPaysForBuilding(buildingId).collectAsState(initial = emptyList())
+
+    val excludedDescriptions = setOf("شارژ", "رهن", "اجاره")
+
+    val debtsByCostName = debtsList
+        .filter { it.description !in excludedDescriptions }
+        .groupBy { it.description }
+        .mapValues { it.value.sumOf { it.amount } }
+
+    val paysByCostName = paysList
+        .filter { it.description !in excludedDescriptions }
+        .groupBy { it.description }
+        .mapValues { it.value.sumOf { it.amount } }
+
+
     val unitsList by sharedViewModel.getUnitsForBuilding(buildingId).collectAsState(initial = emptyList())
     val ownersList by sharedViewModel.getOwnersForBuilding(buildingId).collectAsState(initial = emptyList())
 
     var selectedCategory by remember { mutableStateOf<String?>(null) }
 
-    val debtsByCategory = debtsList.groupBy { it.description }
-    val paysByCategory = paysList.groupBy { it.description }
-    val allCategories = (debtsByCategory.keys + paysByCategory.keys).distinct()
-    val xAxisLabels = allCategories.toTypedArray()
+    val allCostNames = (debtsByCostName.keys + paysByCostName.keys).distinct()
+    val xAxisLabels = allCostNames.toTypedArray()
 
     LaunchedEffect(debtsList, paysList, buildings) {
-        if (debtsList.isEmpty() && paysList.isEmpty()) {
-            showNoDataChartDialog = true
-        } else {
-            showNoDataChartDialog = false
-        }
+        showNoDataChartDialog = debtsList.isEmpty() && paysList.isEmpty()
     }
+// Get debts and pays filtered by selectedCategory (cost description)
+    val filteredDebtsByUnit = remember(debtsList, selectedCategory) {
+        if (selectedCategory == null) emptyMap<String, Double>()
+        else debtsList
+            .filter { it.description == selectedCategory }
+            .groupBy { debt ->
+                unitsList.find { it.unitId == debt.unitId }?.unitNumber ?: context.getString(R.string.other)
+            }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
+
+    val filteredPaysByUnit = remember(paysList, selectedCategory) {
+        if (selectedCategory == null) emptyMap<String, Double>()
+        else paysList
+            .filter { it.description == selectedCategory }
+            .groupBy { pay ->
+                unitsList.find { it.unitId == pay.unitId }?.unitNumber ?: context.getString(R.string.other)
+            }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
+
+// X-axis labels for detail chart are unit numbers associated to the selectedCategory
+    val detailXAxisLabels = (filteredDebtsByUnit.keys + filteredPaysByUnit.keys).distinct().toTypedArray()
+
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onHomeClick
-            ) {
+            FloatingActionButton(onClick = onHomeClick) {
                 Icon(Icons.Default.Home, contentDescription = "Home")
             }
         },
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(context.getString(R.string.title_dashboard), style = MaterialTheme.typography.bodyLarge) }
+                title = { Text(text = context.getString(R.string.title_dashboard), style = MaterialTheme.typography.bodyLarge) }
             )
         }
     ) { innerPadding ->
-
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Building selector row
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            ) {
-                items(buildings) { building ->
-                    FilterChip(
-                        selected = building.buildingId == selectedBuildingId,
-                        onClick = { selectedBuildingId = building.buildingId },
-                        label = { Text(building.name, style = MaterialTheme.typography.bodyLarge) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (!showNoDataChartDialog) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                ) {
+                    items(buildings) { building ->
+                        FilterChip(
+                            selected = building.buildingId == selectedBuildingId,
+                            onClick = { selectedBuildingId = building.buildingId },
+                            label = { Text(building.name, style = MaterialTheme.typography.bodyLarge) },
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = context.getString(R.string.bilan_report),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            AndroidView(
-                factory = { ctx ->
-                    BarChart(ctx).apply {
-                        description.isEnabled = false
-                        setPinchZoom(false)
-                        setDrawGridBackground(false)
-                        legend.isEnabled = true
-                        animateY(1000)
-                        axisRight.isEnabled = false
-                        axisLeft.apply {
-                            axisMinimum = 0f
-                            setDrawGridLines(true)
-                            granularity = 1f
-                            typeface = yekanTypeface
-                            valueFormatter = MoneyValueFormatter()
-                        }
-                        legend.apply {
-                            typeface = yekanTypeface
-                            textSize = 12f
-                            textColor = Color(context.getColor(R.color.black)).toArgb()
-                        }
-                        xAxis.apply {
-                            position = XAxis.XAxisPosition.BOTTOM
-                            granularity = 1f
-                            setDrawGridLines(false)
-                            typeface = yekanTypeface
-                            labelRotationAngle = -45f
-                            setCenterAxisLabels(true)
-                            valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-                        }
-                    }
-                },
-                update = { chart ->
-                    val debtsEntries = ArrayList<BarEntry>()
-                    val paysEntries = ArrayList<BarEntry>()
+                Spacer(Modifier.height(8.dp))
 
-                    allCategories.forEachIndexed { index, category ->
-                        val debtAmount = debtsByCategory[category]?.sumOf { it.amount }?.toFloat() ?: 0f
-                        val payAmount = paysByCategory[category]?.sumOf { it.amount }?.toFloat() ?: 0f
-                        debtsEntries.add(BarEntry(index.toFloat(), debtAmount))
-                        paysEntries.add(BarEntry(index.toFloat(), payAmount))
-                    }
+                Text(
+                    text = context.getString(R.string.bilan_report),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
 
-                    if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
-                        val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                            color = Color(context.getColor(R.color.Red_light)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                            valueTextSize = 12f
-                            valueTypeface = yekanTypeface
-                        }
-                        val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
-                            color = Color(context.getColor(R.color.Green)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                            valueTextSize = 12f
-                            valueTypeface = yekanTypeface
-                        }
-
-                        val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
-                        val groupSpace = 0.4f
-                        val barSpace = 0.05f
-
-                        data.groupBars(0f, groupSpace, barSpace)
-                        chart.data = data
-                        chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-                        chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
-                        chart.xAxis.axisMinimum = -0.5f
-                        chart.invalidate()
-                    } else {
-                        chart.clear()
-                        chart.invalidate()
-                    }
-
-                    chart.setOnChartValueSelectedListener(object : OnChartValueSelectedListener {
-                        override fun onValueSelected(e: com.github.mikephil.charting.data.Entry?, h: Highlight?) {
-                            if (e == null) return
-                            val xIndex = e.x.toInt()
-                            selectedCategory = if (xIndex in allCategories.indices) {
-                                allCategories[xIndex]
-                            } else {
-                                null
+                AndroidView(
+                    factory = { ctx ->
+                        BarChart(ctx).apply {
+                            description.isEnabled = false
+                            setPinchZoom(false)
+                            setDrawGridBackground(false)
+                            legend.isEnabled = true
+                            animateY(1000)
+                            axisRight.isEnabled = false
+                            axisLeft.apply {
+                                axisMinimum = 0f
+                                setDrawGridLines(true)
+                                granularity = 1f
+                                typeface = yekanTypeface
+                                valueFormatter = MoneyValueFormatter()
+                            }
+                            legend.apply {
+                                typeface = yekanTypeface
+                                textSize = 12f
+                                textColor = Color(ctx.getColor(R.color.black)).toArgb()
+                            }
+                            xAxis.apply {
+                                position = XAxis.XAxisPosition.BOTTOM
+                                granularity = 1f
+                                setDrawGridLines(false)
+                                typeface = yekanTypeface
+                                // labelRotationAngle = -45f
+                                setCenterAxisLabels(true)
+                                valueFormatter = IndexAxisValueFormatter(xAxisLabels)
                             }
                         }
+                    },
+                    update = { chart ->
+                        val debtsEntries = mutableListOf<BarEntry>()
+                        val paysEntries = mutableListOf<BarEntry>()
 
-                        override fun onNothingSelected() {
-                            selectedCategory = null
+                        allCostNames.forEachIndexed { index, costName ->
+                            val debtAmount = debtsByCostName[costName]?.toFloat() ?: 0f
+                            val payAmount = paysByCostName[costName]?.toFloat() ?: 0f
+                            debtsEntries.add(BarEntry(index.toFloat(), debtAmount))
+                            paysEntries.add(BarEntry(index.toFloat(), payAmount))
                         }
-                    })
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(350.dp)
-                    .padding(horizontal = 16.dp)
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
+                            val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                                color = Color(context.getColor(R.color.Red_light)).toArgb()
+                                valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                                valueTextSize = 12f
+                                valueTypeface = yekanTypeface
+                                valueFormatter = MoneyValueFormatter()
+                            }
+                            val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                                color = Color(context.getColor(R.color.Green)).toArgb()
+                                valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                                valueTextSize = 12f
+                                valueTypeface = yekanTypeface
+                                valueFormatter = MoneyValueFormatter()
+                            }
 
-            if (selectedCategory == null) {
-                Text(
-                    text = context.getString(R.string.click_on_cost_columns),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                            val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                            val groupSpace = 0.4f
+                            val barSpace = 0.05f
+
+                            data.groupBars(0f, groupSpace, barSpace)
+                            chart.data = data
+                            chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                            chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                            chart.xAxis.axisMinimum = -0.5f
+                            chart.invalidate()
+                        } else {
+                            chart.clear()
+                            chart.invalidate()
+                        }
+
+                        chart.setOnChartValueSelectedListener(object : OnChartValueSelectedListener {
+                            override fun onValueSelected(e: com.github.mikephil.charting.data.Entry?, h: Highlight?) {
+                                if (e == null) return
+                                val xIndex = e.x.toInt()
+                                selectedCategory = if (xIndex in allCostNames.indices) {
+                                    allCostNames[xIndex]
+                                } else {
+                                    null
+                                }
+                            }
+
+                            override fun onNothingSelected() {
+                                selectedCategory = null
+                            }
+                        })
+                    },
+                    modifier = Modifier.fillMaxWidth().height(350.dp).padding(horizontal = 16.dp)
                 )
-            } else {
-                // Show detailed category chart
-                CategoryDetailChart(
-                    category = selectedCategory!!,
-                    debts = debtsByCategory[selectedCategory] ?: emptyList(),
-                    pays = paysByCategory[selectedCategory] ?: emptyList(),
-                    unitsList = unitsList,
-                    ownersList = ownersList,
-                    modifier = Modifier.weight(1f).padding(16.dp)
-                )
+
+                Spacer(Modifier.height(16.dp))
+
+                if (selectedCategory == null) {
+                    Text(
+                        text = context.getString(R.string.click_on_cost_columns),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    // Pass sums for the selected category now
+                    CategoryDetailChartByUnit(
+                        category = selectedCategory!!,
+                        debtsByUnit = filteredDebtsByUnit,
+                        paysByUnit = filteredPaysByUnit,
+                        xAxisLabels = detailXAxisLabels,
+                        modifier = Modifier.weight(1f).padding(16.dp)
+                    )
+
+
+                }
             }
         }
     }
@@ -284,16 +322,10 @@ fun ReportsActivityScreen(
         AlertDialog(
             onDismissRequest = { showNoDataChartDialog = false },
             title = {
-                Text(
-                    text = context.getString(R.string.chart_alarm),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(text = context.getString(R.string.chart_alarm), style = MaterialTheme.typography.bodyLarge)
             },
             text = {
-                Text(
-                    text = context.getString(R.string.chart_alarm_info),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(text = context.getString(R.string.chart_alarm_info), style = MaterialTheme.typography.bodyLarge)
             },
             confirmButton = {
                 TextButton(
@@ -302,10 +334,7 @@ fun ReportsActivityScreen(
                         onHomeClick()
                     }
                 ) {
-                    Text(
-                        context.getString(R.string.confirm),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    Text(text = context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         )
@@ -313,30 +342,115 @@ fun ReportsActivityScreen(
 }
 
 @Composable
-fun CategoryDetailChart(
+fun CategoryDetailChartByUnit(
     category: String,
-    debts: List<Debts>,
-    pays: List<Debts>,
-    unitsList: List<Units>,
-    ownersList: List<Owners>,
+    debtsByUnit: Map<String, Double>,
+    paysByUnit: Map<String, Double>,
+    xAxisLabels: Array<String>,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
-    val unitsMap = remember(unitsList) { unitsList.associateBy { it.unitId } }
-    val ownersMap = remember(ownersList) { ownersList.associateBy { it.ownerId } }
 
-    fun labelForDebt(debt: Debts): String {
-        return debt.unitId?.let { unitsMap[it]?.unitNumber }
-            ?: debt.ownerId?.let { ownerId ->
-                ownersMap[ownerId]?.let { "${it.firstName} ${it.lastName}" }
-            } ?: context.getString(R.string.other)
+    Column(modifier = modifier) {
+        Text(
+            text = "${context.getString(R.string.cost_detail)} $category",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        AndroidView(
+            factory = { ctx ->
+                BarChart(ctx).apply {
+                    description.isEnabled = false
+                    setPinchZoom(false)
+                    setDrawGridBackground(false)
+                    legend.isEnabled = true
+                    axisRight.isEnabled = false
+                    axisLeft.apply {
+                        axisMinimum = 0f
+                        setDrawGridLines(true)
+                        granularity = 1f
+                        typeface = yekanTypeface
+                        valueFormatter = MoneyValueFormatter()
+                    }
+                    legend.apply {
+                        typeface = yekanTypeface
+                        textSize = 12f
+                        textColor = Color(ctx.getColor(R.color.black)).toArgb()
+                    }
+                    xAxis.apply {
+                        position = XAxis.XAxisPosition.BOTTOM
+                        granularity = 1f
+                        setDrawGridLines(false)
+                        setCenterAxisLabels(true)
+                        textSize = 14f
+                        typeface = yekanTypeface
+                        valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                    }
+                }
+            },
+            update = { chart ->
+                val debtsEntries = mutableListOf<BarEntry>()
+                val paysEntries = mutableListOf<BarEntry>()
+
+                xAxisLabels.forEachIndexed { index, unitLabel ->
+                    val debtSum = debtsByUnit[unitLabel]?.toFloat() ?: 0f
+                    val paySum = paysByUnit[unitLabel]?.toFloat() ?: 0f
+                    debtsEntries.add(BarEntry(index.toFloat(), debtSum))
+                    paysEntries.add(BarEntry(index.toFloat(), paySum))
+                }
+
+                if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
+                    val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                        color = Color(context.getColor(R.color.secondary_color)).toArgb()
+                        valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                        valueTextSize = 12f
+                        valueTypeface = yekanTypeface
+                        valueFormatter = MoneyValueFormatter()
+                    }
+                    val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                        color = Color(context.getColor(R.color.teal_700)).toArgb()
+                        valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                        valueTextSize = 12f
+                        valueTypeface = yekanTypeface
+                        valueFormatter = MoneyValueFormatter()
+                    }
+
+                    val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                    val groupSpace = 0.4f
+                    val barSpace = 0.05f
+
+                    data.groupBars(0f, groupSpace, barSpace)
+                    chart.data = data
+                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                    chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                    chart.xAxis.axisMinimum = -0.5f
+                    chart.notifyDataSetChanged()
+                    chart.animateY(1000)
+                    chart.invalidate()
+                } else {
+                    chart.clear()
+                    chart.invalidate()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(350.dp)
+        )
     }
+}
 
-    val debtsByLabel = debts.groupBy { labelForDebt(it) }
-    val paysByLabel = pays.groupBy { labelForDebt(it) }
-    val allLabels = (debtsByLabel.keys + paysByLabel.keys).distinct()
-    val xAxisLabels = allLabels.toTypedArray()
+
+// Modified CategoryDetailChart accepts sum amounts instead of list of Debts
+@Composable
+fun CategoryDetailChart(
+    category: String,
+    debtsSum: Double,
+    paysSum: Double,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
+    val xAxisLabels = arrayOf(category)
 
     Column(modifier = modifier) {
         Text(
@@ -368,65 +482,57 @@ fun CategoryDetailChart(
                         position = XAxis.XAxisPosition.BOTTOM
                         granularity = 1f
                         setDrawGridLines(false)
-                        labelRotationAngle = -45f
                         setCenterAxisLabels(true)
                         textSize = 14f
                         typeface = yekanTypeface
+                        valueFormatter = IndexAxisValueFormatter(xAxisLabels)
                     }
                 }
             },
             update = { chart ->
-                val debtsEntries = mutableListOf<BarEntry>()
-                val paysEntries = mutableListOf<BarEntry>()
-                allLabels.forEachIndexed { index, label ->
-                    val debtSum = debtsByLabel[label]?.sumOf { it.amount }?.toFloat() ?: 0f
-                    val paySum = paysByLabel[label]?.sumOf { it.amount }?.toFloat() ?: 0f
-                    debtsEntries.add(BarEntry(index.toFloat(), debtSum))
-                    paysEntries.add(BarEntry(index.toFloat(), paySum))
+                val debtsEntries = listOf(BarEntry(0f, debtsSum.toFloat()))
+                val paysEntries = listOf(BarEntry(0f, paysSum.toFloat()))
+
+                val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                    color = Color(context.getColor(R.color.secondary_color)).toArgb()
+                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                    valueTextSize = 12f
+                    valueTypeface = yekanTypeface
+                    valueFormatter = MoneyValueFormatter()
                 }
 
-                if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
-                    val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                        color = Color(getColor(R.color.Red_light)).toArgb()
-                        valueTextColor = Color(getColor(R.color.black)).toArgb()
-                        valueTextSize = 12f
-                        valueTypeface = yekanTypeface
-                    }
-                    val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
-                        color = Color(getColor(R.color.Green)).toArgb()
-                        valueTextColor = Color(getColor(R.color.black)).toArgb()
-                        valueTextSize = 12f
-                        valueTypeface = yekanTypeface
-                    }
-                    val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
-                    val groupSpace = 0.4f
-                    val barSpace = 0.05f
-
-                    data.groupBars(0f, groupSpace, barSpace)
-                    chart.data = data
-                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-                    chart.xAxis.axisMaximum = chart.data.xMax + groupSpace + 0.9f
-                    chart.xAxis.axisMinimum = -0.5f
-                    chart.xAxis.typeface = yekanTypeface
-                    chart.notifyDataSetChanged()
-                    chart.animateY(1000)
-                    chart.invalidate()
-                } else {
-                    chart.clear()
-                    chart.invalidate()
+                val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                    color = Color(context.getColor(R.color.teal_700)).toArgb()
+                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                    valueTextSize = 12f
+                    valueTypeface = yekanTypeface
+                    valueFormatter = MoneyValueFormatter()
                 }
+
+                val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                val groupSpace = 0.4f
+                val barSpace = 0.05f
+
+                data.groupBars(0f, groupSpace, barSpace)
+                chart.data = data
+                chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                chart.xAxis.axisMinimum = -0.5f
+                chart.notifyDataSetChanged()
+                chart.animateY(1000)
+                chart.invalidate()
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(350.dp)
+            modifier = Modifier.fillMaxWidth().height(350.dp)
         )
     }
 }
 
 // You might already have this; only included to avoid compile errors:
 class MoneyValueFormatter : ValueFormatter() {
+    private val formatter = NumberFormat.getNumberInstance(Locale.US)
+
     override fun getFormattedValue(value: Float): String {
-        // Format float as currency or desired format, e.g.:
-        return String.format("%.0f", value)
+        // Format float as number with commas, ignoring fraction digits
+        return formatter.format(value.toDouble())
     }
 }

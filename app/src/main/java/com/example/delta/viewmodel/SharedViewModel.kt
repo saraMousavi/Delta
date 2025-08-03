@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
+import com.example.delta.data.dao.DebtsDao.CostAmountSummary
 import com.example.delta.data.dao.NotificationDao
 import com.example.delta.data.dao.UnitsDao.UnitDangSum
 import com.example.delta.data.entity.AuthorizationField
@@ -610,6 +611,17 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getPaysForBuilding(buildingId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getPaysForBuilding(buildingId)
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+    fun getDebtsGroupedByCostName(buildingId: Long): Flow<List<CostAmountSummary>> = flow {
+        val debts = debtsDao.getDebtsGroupedByCostName(buildingId)
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+
+    fun getPaysGroupedByCostName(buildingId: Long): Flow<List<CostAmountSummary>> = flow {
+        val debts = debtsDao.getPaysGroupedByCostName(buildingId)
         emit(debts)
     }.flowOn(Dispatchers.IO)
 

@@ -169,6 +169,15 @@ fun DetailDrawer(
                                         }
                                     )
                                     Spacer(Modifier.height(12.dp))
+                                    // Your NavigationDrawerItems below
+                                    NavigationDrawerItem(
+                                        label = { Text(context.getString(R.string.financial_dashboard)) },
+                                        selected = false,
+                                        onClick = {
+                                            context.startActivity(Intent(context, DashboardActivity::class.java))
+                                        }
+                                    )
+                                    Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.customizing)) },
                                         selected = false,
