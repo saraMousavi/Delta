@@ -67,6 +67,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -88,6 +89,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1390,78 +1392,108 @@ class BuildingProfileActivity : ComponentActivity() {
         val capitalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
             buildingId,
             FundType.CAPITAL
-        )
-            .collectAsState(initial = emptyList())
+        ).collectAsState(initial = emptyList())
+
         val operationalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
             buildingId,
             FundType.OPERATIONAL
-        )
-            .collectAsState(initial = emptyList())
+        ).collectAsState(initial = emptyList())
 
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)) {
-            // Capital Costs Section
-            Text(
-                text = context.getString(R.string.capital_funds),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            if (capitalInvoicedCosts.isEmpty()) {
-                Text(
-                    text = context.getString(R.string.no_transactions_recorded),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(capitalInvoicedCosts) { cost ->
-                        TransactionCostItem(cost = cost, context = context)
-                        HorizontalDivider(modifier = Modifier.height(4.dp))
+        var selectedTab by remember { mutableStateOf(0) }
+        val tabTitles = listOf(
+            context.getString(R.string.capital_funds),
+            context.getString(R.string.operation_funds)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            // Row of TextButtons as tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                tabTitles.forEachIndexed { index, title ->
+                    TextButton(
+                        onClick = { selectedTab = index },
+                        colors = if (selectedTab == index)
+                            ButtonDefaults.textButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
+                        else ButtonDefaults.textButtonColors(),
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = title.uppercase(),
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (selectedTab == index)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Operational Costs Section
-            Text(
-                text = context.getString(R.string.operation_funds),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            if (operationalInvoicedCosts.isEmpty()) {
-                Text(
-                    text = context.getString(R.string.no_transactions_recorded),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(operationalInvoicedCosts) { cost ->
-                        TransactionCostItem(cost = cost, context = context)
-                        HorizontalDivider(modifier = Modifier.height(4.dp))
+            when (selectedTab) {
+                0 -> {
+                    if (capitalInvoicedCosts.isEmpty()) {
+                        Text(
+                            text = context.getString(R.string.no_transactions_recorded),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(capitalInvoicedCosts) { cost ->
+                                TransactionCostItemBordered(cost = cost, context = context)
+                            }
+                        }
+                    }
+                }
+                1 -> {
+                    if (operationalInvoicedCosts.isEmpty()) {
+                        Text(
+                            text = context.getString(R.string.no_transactions_recorded),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(operationalInvoicedCosts) { cost ->
+                                TransactionCostItemBordered(cost = cost, context = context)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // A simple composable to display a cost as a transaction item
     @Composable
-    fun TransactionCostItem(cost: Costs, context: Context) {
-        Card(
+    fun TransactionCostItemBordered(cost: Costs, context: android.content.Context) {
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            elevation = CardDefaults.cardElevation(2.dp)
+                .padding(vertical = 4.dp)
+                .border(
+                    width = 0.7.dp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(6.dp)
+                ),
+            color = Color.Transparent, // No background color
+            shadowElevation = 0.dp,
+            shape = RoundedCornerShape(6.dp)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
@@ -1470,7 +1502,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${formatNumberWithCommas(cost.tempAmount)} تومان",
+                    text = "${formatNumberWithCommas(cost.tempAmount)} ${context.getString(R.string.toman)}",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -1481,11 +1513,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${context.getString(R.string.fund_type)}: ${
-                        cost.fundType.getDisplayName(context)
-                    }",
+                    text = "${context.getString(R.string.fund_type)}: ${cost.fundType.getDisplayName(context)}",
                     style = MaterialTheme.typography.bodyMedium,
-//                    fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1498,58 +1527,126 @@ class BuildingProfileActivity : ComponentActivity() {
         sharedViewModel: SharedViewModel,
         permissionLevel: PermissionLevel
     ) {
-        val residents by sharedViewModel.getResidents(building.buildingId).collectAsState(emptyList())
-        Log.d("residents", residents.toString())
-        val emergencyNumbers by sharedViewModel.getEmergencyNumbers(building.buildingId).collectAsState(emptyList())
-        Log.d("emergencyNumbers", emergencyNumbers.toString())
-        var showAddDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
-        Scaffold(
-            floatingActionButton = {
-                if (permissionLevel >= PermissionLevel.WRITE) {
-                    FloatingActionButton(
-                        onClick = { showAddDialog = true },
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Entry")
+        val buildingId = building.buildingId
+
+        // Two tabs: Emergency and Residents(Tenants)
+        var selectedTab by remember { mutableStateOf(0) }
+        val tabTitles = listOf(
+            context.getString(R.string.emergency_calls).uppercase(),
+            context.getString(R.string.tenants).uppercase()
+        )
+
+        // Load residents and emergency numbers separately
+        val residents by sharedViewModel.getResidents(buildingId).collectAsState(emptyList())
+        val emergencyNumbers by sharedViewModel.getEmergencyNumbers(buildingId).collectAsState(emptyList())
+        var showAddDialog by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                // Tab buttons row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        TextButton(
+                            onClick = { selectedTab = index },
+                            colors = if (selectedTab == index)
+                                ButtonDefaults.textButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                ) else ButtonDefaults.textButtonColors(),
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (selectedTab == index)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when (selectedTab) {
+                    0 -> {
+                        // Emergency Numbers tab content
+                        if (emergencyNumbers.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = context.getString(R.string.no_phone_recorded),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(emergencyNumbers) { entry ->
+                                    PhonebookEntryItem(entry, permissionLevel)
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        // Residents (Tenants) tab content
+                        if (residents.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = context.getString(R.string.no_phone_recorded),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(residents) { entry ->
+                                    PhonebookEntryItem(entry, permissionLevel)
+                                }
+                            }
+                        }
                     }
                 }
             }
-        ) { padding ->
-            if (residents.isEmpty() && emergencyNumbers.isEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = context.getString(R.string.no_phone_recorded),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            } else {
-                LazyColumn(modifier = Modifier.padding(padding)) {
-                    item {
-                        Text(
-                            context.getString(R.string.tenants),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(8.dp)
-                        )
+            // FABs, conditionally show one depending on selected tab
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                if (selectedTab == 0) {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Entry")
                     }
-
-                    items(residents) { entry ->
-                        PhonebookEntryItem(entry, permissionLevel)
-                    }
-
-                    item {
-                        Text(
-                            context.getString(R.string.emergency_calls),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                    items(emergencyNumbers) { entry ->
-                        PhonebookEntryItem(entry, permissionLevel)
+                } else if (selectedTab == 1) {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Entry")
                     }
                 }
             }
         }
-
         if (showAddDialog) {
             AddPhonebookEntryDialog(
                 buildingId = building.buildingId,
@@ -1562,25 +1659,32 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-    @SuppressLint("UseKtx")
     @Composable
     fun PhonebookEntryItem(entry: PhonebookEntry, permissionLevel: PermissionLevel) {
         val context = LocalContext.current
         var showDeleteDialog by remember { mutableStateOf(false) }
 
-        Card(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp)
-                .clickable {
-                    val intent = Intent(Intent.ACTION_DIAL).apply {
-                        data = "tel:${entry.phoneNumber}".toUri()
-                    }
-                    context.startActivity(intent)
-                }
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .border(
+                    width = 0.7.dp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(8.dp)
+                ),
+            color = Color.Transparent,
+            shadowElevation = 0.dp,
+            shape = RoundedCornerShape(8.dp)
         ) {
             Row(
                 modifier = Modifier
+                    .clickable {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = "tel:${entry.phoneNumber}".toUri()
+                        }
+                        context.startActivity(intent)
+                    }
                     .padding(16.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -1600,29 +1704,32 @@ class BuildingProfileActivity : ComponentActivity() {
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
-                title = { Text(text = context.getString(R.string.delete_call), style = MaterialTheme.typography.bodyLarge) },
-                text = { Text(context.getString(R.string.are_you_sure)) },
-                confirmButton = {
-                    TextButton( onClick = {
-                        sharedViewModel.deletePhonebookEntry(entry)
-                        showDeleteDialog = false
-                    }) { Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge) }
+                title = {
+                    Text(
+                        text = context.getString(R.string.delete_call),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 },
-                dismissButton = {
+                text = {
+                    Text(context.getString(R.string.are_you_sure))
+                },
+                confirmButton = {
                     TextButton(onClick = {
+                        // Your SharedViewModel's delete function here:
+                        // sharedViewModel.deletePhonebookEntry(entry)
                         showDeleteDialog = false
                     }) {
-                        Text(
-                            context.getString(R.string.cancel),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) {
+                        Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             )
         }
     }
-
-
     @Composable
     fun AddPhonebookEntryDialog(
         buildingId: Long,
