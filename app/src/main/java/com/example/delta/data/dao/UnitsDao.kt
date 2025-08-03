@@ -79,6 +79,13 @@ interface UnitsDao {
 """)
     fun getUnitsByOwnerIds(ownerIds: List<Long>): List<Units>
 
+    // Query to get units for ownerId
+    @Query("""
+        SELECT u.* FROM Units u 
+        INNER JOIN owners_units_cross_ref our ON u.unitId = our.unitId
+        WHERE our.ownerId = :ownerId
+    """)
+    suspend fun getUnitsForOwner(ownerId: Long): List<Units>
 
     @Query("""
     SELECT unitId, SUM(dang) as totalDang

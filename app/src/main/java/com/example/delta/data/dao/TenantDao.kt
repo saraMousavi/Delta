@@ -104,6 +104,16 @@ interface TenantDao {
 """)
     suspend fun getActiveTenantsWithRelationForUnit(unitId: Long): TenantWithRelation?
 
+    @Transaction
+    @Query("""
+    SELECT DISTINCT t.* FROM Tenants t
+    INNER JOIN tenants_units_cross_ref tur ON t.tenantId = tur.tenantId
+    INNER JOIN Units u ON tur.unitId = u.unitId
+    WHERE u.buildingId = :buildingId
+      AND t.status = 'فعال'
+      -- Optionally add more filters on tur.startDate, tur.endDate, or t.status if needed
+""")
+    suspend fun getActiveTenantsForBuilding(buildingId: Long): List<Tenants>
 
 
 
@@ -114,8 +124,8 @@ interface TenantDao {
 """)
     fun getActiveTenantUnitRelationships(unitId: Long, status: String): TenantsUnitsCrossRef
 
-    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM tenants_units_cross_ref WHERE tenantId = :tenantId)")
-    suspend fun getUnitForTenant(tenantId: Long): Units
+    @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM tenants_units_cross_ref WHERE tenantId = :tenantId) Limit 1")
+    suspend fun getUnitForTenant(tenantId: Long): Units?
 
     @Query("SELECT * FROM Units")
     suspend fun getAllUnits(): List<Units>

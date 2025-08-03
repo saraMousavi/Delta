@@ -55,6 +55,8 @@ import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Responsible
+import com.example.delta.enums.UserType
+import com.example.delta.enums.UserWithUnit
 import com.example.delta.init.Calculation
 import com.example.delta.init.Preference
 import com.example.delta.volley.Building
@@ -376,6 +378,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getBuildingsForUser(userId: Long): Flow<List<Buildings>> = flow {
         val units = buildingDao.getBuildingsForUser(userId)
+        emit(units)
+    }.flowOn(Dispatchers.IO)
+
+    fun getBuildingsWithUserRoles(): Flow<List<UsersBuildingsCrossRef>> = flow {
+        val units = buildingDao.getBuildingsWithUserRoles()
         emit(units)
     }.flowOn(Dispatchers.IO)
 
@@ -1943,7 +1950,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(auth)
     }.flowOn(Dispatchers.IO)
 
-    fun getUnitForTenant(tenantId: Long): Flow<Units> = flow {
+    fun getUnitForTenant(tenantId: Long): Flow<Units?> = flow {
         val tenant = tenantsDao.getUnitForTenant(tenantId)
         emit(tenant)
     }.flowOn(Dispatchers.IO)
@@ -2909,6 +2916,45 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             }
 
     }
+
+
+    // Combine owners and units into UserWithUnit list
+    fun getActiveOwnersForBuilding(buildingId: Long): Flow<List<UserWithUnit>> = flow {
+        val owners = ownersDao.getOwnersForBuilding(buildingId)
+        val userWithUnits = owners.map { owner ->
+            val units = unitsDao.getUnitsForOwner(owner.ownerId)
+            UserWithUnit(
+                id = owner.ownerId,
+                firstName = owner.firstName,
+                lastName = owner.lastName,
+                unitNumber = units.firstOrNull()?.unitNumber,
+                userType = UserType.OWNER
+            )
+        }
+        emit(userWithUnits)
+    }.flowOn(Dispatchers.IO)
+
+    // Combine tenants and units into UserWithUnit list
+    fun getActiveTenantsForBuilding(buildingId: Long): Flow<List<UserWithUnit>> = flow {
+        val tenants = tenantsDao.getActiveTenantsForBuilding(buildingId)
+        val userWithUnits = tenants.map { tenant ->
+            val units = tenantsDao.getUnitForTenant(tenant.tenantId)
+            UserWithUnit(
+                id = tenant.tenantId,
+                firstName = tenant.firstName,
+                lastName = tenant.lastName,
+                unitNumber = units?.unitNumber ?: "",
+                userType = UserType.TENANT
+            )
+        }
+        emit(userWithUnits)
+    }.flowOn(Dispatchers.IO)
+
+    // Convenience: get all users (owners + tenants) for building combined
+    fun getOwnersAndTenantsForBuilding(buildingId: Long): Flow<List<UserWithUnit>> =
+        combine(getActiveOwnersForBuilding(buildingId), getActiveTenantsForBuilding(buildingId)) { owners, tenants ->
+            owners + tenants
+        }
 
 
 

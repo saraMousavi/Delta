@@ -102,11 +102,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.delta.init.NavItem
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.items
 import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -685,44 +690,32 @@ fun AuthScreen() {
 //        }
 //    }
 //}
-
 @Composable
 fun SettingsScreen(
     context: Context
 ) {
     val showAuthScreen by remember { mutableStateOf(false) }
-    val items = listOf(
-        NavItem(
-            title = R.string.charges_calculation,
-            icon = Icons.Outlined.Calculate,
-            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
-        ),
 
-         NavItem(
+    val chargeItem = NavItem(
+        title = R.string.charges_calculation,
+        icon = Icons.Outlined.Calculate,
+        onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
+    )
+
+    val firstGroup = listOf(
+        NavItem(
             title = R.string.supporting,
             icon = Icons.Outlined.Support,
             onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
         ),
-//        NavItem(
-//            title = R.string.owners_list,
-//            icon = Icons.Outlined.Badge,
-//            onClick = { context.startActivity(Intent(context, OwnersActivity::class.java)) }
-//        ),
-//        NavItem(
-//            title = R.string.tenant_list,
-//            icon = Icons.Outlined.People,
-//            onClick = { context.startActivity(Intent(context, TenantsActivity::class.java)) }
-//        ),
-//        NavItem(
-//            title = R.string.cost_list,
-//            icon = Icons.Outlined.MoneyOff,
-//            onClick = { context.startActivity(Intent(context, CostActivity::class.java)) }
-//        ),
         NavItem(
             title = R.string.income_list,
             icon = Icons.Outlined.AttachMoney,
             onClick = { context.startActivity(Intent(context, EarningsActivity::class.java)) }
-        ),
+        )
+    )
+
+    val secondGroup = listOf(
         NavItem(
             title = R.string.building_type_list,
             icon = Icons.Outlined.Apartment,
@@ -741,26 +734,152 @@ fun SettingsScreen(
     )
 
     Scaffold { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()) // debug background
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items.forEach { item ->
+            // Charge calculation full width row
+            item {
                 ClickableSettingItem(
-                    title = context.getString(item.title),
-                    icon = item.icon,
-                    onClick = item.onClick
+                    title = context.getString(chargeItem.title),
+                    icon = chargeItem.icon,
+                    onClick = chargeItem.onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    iconOnTop = false
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+
+            // First group grid wrapped in Box to enforce max height
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp) // adjust based on your content
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        userScrollEnabled = false
+                    ) {
+                        items(firstGroup) { item ->
+                            ClickableSettingItem(
+                                title = context.getString(item.title),
+                                icon = item.icon,
+                                onClick = item.onClick,
+                                modifier = Modifier.height(120.dp),
+                                iconOnTop = true
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Second group grid wrapped in Box to enforce max height
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp) // adjust as needed to fit all rows without scrolling
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        userScrollEnabled = false
+                    ) {
+                        items(secondGroup) { item ->
+                            ClickableSettingItem(
+                                title = context.getString(item.title),
+                                icon = item.icon,
+                                onClick = item.onClick,
+                                modifier = Modifier.height(120.dp),
+                                iconOnTop = true
+                            )
+                        }
+                    }
+                }
             }
         }
-
     }
+
     if (showAuthScreen) {
         AuthScreen()
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ClickableSettingItem(
+    title: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconOnTop: Boolean = true
+) {
+    Card(
+        modifier = modifier
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        if (iconOnTop) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    modifier = Modifier
+                        .size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+        } else {
+            // Icon left, title right row for full width charge row
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

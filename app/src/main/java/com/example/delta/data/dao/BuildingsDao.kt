@@ -47,7 +47,7 @@ interface BuildingsDao {
     SELECT b.*
         FROM buildings b
             INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
-            WHERE b.userId = :userId
+            WHERE ub.userId = :userId
 """)
     fun getBuildingsForUser(userId: Long): List<Buildings>
 

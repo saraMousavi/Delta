@@ -432,4 +432,6 @@
     <string name="transfer_to_operational">مبلغ دریافتی به صندوق جاری انتقال یافت.</string>
     <string name="receipt_money">دریافت شود</string>
     <string name="insufficient_operational_fund_balance">موجودی صندوق جاری جهت ثبت فاکتور کافی نمی باشد.</string>
+    <string name="no_owner_recorded">مالکی برای این ساختمان ثبت نشده است.</string>
+    <string name="no_tenant_recorded">ساکنی برای این ساختمان ثبت نشده است.</string>
 </resources>

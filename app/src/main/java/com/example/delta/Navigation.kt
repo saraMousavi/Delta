@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -53,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -69,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.example.delta.data.entity.Notification
 import com.example.delta.enums.NotificationType
+import com.example.delta.enums.UserWithUnit
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
 import kotlinx.coroutines.flow.firstOrNull
@@ -102,18 +106,24 @@ fun DetailDrawer(
             ModalNavigationDrawer(
                 drawerContent = {
                     ModalDrawerSheet {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         NotificationsDrawerContent(
                             sharedViewModel = sharedViewModel,
                             onNotificationRead = { notificationId ->
                                 scope.launch {
-                                    val crossRef = sharedViewModel.getUsersNotificationsById(notificationId).firstOrNull()
+                                    val crossRef =
+                                        sharedViewModel.getUsersNotificationsById(notificationId)
+                                            .firstOrNull()
                                     if (crossRef != null && !crossRef.isRead) {
                                         val updatedCrossRef = crossRef.copy(isRead = true)
-                                        sharedViewModel.updateUserNotificationCrossRef(updatedCrossRef)
+                                        sharedViewModel.updateUserNotificationCrossRef(
+                                            updatedCrossRef
+                                        )
                                     }
                                 }
                             }
                         )
+                        }
                     }
                 },
                 drawerState = notificationsDrawerState,
@@ -291,75 +301,96 @@ fun NotificationsDrawerContent(
     var showDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // "Create Notification" Button
-    Button(
-        onClick = { showDialog = true },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .padding(16.dp)
-    ) {
-        Text(text = context.getString(R.string.create_notification)
-        , style = MaterialTheme.typography.bodyLarge)
-    }
 
     if (showDialog) {
+        // When calling NotificationCreationDialog, change this to:
+
         NotificationCreationDialog(
             onDismiss = { showDialog = false },
-            onCreate = { notification, targetUsers ->
-                sharedViewModel.insertNotification(notification, targetUsers)
+            onCreate = { notification, selectedOwnerIds, selectedTenantIds ->
+                // Merge owners and tenants user IDs
+                val targetUserIds = selectedOwnerIds + selectedTenantIds
+                Log.d("targetUserIds", targetUserIds.toString())
+                sharedViewModel.insertNotification(notification, targetUserIds)
                 showDialog = false
             },
             sharedViewModel = sharedViewModel
         )
+
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(8.dp)
     ) {
-        Text(context.getString(R.string.manager_notification), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-
-        if (managerNotifications.isEmpty()) {
-            Text(
-                text = context.getString(R.string.no_manager_notification),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-        } else {
-            managerNotifications.forEach { notificationRead ->
-                NotificationCard(
-                    notification = notificationRead.notification,
-                    onNotificationRead = onNotificationRead,
-                    sharedViewModel = sharedViewModel,
-                    isRead = notificationRead.isRead
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-        }
-
         Spacer(Modifier.height(24.dp))
 
-        Text(text = context.getString(R.string.system_notification), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-
-        if (systemNotifications.isEmpty()) {
-            Text(
-                text = context.getString(R.string.no_system_notification),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-        } else {
-            systemNotifications.forEach { notificationRead ->
-                NotificationCard(
-                    notification = notificationRead.notification,
-                    onNotificationRead = onNotificationRead,
-                    sharedViewModel = sharedViewModel,
-                    isRead = notificationRead.isRead
+        Row {
+            Button(
+                onClick = { showDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = context.getString(R.string.create_notification),
+                    style = MaterialTheme.typography.bodyLarge
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Column (modifier = Modifier.padding(12.dp)){
+            Text(
+                context.getString(R.string.manager_notification),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+
+            if (managerNotifications.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_manager_notification),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            } else {
+                managerNotifications.forEach { notificationRead ->
+                    NotificationCard(
+                        notification = notificationRead.notification,
+                        onNotificationRead = onNotificationRead,
+                        sharedViewModel = sharedViewModel,
+                        isRead = notificationRead.isRead
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                text = context.getString(R.string.system_notification),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+
+            if (systemNotifications.isEmpty()) {
+                Text(
+                    text = context.getString(R.string.no_system_notification),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            } else {
+                systemNotifications.forEach { notificationRead ->
+                    NotificationCard(
+                        notification = notificationRead.notification,
+                        onNotificationRead = onNotificationRead,
+                        sharedViewModel = sharedViewModel,
+                        isRead = notificationRead.isRead
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
             }
         }
     }
@@ -490,36 +521,33 @@ fun NotificationCard(
     }
 }
 
-
 @Composable
 fun NotificationCreationDialog(
     onDismiss: () -> Unit,
-    onCreate: (notification: Notification, targetUserIds: List<Long>) -> Unit,
-    sharedViewModel: SharedViewModel // Pass your ViewModel here to get buildings and users
+    onCreate: (notification: Notification, selectedOwnerIds: List<Long>, selectedTenantIds: List<Long>) -> Unit,
+    sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
     val userId = Preference().getUserId(context = context)
 
-    // States for title/message/type input
     var title by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(NotificationType.MANAGER) }
 
-    // Loading buildings related to user - collect as state
-    val buildings by sharedViewModel.getBuildingsForUser(userId)
-        .collectAsState(initial = emptyList())
-
-    // Selected building id state
+    val buildings by sharedViewModel.getBuildingsForUser(userId).collectAsState(initial = emptyList())
     var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
 
-    // Loading users related to selected building
-    val usersForBuilding by sharedViewModel.getUsersForBuilding(selectedBuildingId ?: -1L)
-        .collectAsState(initial = emptyList())
+    // Owners and tenants separately
+    val owners by selectedBuildingId?.let { sharedViewModel.getActiveOwnersForBuilding(it).collectAsState(initial = emptyList()) }
+        ?: remember { mutableStateOf(emptyList()) }
 
-    // Selected users states represented by a Set of their IDs for quick add/remove
-    var selectedUserIds by remember { mutableStateOf(setOf<Long>()) }
+    val tenants by produceState(initialValue = emptyList<UserWithUnit>(), key1 = selectedBuildingId) {
+        selectedBuildingId?.let { it1 -> sharedViewModel.getActiveTenantsForBuilding(it1).collect { value = it } }
+    }
 
-    // Build Notification object base (without id, timestamp set on create)
+    var selectedOwnerIds by remember { mutableStateOf(setOf<Long>()) }
+    var selectedTenantIds by remember { mutableStateOf(setOf<Long>()) }
+
     val notification = Notification(
         title = title,
         message = message,
@@ -528,24 +556,21 @@ fun NotificationCreationDialog(
         timestamp = System.currentTimeMillis()
     )
 
+    val isTitleValid = title.isNotBlank()
+    val isMessageValid = message.isNotBlank()
+    val isBuildingSelected = selectedBuildingId != null
+    val isAnyOwnerSelected = selectedOwnerIds.isNotEmpty()
+    val isAnyTenantSelected = selectedTenantIds.isNotEmpty()
+    // At least one owner or tenant must be selected
+    val isUserSelected = isAnyOwnerSelected || isAnyTenantSelected
+    val isFormValid = isTitleValid && isMessageValid && isBuildingSelected && isUserSelected
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             Button(
-                onClick = {
-                    // Validate inputs: title/message and at least one selected user
-                    //@todo validation
-//                    if (title.isBlank() || message.isBlank()) {
-//                        Toast.makeText(context, "Please enter title and message", Toast.LENGTH_SHORT).show()
-//                        return@Button
-//                    }
-//                    if (selectedUserIds.isEmpty()) {
-//                        Toast.makeText(context, "Please select at least one user", Toast.LENGTH_SHORT).show()
-//                        return@Button
-//                    }
-                    // Call onCreate with notification and selected target users
-                    onCreate(notification, selectedUserIds.toList())
-                }
+                onClick = { onCreate(notification, selectedOwnerIds.toList(), selectedTenantIds.toList()) },
+                enabled = isFormValid
             ) {
                 Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
             }
@@ -555,36 +580,38 @@ fun NotificationCreationDialog(
                 Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
             }
         },
-        title = { Text(text = context.getString(R.string.create_notification), style = MaterialTheme.typography.bodyLarge) },
+        title = {
+            Text(text = context.getString(R.string.create_notification), style = MaterialTheme.typography.bodyLarge)
+        },
         text = {
             Column(modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())) {
+
                 // Title input
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(text = context.getString(R.string.title), style = MaterialTheme.typography.bodyLarge) },
+                    isError = !isTitleValid,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Message input (multi-line)
+                // Message input
                 OutlinedTextField(
                     value = message,
                     onValueChange = { message = it },
                     label = { Text(text = context.getString(R.string.message), style = MaterialTheme.typography.bodyLarge) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
+                    isError = !isMessageValid,
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
                     maxLines = 6
                 )
+                Spacer(Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
+                // Notification type dropdown (same as before)...
 
-                // Notification type dropdown
                 var expandedTypeDropdown by remember { mutableStateOf(false) }
                 Box {
                     OutlinedTextField(
@@ -594,18 +621,12 @@ fun NotificationCreationDialog(
                         readOnly = true,
                         trailingIcon = {
                             IconButton(onClick = { expandedTypeDropdown = true }) {
-                                Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = "Select Type"
-                                )
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = context.getString(R.string.select_type))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    DropdownMenu(
-                        expanded = expandedTypeDropdown,
-                        onDismissRequest = { expandedTypeDropdown = false }
-                    ) {
+                    DropdownMenu(expanded = expandedTypeDropdown, onDismissRequest = { expandedTypeDropdown = false }) {
                         NotificationType.entries.forEach { enumType ->
                             DropdownMenuItem(
                                 text = { Text(enumType.name) },
@@ -618,19 +639,19 @@ fun NotificationCreationDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // Buildings selection list header
+                // Buildings selection
                 Text(text = context.getString(R.string.building_select), style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
                 if (buildings.isEmpty()) {
                     Text(
-                        text = context.getString(R.string.no_building_recorded), style = MaterialTheme.typography.bodyLarge,
+                        text = context.getString(R.string.no_building_recorded),
+                        style = MaterialTheme.typography.bodyLarge,
                         color = Color.Gray
                     )
                 } else {
-                    // List of buildings - single selection
                     buildings.forEach { building ->
                         Row(
                             modifier = Modifier
@@ -648,57 +669,88 @@ fun NotificationCreationDialog(
                                 selected = selectedBuildingId == building.buildingId,
                                 onClick = { selectedBuildingId = building.buildingId }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(text = building.name, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // Users related to selected building header
-                Text(text = context.getString(R.string.user_select), style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
+                // Owners section
+                if (selectedBuildingId != null) {
+                    Text(text = context.getString(R.string.owners), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    if (owners.isEmpty()) {
+                        Text(
+                            text = context.getString(R.string.no_owner_recorded),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                    } else {
+                        owners.forEach { owner ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedOwnerIds = if (selectedOwnerIds.contains(owner.id)) {
+                                            selectedOwnerIds - owner.id
+                                        } else {
+                                            selectedOwnerIds + owner.id
+                                        }
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = selectedOwnerIds.contains(owner.id),
+                                    onCheckedChange = { checked ->
+                                        selectedOwnerIds = if (checked) selectedOwnerIds + owner.id else selectedOwnerIds - owner.id
+                                    }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(text = "${owner.firstName} ${owner.lastName} - ${context.getString(R.string.unit)} ${owner.unitNumber ?: "-"}", style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
 
-                if (selectedBuildingId == null) {
-                    Text(
-                        text = context.getString(R.string.please_select_building), style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                } else if (usersForBuilding.isEmpty()) {
-                    Text(
-                        text = context.getString(R.string.no_user_recorded), style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                } else {
-                    // List of users with checkboxes
-                    usersForBuilding.forEach { user ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedUserIds = if (selectedUserIds.contains(user.userId)) {
-                                        selectedUserIds - user.userId
-                                    } else {
-                                        selectedUserIds + user.userId
+                Spacer(Modifier.height(8.dp))
+
+                // Tenants section
+                if (selectedBuildingId != null) {
+                    Text(text = context.getString(R.string.tenants), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    if (tenants.isEmpty()) {
+                        Text(
+                            text = context.getString(R.string.no_tenant_recorded),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                    } else {
+                        tenants.forEach { tenant ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedTenantIds = if (selectedTenantIds.contains(tenant.id)) {
+                                            selectedTenantIds - tenant.id
+                                        } else {
+                                            selectedTenantIds + tenant.id
+                                        }
                                     }
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = selectedUserIds.contains(user.userId),
-                                onCheckedChange = { checked ->
-                                    selectedUserIds = if (checked) {
-                                        selectedUserIds + user.userId
-                                    } else {
-                                        selectedUserIds - user.userId
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = selectedTenantIds.contains(tenant.id),
+                                    onCheckedChange = { checked ->
+                                        selectedTenantIds = if (checked) selectedTenantIds + tenant.id else selectedTenantIds - tenant.id
                                     }
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            //@todo show users name
-                            Text(text = user.mobileNumber)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(text = "${tenant.firstName} ${tenant.lastName} - ${context.getString(R.string.unit)} ${tenant.unitNumber ?: "-"}", style = MaterialTheme.typography.bodyLarge)
+                            }
                         }
                     }
                 }
@@ -706,6 +758,5 @@ fun NotificationCreationDialog(
         }
     )
 }
-
 
 
