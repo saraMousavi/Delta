@@ -58,6 +58,7 @@ import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
+import com.example.delta.init.Calculation
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.SharedViewModel
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +107,7 @@ class ChargeCalculationActivity : ComponentActivity() {
 @Composable
 fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     val context = LocalContext.current
+    var amountInputs by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // State variables
     var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
@@ -118,33 +120,41 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
     // Load buildings and periods (assumed from ViewModel or static)
     val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
-    val fiscalYears = (1400..1420).map { it.toString() }
+    val fiscalYears = (1404..1415).map { it.toString() }
     var selectedYear by remember { mutableStateOf(fiscalYears.first()) }
 
     var chargeAlreadyCalculated by remember { mutableStateOf(false) }
     var lastCalculatedCharges by remember { mutableStateOf<Map<Units, Double>?>(null) }
 
-
     val coroutineScope = rememberCoroutineScope()
     var selectedCalculation by remember {
         mutableStateOf(CalculateMethod.AUTOMATIC.getDisplayName(context)) // Default to "Owners"
     }
+    val isCalculateEnabled by remember(costItems) {
+        derivedStateOf {
+            costItems.any { it.tempAmount > 0 }
+        }
+    }
+
     // On building selection, load costs from sharedViewModel, map to CostInputModel
+    var lastSavedCostItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
+
     LaunchedEffect(selectedBuilding, selectedYear) {
         selectedBuilding?.let { building ->
-            // Get single snapshot of costs
             val costs = sharedViewModel.getCostsForBuildingWithChargeFlag(building.buildingId)
                 .flowOn(Dispatchers.IO)
-                .first() // Collect only first emission
+                .first()
             costItems = costs
-            sharedViewModel.chargeCostsList.value = costs
+            // Initialize amountInputs synced with loaded costItems
+            amountInputs = costs.map { it.tempAmount.toString() }
 
+            lastSavedCostItems = costs // Save a copy for reset
+            sharedViewModel.chargeCostsList.value = costs
             chargeAlreadyCalculated = costs.isNotEmpty()
 
             if (chargeAlreadyCalculated) {
                 isEditMode = false
-                lastCalculatedCharges =
-                    sharedViewModel.getLastCalculatedCharges(building.buildingId, selectedYear)
+                lastCalculatedCharges = sharedViewModel.getLastCalculatedCharges(building.buildingId, selectedYear)
             } else {
                 isEditMode = true
                 lastCalculatedCharges = null
@@ -222,7 +232,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             // Show calculated charges per unit
                             lastCalculatedCharges!!.forEach { (unit, charge) ->
                                 Text(
-                                    text = "${unit.unitNumber}: ${String.format("%.2f", charge)}",
+                                    text = "${unit.unitNumber}: ${formatNumberWithCommas(charge)}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.padding(vertical = 2.dp)
                                 )
@@ -230,33 +240,64 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             Spacer(Modifier.height(16.dp))
                         }
                     }
-                    val costList = sharedViewModel.chargeCostsList.value
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = context.getString(R.string.title),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.4f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = context.getString(R.string.amount),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.3f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = context.getString(R.string.calculate_method),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.3f)
+                            )
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                    val costList = costItems   // Use costItems as source
+
                     items(costList.size) { index ->
                         val item = costList[index]
                         CostInputRow(
-                            costInput = item,
+                            costInput = costList[index],
+                            amount = amountInputs.getOrElse(index) { "0" },  // Use the string input, can be ""
+                            calculateMethod = costItems[index].calculateMethod,
                             isEditMode = isEditMode,
                             onAmountChange = { newAmount ->
-                                costItems = costItems.toMutableList()
-                                    .also {
-                                        it[index] =
-                                            it[index].copy(tempAmount = if (newAmount.isEmpty()) 0.0 else newAmount.toDouble())
-                                    }
+                                amountInputs = amountInputs.toMutableList().also { it[index] = newAmount }
+                                costItems = costItems.toMutableList().also {
+                                    it[index] = it[index].copy(tempAmount = newAmount.toDoubleOrNull() ?: 0.0)
+                                }
                             },
                             onCalculateMethodChange = { newMethod ->
-                                costItems = costItems.toMutableList()
-                                    .also {
-                                        it[index] = it[index].copy(calculateMethod = newMethod)
-                                    }
+                                costItems = costItems.toMutableList().also {
+                                    it[index] = it[index].copy(calculateMethod = newMethod)
+                                }
                             }
                         )
+
                         Spacer(Modifier.height(8.dp))
                     }
+
                 }
 
                 if (isEditMode) {
                     Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement  = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(onClick = { showAddCostDialog = true }) {
@@ -265,23 +306,65 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
+                        Button(
+                            onClick = {
+                                costItems = lastSavedCostItems.map { it.copy() } // Defensive copy to avoid mutation issues
+                                isEditMode = false
+                            }
+                        ) {
+                            Text(
+                                text = context.getString(R.string.display),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
                         Button(onClick = {
                             isEditMode = false
                             coroutineScope.launch {
-                                val units =
-                                    sharedViewModel.getUnitsForBuilding(selectedBuilding!!.buildingId)
-                                        .first()
-                                // or collect with a one-shot here, depending on your API
-                                val chargeMap = units.associate { unit ->
-                                    // Calculate charge here based on costItems and unit
-                                    // For demonstration, sum of all tempAmounts equally divided or your logic
-                                    val totalCharge = costItems.sumOf { it.tempAmount }
-                                    unit to totalCharge // Replace with correct calculation logic
+                                val units = sharedViewModel.getUnitsForBuilding(selectedBuilding!!.buildingId).first()
+
+                                val calculation = Calculation()
+
+                                // 1. Fetch tenant counts for all units asynchronously in parallel or sequentially
+                                val tenantCountsByUnitId: Map<Long, Int> = units.associate { unit ->
+                                    // call DAO or ViewModel method to get tenant count per unit
+                                    val tenantCountResult =
+                                        sharedViewModel.getNumberOfUnitsTenantForUnit(unit.unitId)
+                                    // assume tenantCountResult.numberOfTenants is String? or Int? convert to Int safely
+                                    unit.unitId to (tenantCountResult?.toIntOrNull() ?: 1)
                                 }
+
+                                // 2. Define synchronous lookup function using the pre-fetched map
+                                val getTenantCountForUnit: (Long) -> Int = { unitId ->
+                                    tenantCountsByUnitId[unitId] ?: 1
+                                }
+
+                                // 3. Prepare CostInfo map
+                                data class CostInfo(val amount: Double, val method: CalculateMethod)
+                                val costsInfoMap: Map<String, CostInfo> = costItems.associate { cost ->
+                                    cost.costName to CostInfo(cost.tempAmount, cost.calculateMethod)
+                                }
+
+                                // 4. Calculate charges for each unit using calculation method and pre-fetched tenant counts
+                                val chargeMap = units.associateWith { unit ->
+                                    costsInfoMap.entries.sumOf { (_, costInfo) ->
+                                        calculation.calculateAmountByMethod(
+                                            costAmount = costInfo.amount,
+                                            unit = unit,
+                                            allUnits = units,
+                                            calculationMethod = costInfo.method,
+                                            getTenantCountForUnit = getTenantCountForUnit
+                                        )
+                                    }
+                                }
+
                                 calculatedCharges = chargeMap
                                 showChargeResultDialog = true
                             }
-                        }) {
+
+
+                        },
+                            enabled = isCalculateEnabled) {
                             Text(
                                 context.getString(R.string.calculate),
                                 style = MaterialTheme.typography.bodyLarge
@@ -440,104 +523,80 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     }
 }
 
+
 @Composable
 fun CostInputRow(
     costInput: Costs,
+    amount: String,
+    calculateMethod: CalculateMethod,
     isEditMode: Boolean,
     onAmountChange: (String) -> Unit,
     onCalculateMethodChange: (CalculateMethod) -> Unit
 ) {
     val context = LocalContext.current
-    // Keep local input state synchronized with costInput.tempAmount when editing
-    var amount by remember(costInput.costId) { mutableStateOf(costInput.tempAmount.toString()) }
     val transformation = remember { NumberCommaTransformation() }
-// Convert to words
-    val amountInWords = remember(amount) {
-        derivedStateOf {
-            transformation.numberToWords(
-                context,
-                amount.toLongOrNull() ?: 0L
-            )
-        }
+
+    val filteredMethods = remember {
+        CalculateMethod.entries.filter { it != CalculateMethod.DANG && it != CalculateMethod.AUTOMATIC }.toMutableList()
+    }.apply {
+        if (calculateMethod !in this) add(calculateMethod)
     }
+
+    // Compute amountInWords directly on each recomposition according to amount param
+    val amountInWords = transformation.numberToWords(
+        context,
+        amount.toDoubleOrNull()?.toLong() ?: 0L  // Convert decimal input to long
+    )
+
     if (isEditMode) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { newValue ->
-                        // Allow only valid numbers (optional)
                         if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*\$"))) {
-                            amount = newValue
                             onAmountChange(newValue)
                         }
                     },
-                    label = {
-                        Text(
-                            text = costInput.costName,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
+                    label = { Text(costInput.costName, style = MaterialTheme.typography.bodyLarge) },
                     singleLine = true,
-                    enabled = true, // editable since isEditMode == true
+                    enabled = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(0.6f)
                 )
-
                 Spacer(Modifier.width(8.dp))
-
                 ExposedDropdownMenuBoxExample(
-                    items = CalculateMethod.entries.toList(),
-                    selectedItem = costInput.calculateMethod,
-                    onItemSelected = { selectedMethod ->
-                        onCalculateMethodChange(selectedMethod)
-                    },
+                    items = filteredMethods,
+                    selectedItem = calculateMethod,
+                    onItemSelected = onCalculateMethodChange,
                     label = context.getString(R.string.calculate_method),
                     modifier = Modifier.weight(0.4f),
                     itemLabel = { it.getDisplayName(context) }
                 )
             }
             Text(
-                text = " ${amountInWords.value} ${context.getString(R.string.toman)}",
+                text = " $amountInWords ${context.getString(R.string.toman)}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(context.getColor(R.color.grey)),
                 modifier = Modifier.padding(top = 4.dp)
             )
-
-    }
+        }
     } else {
-        // Show non-editable row with texts
+        // Display mode row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = costInput.costName,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(0.4f)
-            )
+            Text(costInput.costName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.4f))
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = amount,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(0.3f)
-            )
+            Text(amount, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.3f))
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = costInput.calculateMethod.getDisplayName(context),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(0.3f)
-            )
+            Text(calculateMethod.getDisplayName(context), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.3f))
         }
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
@@ -569,10 +628,7 @@ fun ChargeResultDialog(
                     results.forEach { (unit, charge) ->
                         Text(
                             text = " ${context.getString(R.string.unit)} ${unit.unitNumber} : ${
-                                String.format(
-                                    "%.2f",
-                                    charge
-                                )
+                                formatNumberWithCommas(charge)
                             } ${context.getString(R.string.toman)}",
                             style = MaterialTheme.typography.bodyLarge
                         )

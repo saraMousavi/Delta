@@ -71,6 +71,13 @@ interface TenantDao {
             " and status = 'فعال')")
     fun getActiveTenantForUnit(unitId: Long): Tenants?
 
+
+    @Transaction
+    @Query("SELECT number_of_tenants FROM Tenants WHERE tenantId IN " +
+            "(SELECT tenantId FROM tenants_units_cross_ref WHERE unitId = :unitId" +
+            " and status = 'فعال')")
+    suspend fun getNumberOfUnitsTenantForUnit(unitId: Long): String?
+
     // Get cross-reference entries for a unit
     @Query("SELECT * FROM tenants_units_cross_ref WHERE unitId = :unitId")
     suspend fun getTenantUnitRelationships(unitId: Long): List<TenantsUnitsCrossRef>
@@ -122,7 +129,7 @@ interface TenantDao {
     WHERE unitId = :unitId 
     AND status = :status
 """)
-    fun getActiveTenantUnitRelationships(unitId: Long, status: String): TenantsUnitsCrossRef
+    fun getActiveTenantUnitRelationships(unitId: Long, status: String): TenantsUnitsCrossRef?
 
     @Query("SELECT * FROM Units WHERE unitId IN (SELECT unitId FROM tenants_units_cross_ref WHERE tenantId = :tenantId) Limit 1")
     suspend fun getUnitForTenant(tenantId: Long): Units?

@@ -198,6 +198,7 @@ fun TenantOverviewTab(
     var email by remember(isEditing) { mutableStateOf(twr.tenant.email) }
     var startDate by remember(isEditing) { mutableStateOf(twr.tenant.startDate) }
     var endDate by remember(isEditing) { mutableStateOf(twr.tenant.endDate) }
+    var numberOfTenant by remember(isEditing) { mutableStateOf(twr.tenant.numberOfTenants) }
 
     var selectedStatus by remember(isEditing) { mutableStateOf(twr.crossRef.status) }
 
@@ -220,6 +221,7 @@ fun TenantOverviewTab(
             email.isNotBlank() &&
             startDate.isNotBlank() &&
             endDate.isNotBlank() &&
+            numberOfTenant.isNotBlank() &&
             selectedStatus.isNotBlank()
 
     Box(
@@ -248,6 +250,8 @@ fun TenantOverviewTab(
                         OwnerTextField(R.string.first_name, firstName) { firstName = it }
                         Spacer(Modifier.height(8.dp))
                         OwnerTextField(R.string.last_name, lastName) { lastName = it }
+                        Spacer(Modifier.height(8.dp))
+                        OwnerTextField(R.string.number_of_tenants, numberOfTenant) { numberOfTenant = it }
                         Spacer(Modifier.height(8.dp))
                         OwnerTextField(R.string.phone_number, phone) { phone = it }
                         Spacer(Modifier.height(8.dp))
@@ -339,6 +343,10 @@ fun TenantOverviewTab(
                         // Display mode -- use OwnerInfoRow with icons and labels
                         OwnerInfoRow(Icons.Default.Person, "${twr.tenant.firstName} ${twr.tenant.lastName}")
                         Spacer(Modifier.height(8.dp))
+                        OwnerInfoRow(Icons.Default.Person,
+                            "${context.getString(R.string.number_of_tenants)}:" +
+                                    " ${twr.tenant.numberOfTenants}")
+                        Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Phone,
                             "${context.getString(R.string.phone_number)}: ${twr.tenant.phoneNumber}"
@@ -410,6 +418,7 @@ fun TenantOverviewTab(
                                     updatedTenant = twr.tenant.copy(
                                         firstName = firstName.trim(),
                                         lastName = lastName.trim(),
+                                        numberOfTenants = numberOfTenant.trim(),
                                         phoneNumber = phone.trim(),
                                         mobileNumber = mobile.trim(),
                                         email = email.trim(),

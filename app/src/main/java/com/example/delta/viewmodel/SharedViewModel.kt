@@ -4,8 +4,8 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
-import com.example.delta.data.dao.DebtsDao.CostAmountSummary
 import com.example.delta.data.dao.NotificationDao
 import com.example.delta.data.dao.UnitsDao.UnitDangSum
 import com.example.delta.data.entity.AuthorizationField
@@ -54,7 +53,6 @@ import com.example.delta.enums.FundType
 import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
-import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Responsible
 import com.example.delta.enums.UserType
 import com.example.delta.enums.UserWithUnit
@@ -86,6 +84,7 @@ import kotlinx.coroutines.flow.combine
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
 
+    @SuppressLint("StaticFieldLeak")
     private val context = getApplication<Application>().applicationContext
     val userId = Preference().getUserId(context)
 
@@ -127,8 +126,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var isLoading by mutableStateOf(false)
 
 
-    var selectedChargeType by mutableStateOf(listOf<String>())
-
     var unitsAdded by mutableStateOf(false)
     var buildingTypeId by mutableIntStateOf(0)
     var buildingUsageId by mutableIntStateOf(0)
@@ -146,7 +143,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var unitsList = mutableStateListOf<Units>()
     var debtsList = mutableStateListOf<Debts>()
     var unitDebtsList = mutableStateListOf<Debts>()
-    var newOwnerId: Long by mutableLongStateOf(0L)
     var newTenantId: Long by mutableLongStateOf(0L)
     var selectedOwnerForUnit by mutableStateOf<Owners?>(null)
     var fileList = mutableStateListOf<UploadedFileEntity>()
@@ -155,7 +151,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedCredits = MutableStateFlow<Set<Long>>(emptySet())
     val selectedCredits: StateFlow<Set<Long>> = _selectedCredits
     private val _creditsForEarning = MutableStateFlow<List<Credits>>(emptyList())
-    val creditsForEarning: StateFlow<List<Credits>> = _creditsForEarning
 
     var selectedBuildingTypes by mutableStateOf<BuildingTypes?>(null)
     var selectedCityComplex by mutableStateOf<CityComplex?>(null)
@@ -173,17 +168,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     var automaticCharge by mutableStateOf(false)
-    var fillCostsByBuilding by mutableStateOf(false)
-    var chargeFundFlagChecked by mutableStateOf(false)
-    var rentMortgageFundFlagChecked by mutableStateOf(false)
-
     // State to hold current balance of operational fund
-    private val _operationalFundBalance = mutableStateOf(0.0)
-    val operationalFundBalance: State<Double> = _operationalFundBalance
-
+    private val _operationalFundBalance = mutableDoubleStateOf(0.0)
     // State to hold current balance of capital fund
-    private val _capitalFundBalance = mutableStateOf(0.0)
-    val capitalFundBalance: State<Double> = _capitalFundBalance
+    private val _capitalFundBalance = mutableDoubleStateOf(0.0)
 
     var sameCosts by mutableStateOf(true)
     var currentRoleId by mutableLongStateOf(0L)
@@ -196,14 +184,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     val tenantMortgageDebtMap = mutableStateMapOf<Long, Double>()
 
 
-    var chargeAmount by mutableStateOf("")
-
 
     // Options Lists
     val periods = Period.entries
 
     // Hold the flow of all notifications with read statuses
-    private val _allNotifications = notificationDao.getNotificationsWithReadStatusByUser(userId)
+    private val _allNotifications = notificationDao.getNotificationsWithReadStatusByUser()
 
     // Filter to system and manager notifications as StateFlows
     val systemNotifications = _allNotifications
@@ -233,8 +219,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val opFund = fundsDao.getFundByType(buildingId, FundType.OPERATIONAL)
             val capFund = fundsDao.getFundByType(buildingId, FundType.CAPITAL)
 
-            _operationalFundBalance.value = opFund?.balance ?: 0.0
-            _capitalFundBalance.value = capFund?.balance ?: 0.0
+            _operationalFundBalance.doubleValue = opFund?.balance ?: 0.0
+            _capitalFundBalance.doubleValue = capFund?.balance ?: 0.0
         }
     }
 
@@ -258,41 +244,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
 
-    fun getFieldsForAuthorizationObject(objId: Long): Flow<List<AuthorizationField>> = flow {
-        val obj = authorizationDao.getFieldsForObject(objId)
-        emit(obj)
-    }.flowOn(Dispatchers.IO)
-
-    fun getDebtsOneUnit(unitId: Long): Flow<List<Debts>> = flow {
-        val debts = debtsDao.getDebtsOneUnit(unitId)
-        emit(debts)
-    }.flowOn(Dispatchers.IO)
-
-
-    fun getCreditsOfBuilding(buildingId: Long): Flow<List<Credits>> = flow {
-        val debts = creditsDao.getCreditsForBuilding(buildingId)
-        emit(debts)
-    }.flowOn(Dispatchers.IO)
-
-    fun getCredit(creditId: Long): Flow<Credits?> = flow {
-        val credit = creditsDao.getCredit(creditId)
-        emit(credit)
-    }.flowOn(Dispatchers.IO)
-
     fun getCreditFromEarning(earningId: Long): Flow<List<Credits>> = flow {
         val credit = creditsDao.getCreditFromEarning(earningId)
         emit(credit)
     }.flowOn(Dispatchers.IO)
 
-    fun getCreditOfBuilding(buildingsId: Long): Flow<List<Credits>> = flow {
-        val credit = creditsDao.getCreditsForBuilding(buildingsId)
-        emit(credit)
-    }.flowOn(Dispatchers.IO)
-
-    fun sumAllCreditAmount(buildingsId: Long): Flow<Double> = flow {
-        val credit = creditsDao.sumAllCreditAmount(buildingsId)
-        emit(credit)
-    }.flowOn(Dispatchers.IO)
 
     // New function to get debts for a specific unit and month
     fun getDebtsForUnitAndMonth(unitId: Long, year: String?, month: String?): Flow<List<Debts>> = flow {
@@ -340,12 +296,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun getDebtById(id: Long): Debts? = debtsDao.getDebt(id) // suspend function in DAO
 
-    fun getDebt(debtId: Long): Flow<Debts?> =
-        flow {
-            val debts = debtsDao.getDebt(debtId)
-            emit(debts)
-        }.flowOn(Dispatchers.IO)
-
     fun updateDebt(debt: Debts) {
         viewModelScope.launch(Dispatchers.IO) {
             debtsDao.updateDebt(debt)
@@ -359,18 +309,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    fun updateTenant(tenant: Tenants) {
-        viewModelScope.launch(Dispatchers.IO) {
-            tenantsDao.updateTenant(tenant)
-        }
-    }
-
-    fun getUnitsOfBuildingForCost(costId: Long, buildingId: Long): Flow<List<Units>> = flow {
-        val units = costsDao.getUnitsOfBuildingFromCost(costId, buildingId)
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
-
     fun getBuildingsWithUserRole(userId: Long): Flow<List<BuildingWithTypesAndUsages>> = flow {
         val units = buildingDao.getBuildingsWithUserRole(userId)
         emit(units)
@@ -382,54 +320,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(units)
     }.flowOn(Dispatchers.IO)
 
-    fun getBuildingsWithUserRoles(): Flow<List<UsersBuildingsCrossRef>> = flow {
-        val units = buildingDao.getBuildingsWithUserRoles()
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
-    fun canShowTab(
-        roleId: Long,
-        objectId: Long,
-        fieldIds: List<Long>,
-        minPermissionLevel: Int = 0
-    ): Flow<Boolean> {
-        return authorizationDao.hasAuthorizationForFields(roleId, objectId, fieldIds, minPermissionLevel)
-    }
-
-    fun hasFieldPermission(
-        roleId: Long,
-        objectId: Long,
-        fieldId: Long,
-        required: PermissionLevel
-    ): Flow<Boolean> = flow {
-        val level = authorizationDao.getPermissionLevel(roleId, objectId, fieldId)
-        emit(level != null && level >= required.value)
-    }.flowOn(Dispatchers.IO)
-
-    fun getFieldPermissionFlow(
-        roleId: Long,
-        objectId: Long,
-        fieldNameRes: Int,
-        required: PermissionLevel = PermissionLevel.READ
-    ): Flow<Boolean> = flow {
-        val fieldId = authorizationDao.getFieldIdByName(objectId, fieldNameRes)
-        if (fieldId == null || fieldId == 0L) {
-            emit(false)
-        } else {
-            // Collect permission level from DAO
-            val hasPermission = authorizationDao.getPermissionLevel(roleId, objectId, fieldId)?.let {
-                it >= required.value
-            } ?: false
-            emit(hasPermission)
-        }
-    }.flowOn(Dispatchers.IO)
-
-
-
-    fun getOwnersOfBuildingForCost(costId: Long, buildingId: Long): Flow<List<Owners>> = flow {
-        val owners = costsDao.getOwnersOfBuildingFromCost(costId, buildingId)
-        emit(owners)
-    }.flowOn(Dispatchers.IO)
 
 
     fun getAllBuildings(): Flow<List<Buildings>> = flow {
@@ -455,77 +345,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(debts)
     }.flowOn(Dispatchers.IO)
 
-    fun getDebtsForUnitCostCurrentAndPreviousUnpaid(
-        costId: Long,
-        buildingId: Long,
-        unitId: Long,
-        yearStr: String,
-        monthStr: String
-    ): Flow<List<Debts>> = flow {
-        val units = debtsDao.getDebtsCurrentMonthAndPastUnpaid(
-            buildingId = buildingId,
-            costId = costId,
-            unitId = unitId,
-            yearStr = yearStr,
-            monthStr = monthStr
-//            ,            getCurrentYearMonth()
-        )
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
-    fun getDebtsFundMinus(
-        costId: Long,
-        buildingId: Long,
-        yearStr: String,
-        monthStr: String
-    ): Flow<List<Debts>> = flow {
-        val units = debtsDao.getDebtsFundMinus(
-            buildingId = buildingId,
-            costId = costId,
-            yearStr = yearStr,
-            monthStr = monthStr
-        )
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
-
-    fun getDebtsForOwnerCostCurrentAndPreviousUnpaid(
-        costId: Long,
-        buildingId: Long,
-        ownerId: Long,
-        yearStr: String,
-        monthStr: String
-    ): Flow<List<Debts>> = flow {
-        val units = debtsDao.getDebtsForOwnerCostCurrentAndPreviousUnpaid(
-            buildingId = buildingId,
-            costId = costId,
-            ownerId = ownerId,
-            yearStr = yearStr,
-            monthStr = monthStr
-//            ,            getCurrentYearMonth()
-        )
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
-
-    fun sumPaidFundFlagPositive(buildingId: Long): Flow<Double> =
-        debtsDao.sumPaidFundFlagPositive(buildingId)
-
-    fun sumPaidEarnings(buildingId: Long): Flow<Double> =
-        earningsDao.sumPaidEarning(buildingId)
-
-    fun sumUnpaidFundFlagNegative(buildingId: Long): Flow<Double> =
-        debtsDao.sumUnpaidFundFlagNegative(buildingId)
-
-    fun sumFundMinus(buildingId: Long): Flow<Double> =
-        debtsDao.sumFundMinus(buildingId, Responsible.ALL)
-
-
-    fun getAllCosts(): Flow<List<Costs>> = flow {
-        val costs = costsDao.getCosts()
-        emit(costs)
-    }.flowOn(Dispatchers.IO)
-
 
     fun getAllCostsOfCharges(): Flow<List<String>> = flow {
         val costs = costsDao.getCostsOfCharges()
@@ -543,23 +362,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(tenants)
     }.flowOn(Dispatchers.IO)
 
-    fun getTenantUnitRelationships(unitId: Long): Flow<List<TenantsUnitsCrossRef>> = flow {
-        val tenants = tenantsDao.getTenantUnitRelationships(unitId)
-        emit(tenants)
-    }.flowOn(Dispatchers.IO)
+    suspend fun getNumberOfUnitsTenantForUnit(unitId: Long): String? = tenantsDao.getNumberOfUnitsTenantForUnit(unitId) // suspend function in DAO
 
     fun getBuildingsForUnit(unitId: Long): Flow<Buildings> = flow {
         val owners = unitsDao.getBuildingForUnit(unitId)
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-    fun getCostsByFundTypeForBuilding(buildingId: Long, fundType: FundType): Flow<List<Costs>> =
-        flow {
-            val costs = costsDao.getCostsByFundTypeForBuilding(
-                buildingId, fundType
-        )
-        emit(costs)
-    }.flowOn(Dispatchers.IO)
 
 
     fun getCostsForBuildingWithChargeFlag(buildingId: Long): Flow<List<Costs>> = flow {
@@ -576,24 +385,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
-    fun getCostByBuildingIdAndName(buildingId: Long): Flow<Costs?> = flow {
-        val costs = costsDao.getCostByBuildingIdAndName(
-            buildingId
-        )
-        emit(costs)
-    }.flowOn(Dispatchers.IO)
 
     fun getChargesCostsWithNullBuildingId(): Flow<List<Costs>> = flow {
         val costs = costsDao.getChargesCostsWithNullBuildingId()
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
-    fun getEarningForBuilding(buildingId: Long): Flow<List<Earnings>> = flow {
-        val earnings = earningsDao.getEarningsForBuilding(
-            buildingId
-        )
-        emit(earnings)
-    }.flowOn(Dispatchers.IO)
 
     fun getEarning(earningId: Long): Flow<Earnings?> = flow {
         val earnings = earningsDao.getEarning(
@@ -611,17 +408,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getPaysForBuilding(buildingId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getPaysForBuilding(buildingId)
-        emit(debts)
-    }.flowOn(Dispatchers.IO)
-
-    fun getDebtsGroupedByCostName(buildingId: Long): Flow<List<CostAmountSummary>> = flow {
-        val debts = debtsDao.getDebtsGroupedByCostName(buildingId)
-        emit(debts)
-    }.flowOn(Dispatchers.IO)
-
-
-    fun getPaysGroupedByCostName(buildingId: Long): Flow<List<CostAmountSummary>> = flow {
-        val debts = debtsDao.getPaysGroupedByCostName(buildingId)
         emit(debts)
     }.flowOn(Dispatchers.IO)
 
@@ -660,10 +446,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
-    fun countUnits(buildingId: Long): Flow<Int> = flow {
-        val units = unitsDao.countUnits(buildingId)
-        emit(units)
-    }.flowOn(Dispatchers.IO)
 
     fun getUnitsForBuilding(buildingId: Long?): Flow<List<Units>> = flow {
         val units = unitsDao.getUnitsByBuildingId(buildingId)
@@ -708,45 +490,26 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-//    fun getAllOwnerUnitsCrossRefs(): Flow<List<OwnersUnitsCrossRef>> {
-//        return ownersDao.getOwnersUnitsCrossRef()
-//    }
-
-
-    fun getCostsByIds(ownerIds: List<Long>): Flow<List<Costs>> = flow {
-        val owners = costsDao.getCostsByIds(ownerIds)
-        emit(owners)
-    }.flowOn(Dispatchers.IO)
-
 
     fun getDangSumsForAllUnits(): Flow<List<UnitDangSum>> = flow {
         val owners = unitsDao.getDangSumsForAllUnits()
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-    fun getNotifications(): Flow<List<Notification>> = flow {
-        val notification = notificationDao.getNotifications()
-        emit(notification)
-    }.flowOn(Dispatchers.IO)
 
     fun getNotificationsWithReadStatus(userId: Long = this.userId): Flow<List<NotificationDao.NotificationWithRead>> {
-        return notificationDao.getNotificationsWithReadStatusByUser(userId)
+        return notificationDao.getNotificationsWithReadStatusByUser()
     }
 
 
-    fun getUsersNotificationsByUser(userId: Long): Flow<List<UsersNotificationCrossRef>> = flow {
-        val notification = notificationDao.getUsersNotificationsByUser(userId)
-        emit(notification)
-    }.flowOn(Dispatchers.IO)
-
-    fun getUsersNotificationsByNotification(notificationId: Long, userId: Long): Flow<UsersNotificationCrossRef> = flow {
-        val notification = notificationDao.getUsersNotificationsByNotification(notificationId, userId)
+    fun getUsersNotificationsByNotification(notificationId: Long, userId: Long): Flow<UsersNotificationCrossRef?> = flow {
+        val notification = notificationDao.getUsersNotificationsByNotification(notificationId)//, userId
         emit(notification)
     }.flowOn(Dispatchers.IO)
 
     fun deleteUserNotificationCrossRef(userId: Long, notificationId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            val crossRef = notificationDao.getUsersNotificationsByNotification(notificationId, userId)
+            val crossRef = notificationDao.getUsersNotificationsByNotification(notificationId)//, userId
             if (crossRef != null) {
                 notificationDao.deleteUserNotificationCrossRef(crossRef)
             }
@@ -759,12 +522,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         val notification = notificationDao.getUsersNotificationsById(notificationId)
         emit(notification)
     }.flowOn(Dispatchers.IO)
-
-    fun updateNotification(notification: Notification){
-        viewModelScope.launch(Dispatchers.IO) {
-            notificationDao.updateNotification(notification)
-        }
-    }
 
     fun updateUserNotificationCrossRef(notification: UsersNotificationCrossRef){
         viewModelScope.launch(Dispatchers.IO) {
@@ -786,17 +543,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-
-
-    fun getNotificationsForCrossRefsFlow(crossRefs: List<UsersNotificationCrossRef>): Flow<List<Notification>> = flow {
-        val notifications = notificationDao.getNotificationsForCrossRefs(crossRefs)  // suspend call
-        emit(notifications)
-    }.flowOn(Dispatchers.IO)
-
-    fun getNotificationsByNotificationId(notificationId:Long): Flow<Notification> = flow {
-        val notifications = notificationDao.getNotificationsById(notificationId) // suspend call
-        emit(notifications)
-    }.flowOn(Dispatchers.IO)
 
 
     fun getOperationalOrCapitalFundBalance(buildingId: Long, fundType: FundType): Flow<Double?> =
@@ -821,14 +567,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(userDao.getUserById(userId))
     }.flowOn(Dispatchers.IO)
 
-
-    fun getUserByRoleId(roleId: Long): Flow<User> = flow {
-        emit(userDao.getUserByRoleId(roleId))
-    }.flowOn(Dispatchers.IO)
-
-    fun getUsersForBuilding(buildingId: Long): Flow<List<User>> = flow {
-        emit(userDao.getUsersForBuilding(buildingId))
-    }.flowOn(Dispatchers.IO)
 
 
     fun getRoleByUserId(userId: Long): Flow<Role> = flow {
@@ -866,45 +604,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(earnings)
     }.flowOn(Dispatchers.IO)
 
-//    fun getTenantUnitRelationshipsOfUnit(unitId: Long): Flow<List<TenantWithRelation>> = flow {
-//        val tenantsUnitsCrossRef = tenantsDao.getTenantsWithRelationForUnit(unitId)
-//        emit(tenantsUnitsCrossRef)
-//    }.flowOn(Dispatchers.IO)
-
-    fun getTenantUnitRelationshipsOfUnit(unitId: Long): Flow<List<TenantWithRelation>> = flow {
-        emit(tenantsDao.getTenantsWithRelationForUnit(unitId))
-    }.flowOn(Dispatchers.IO)
-
 
     fun getActiveTenantsWithRelationForUnit(unitId: Long): Flow<TenantWithRelation?> = flow {
         emit(tenantsDao.getActiveTenantsWithRelationForUnit(unitId))
     }.flowOn(Dispatchers.IO)
 
 
-    fun getAllUnitsForBuilding(buildingId: Long): Flow<List<Units>> = flow {
-        val units = unitsDao.getUnits(buildingId)
-        emit(units)
-    }.flowOn(Dispatchers.IO)
-
     fun getAllUnits(): Flow<List<Units>> = flow {
         val units = tenantsDao.getAllUnits()
         emit(units)
     }.flowOn(Dispatchers.IO)
 
-    fun getBuildingUsages(buildingUsageId: Long): Flow<BuildingUsages?> = flow {
-        val buildingUsage = buildingUsagesDao.getBuildingUsages(buildingUsageId)
-        emit(buildingUsage)
-    }.flowOn(Dispatchers.IO)
 
-    fun getBuildingTypes(buildingTypeId: Long): Flow<BuildingTypes?> = flow {
-        val buildingType = buildingTypesDao.getBuildingTypes(buildingTypeId)
-        emit(buildingType)
-    }.flowOn(Dispatchers.IO)
-
-    fun getAllUsers(): Flow<List<User>> = flow {
-        val users = userDao.getUsers()
-        emit(users)
-    }.flowOn(Dispatchers.IO)
 
     fun getUnitsForOwners(ownerId: Long): Flow<List<UnitWithDang>> = flow {
         val owners = ownersDao.getUnitsWithDangForOwner(ownerId)
@@ -916,10 +627,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(owners)
     }.flowOn(Dispatchers.IO)
 
-    fun getBuildingOwnerCrossRef(): Flow<List<BuildingOwnerCrossRef>> = flow {
-        val owners = ownersDao.getAllBuildingsOwnerCrossRef()
-        emit(owners)
-    }.flowOn(Dispatchers.IO)
 
     fun isOwnerManager(ownerId: Long, buildingId: Long): Flow<Boolean> = flow {
         val crossRef = ownersDao.getBuildingOwnerCrossRef(ownerId, buildingId)
@@ -1329,56 +1036,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     )
                     debtsDao.insertDebt(debt)
                 }
-            }
-        }
-    }
-
-    fun insertDebtPerNewEarnings(
-        buildingId: Long,
-        amount: String,
-        name: String,
-        period: Period,
-        paymentLevel: PaymentLevel,
-        fundFlag: FundType
-    ) {
-
-        viewModelScope.launch(Dispatchers.IO) {
-            // Convert amount to Double
-            val parsedAmount = amount.toString().persianToEnglishDigits().toDoubleOrNull() ?: 0.0
-
-            var units = unitsDao.getUnitsByBuildingId(buildingId)
-            // Calculate debt per unit
-            val numberOfUnits = units.size
-            val amountPerUnit = if (numberOfUnits > 0) parsedAmount / numberOfUnits else 0.0
-            // Insert Cost
-            val cost = Costs(
-                buildingId = buildingId,
-                costName = name,
-                tempAmount = parsedAmount.toString().persianToEnglishDigits().toDoubleOrNull()
-                    ?: 0.0,
-                period = period,
-                calculateMethod = CalculateMethod.EQUAL,
-                paymentLevel = paymentLevel,
-                responsible = Responsible.TENANT,
-                fundType = fundFlag,
-                dueDate = ""
-            )
-
-            val costId = costsDao.insertCost(cost)
-
-            // Insert Debts
-            units.forEach { unit ->
-                val debt = Debts(
-                    unitId = unit.unitId,
-                    costId = costId,
-                    buildingId = buildingId,
-                    description = name, //Customizing description
-                    dueDate = getNextMonthSameDaySafe().persianShortDate,
-                    amount = amountPerUnit.toString().persianToEnglishDigits()
-                        .toDoubleOrNull() ?: 0.0,
-                    paymentFlag = false
-                )
-                debtsDao.insertDebt(debt)
             }
         }
     }
@@ -2227,78 +1884,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    // In SharedViewModel
-    fun addOwner(owner: Owners) {
-        viewModelScope.launch(Dispatchers.IO) {
-//            ownersDao.insertOwners(owner) // Get the generated ID
-
-            // Update the owner with the new ID
-            val updatedOwner = owner.copy(ownerId = newOwnerId)
-
-            withContext(Dispatchers.Main) {
-                ownersList.add(updatedOwner)
-            }
-        }
-    }
-
-    fun addTempDebt(unitId: Long) {
-
-        costsList.value.filter { it.buildingId == null }.forEach { cost ->
-            val existingDebtInDebts = debtsList.find { it.unitId == unitId && it.costId == cost.costId }
-            val existingDebtInUnitDebts =
-                unitDebtsList.find { it.unitId == unitId && it.costId == cost.costId }
-            val debt = Debts(
-                unitId = unitId, costId = cost.costId,
-                description = cost.costName, amount = cost.tempAmount,
-                buildingId = 0, dueDate = "", paymentFlag = false
-            )
-            if (existingDebtInDebts != null) {
-                // Update existing debt in debtsList
-                val index = debtsList.indexOf(existingDebtInDebts)
-                debtsList[index] = existingDebtInDebts.copy(
-                    amount = cost.tempAmount,
-                    paymentFlag = false,
-                    dueDate = "" // or keep existing dueDate if preferred
-                )
-            } else {
-                debtsList.add(debt)
-            }
-
-            if (existingDebtInUnitDebts != null) {
-                // Update existing debt in debtsList
-                val index = unitDebtsList.indexOf(existingDebtInUnitDebts)
-                unitDebtsList[index] = existingDebtInUnitDebts.copy(
-                    amount = cost.tempAmount,
-                    paymentFlag = false,
-                    dueDate = "" // or keep existing dueDate if preferred
-                )
-            } else {
-                unitDebtsList.add(debt)
-            }
-
-        }
-    }
-
-    fun addUnitDebtsList(debts: List<Debts>) {
-        if (debts.isEmpty()) return
-
-        val unitIdToReplace = debts.first().unitId
-
-        // Remove debts with the same unitId
-        unitDebtsList.removeAll { it.unitId == unitIdToReplace }
-
-        // Add new debts
-        unitDebtsList.addAll(debts)
-    }
-
-
-    fun addUnpaidDebtListList(debts: List<Debts>) {
-        unpaidDebtList.value = emptyList()
-        debts.forEach { debt ->
-            unpaidDebtList.value = unpaidDebtList.value + debt
-        }
-    }
-
     fun addFileList(uploadedFileEntity: UploadedFileEntity) {
         fileList.add(uploadedFileEntity)
     }
@@ -2350,34 +1935,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             } else it
         }
     }
-
-
-    fun updateCostTempAmount(newAmount: Double) {
-        costsList.value = costsList.value.filter { it.buildingId == null }.map {
-            it.copy(tempAmount = newAmount)
-        }
-    }
-
-    fun updateCostFundFlag(newValue: FundType) {
-        costsList.value = costsList.value.filter { it.buildingId == null }.map {
-            it.copy(fundType = newValue)
-        }
-    }
-
-    fun clearAllCostAmount() {
-        costsList.value = costsList.value.map { cost ->
-            cost.copy(tempAmount = 0.0) // Reset to 0.0 or your preferred default
-        }
-    }
-
-    fun clearDebtList() {
-        debtsList.clear()
-    }
-
-    fun clearUnitDebtList() {
-        unitDebtsList.clear()
-    }
-
 
     fun updateCostPeriod(cost: Costs, newPeriod: Period) {
         costsList.value = costsList.value.filter { it.buildingId == null }.map {
@@ -2573,55 +2130,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     val calendar = PersianCalendar().apply {
         setPersianDate(1402, 5, 1) // Shahrivar (month 6)
     }
-    val maxDay = calendar.getMaxDaysInMonth() // 31
-
-    fun updateFixedAmountFormat(newValue: String) {
-        // Remove non-digit characters before storing
-        val cleanValue = newValue.filter { it.isDigit() }
-        fixedAmount = cleanValue.persianToEnglishDigits()
-        charge.value = charge.value.filter { it.buildingId == null }.map {
-            it.copy(tempAmount = fixedAmount.toDoubleOrNull() ?: 0.0)
-        }
-    }
-
-    fun updateFundFlagCharge(newValue: FundType) {
-        charge.value = charge.value.filter { it.buildingId == null }.map {
-            it.copy(fundType = newValue)
-        }
-    }
-
-    fun updateChargeAmountFormat(newValue: String) {
-        // Remove non-digit characters before storing
-        val cleanValue = newValue.filter { it.isDigit() }
-        chargeAmount = cleanValue
-        charge.value = charge.value.filter { it.buildingId == null }.map {
-            it.copy(tempAmount = chargeAmount.toDoubleOrNull() ?: 0.0)
-        }
-    }
-
-    // In your ViewModel
-    fun addAuthorization(objectId: Long, fieldId: Long, role: String) {
-        viewModelScope.launch {
-            // Insert into RoleAuthorizationObjectCrossRef
-            // Update authObjects list
-        }
-    }
-
-    private val _userState = mutableStateListOf<User>()
-
     private val _authObjects = MutableStateFlow(listOf<AuthorizationObject>())
-    val authObjects: StateFlow<List<AuthorizationObject>> = _authObjects
-
-    fun selectRole(role: String) {
-        // Load user data and authorizations
-        // _userState.update { it.copy(role = role) } // Uncomment and adjust if needed
-        loadAuthorizations(role)
-    }
-
-    fun getUserRole(mobile: String): String? {
-        // API call or database query
-        return null // Replace with actual implementation
-    }
 
     private fun loadAuthorizations(role: String) {
         // Load from database

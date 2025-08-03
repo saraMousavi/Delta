@@ -35,10 +35,10 @@ interface NotificationDao {
     @Query("SELECT * FROM users_notification_cross_ref where userId = :userId")
     suspend fun getUsersNotificationsByUser(userId: Long): List<UsersNotificationCrossRef>
 
-
+//@todo and userId = :userId
     @Query("SELECT * FROM users_notification_cross_ref where notificationId = :notificationId" +
-            " and userId = :userId")
-    suspend fun getUsersNotificationsByNotification(notificationId: Long, userId: Long): UsersNotificationCrossRef
+            " ")
+    suspend fun getUsersNotificationsByNotification(notificationId: Long): UsersNotificationCrossRef?
 
     @Delete
     suspend fun deleteUserNotificationCrossRef(crossRef: UsersNotificationCrossRef)
@@ -59,14 +59,14 @@ interface NotificationDao {
         return getNotificationsByIds(notificationIds)
     }
 
+    //@todo WHERE uncr.userId = :userId userId: Long
     @Query("""
         SELECT n.*, uncr.isRead AS isRead
         FROM notification n
         INNER JOIN users_notification_cross_ref uncr ON n.notificationId = uncr.notificationId
-        WHERE uncr.userId = :userId
         ORDER BY n.timestamp DESC
     """)
-    fun getNotificationsWithReadStatusByUser(userId: Long): kotlinx.coroutines.flow.Flow<List<NotificationWithRead>>
+    fun getNotificationsWithReadStatusByUser(): kotlinx.coroutines.flow.Flow<List<NotificationWithRead>>
 
     data class NotificationWithRead(
         @Embedded val notification: Notification,
