@@ -1103,21 +1103,7 @@ fun OwnerItem(
 
             // Owner Details
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                ) {
-                    Text(
-                        text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        text = "${context.getString(R.string.last_name)}: ${owner.lastName}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row{
                     if (activity?.javaClass?.name?.endsWith("BuildingProfileActivity") == true) {
                         // Collect isManager state
                         val isManager by sharedViewModel.isOwnerManager(owner.ownerId, buildingId)
@@ -1140,6 +1126,23 @@ fun OwnerItem(
                             }
                         }
                     }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = "${context.getString(R.string.first_name)}: ${owner.firstName}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        text = "${context.getString(R.string.last_name)}: ${owner.lastName}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                 }
                 if (unitsForOwner.isNotEmpty()) {
                     Text(

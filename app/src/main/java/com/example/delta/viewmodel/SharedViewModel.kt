@@ -370,10 +370,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     }.flowOn(Dispatchers.IO)
 
 
+    fun getRawChargesCostsWithBuildingId(buildingId: Long): Flow<List<Costs>> = flow {
+        val costs = costsDao.getRawChargesCostsWithBuildingId(
+            buildingId
+        )
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
 
     fun getCostsForBuildingWithChargeFlag(buildingId: Long): Flow<List<Costs>> = flow {
         val costs = costsDao.getCostsForBuildingWithChargeFlag(
             buildingId
+        )
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCostsForBuildingWithChargeFlagAndFiscalYear(buildingId: Long, fiscalYear: String): Flow<List<Costs>> = flow {
+        val costs = costsDao.getCostsForBuildingWithChargeFlagAndFiscalYear(
+            buildingId, fiscalYear
         )
         emit(costs)
     }.flowOn(Dispatchers.IO)
@@ -416,6 +429,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getCost(costId: Long): Flow<Costs> = flow {
         val cost = costsDao.getCostById(costId)
+        emit(cost)
+    }.flowOn(Dispatchers.IO)
+
+    fun getCosts(): Flow<List<Costs>> = flow {
+        val cost = costsDao.getCosts()
         emit(cost)
     }.flowOn(Dispatchers.IO)
 
@@ -748,6 +766,24 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
         try {
             viewModelScope.launch(Dispatchers.IO) {
+                // --- insert or update cost ---
+                val costsToInsertOrUpdate = costsDao.getRawChargesCostsWithBuildingId(buildingId)
+                val fiscalYearDueDate = "$fiscalYear/01/01"
+
+                costsToInsertOrUpdate.forEach { cost ->
+                    val existingCost = costsDao.getCostsForBuildingWithChargeFlagAndFiscalYearAndCostName(buildingId,
+                        fiscalYear,cost.costName)
+                    val costWithNewValues = cost.copy(
+                        buildingId = buildingId,
+                        dueDate = fiscalYearDueDate
+                    )
+                    if (existingCost != null) {
+                        costsDao.updateCost(costWithNewValues.copy(costId = existingCost.costId, calculateMethod = existingCost.calculateMethod))
+                    } else {
+                        costsDao.insertCost(costWithNewValues.copy(costId = 0))
+                    }
+                }
+                // ----------------------------------------
                 chargeUnitMap.forEach { (unit, amount) ->
                     if (amount <= 0.0) return@forEach
 
@@ -2476,6 +2512,23 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         combine(getActiveOwnersForBuilding(buildingId), getActiveTenantsForBuilding(buildingId)) { owners, tenants ->
             owners + tenants
         }
+
+    suspend fun transferDebtsToTenants(ownerId: Long, debtsToTransfer: List<Debts>): Boolean = try {
+        withContext(Dispatchers.IO) {
+            debtsToTransfer.forEach { debt ->
+                val tenants = tenantsDao.getTenantsWithRelationForUnit(debt.unitId ?: return@forEach)
+                if (tenants.isEmpty()) return@forEach
+                val tenantUnitId = tenants.first().crossRef.unitId
+                val updatedDebt = debt.copy(ownerId = null, unitId = tenantUnitId)
+                debtsDao.updateDebt(updatedDebt)
+            }
+        }
+        true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+
 
 
 

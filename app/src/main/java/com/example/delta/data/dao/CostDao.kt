@@ -81,6 +81,26 @@ interface CostDao {
     suspend fun getCostsForBuildingWithChargeFlag(buildingId: Long): List<Costs>
 
     @Query("""
+    SELECT * FROM costs
+    WHERE buildingId = :buildingId
+    AND charge_flag = 1
+    AND due_date LIKE (:fiscalYear || '%')
+""")
+    suspend fun getCostsForBuildingWithChargeFlagAndFiscalYear(buildingId: Long, fiscalYear: String): List<Costs>
+
+
+    @Query("""
+    SELECT * FROM costs
+    WHERE buildingId = :buildingId
+    AND charge_flag = 1
+    AND cost_name = :costName
+    AND due_date LIKE (:fiscalYear || '%')
+    LIMIT 1
+""")
+    suspend fun getCostsForBuildingWithChargeFlagAndFiscalYearAndCostName(buildingId: Long, fiscalYear: String, costName : String): Costs?
+
+
+    @Query("""
     SELECT * FROM costs c1
     WHERE c1.buildingId IS NULL
     and c1.cost_name NOT IN (
@@ -106,6 +126,11 @@ interface CostDao {
 
     @Query("SELECT * FROM costs WHERE buildingId IS NULL and charge_flag = 1")
     suspend fun getChargesCostsWithNullBuildingId(): List<Costs>
+
+
+
+    @Query("SELECT * FROM costs WHERE buildingId = :buildingId and charge_flag = 1 and temp_amount = 0.0 and due_date = ''")
+    fun getRawChargesCostsWithBuildingId(buildingId: Long): List<Costs>
 
     @Query("SELECT * FROM costs WHERE costId = :costId LIMIT 1")
     suspend fun getCostById(costId: Long): Costs

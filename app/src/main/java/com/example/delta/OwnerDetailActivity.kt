@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.MobileFriendly
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -70,6 +72,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.OwnerTabItem
 import com.example.delta.data.entity.OwnerTabType
 import com.example.delta.enums.FilterType
@@ -77,6 +80,7 @@ import com.example.delta.enums.FundType
 import com.example.delta.viewmodel.SharedViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -353,120 +357,199 @@ fun OwnerFinancialsTab(
     val totalDebtAmount = debts.sumOf { it.amount }
     val totalPaymentAmount = payments.sumOf { it.amount }
 //    val balance = totalDebtAmount - totalPaymentAmount
-
-    Column(modifier = modifier.fillMaxSize()) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "${context.getString(R.string.debt)}: ${
-                            formatNumberWithCommas(
-                                totalDebtAmount
-                            )
-                        } ${context.getString(R.string.toman)}"
-                    )
-                }
-                    Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "${context.getString(R.string.payments)}: ${
-                            formatNumberWithCommas(
-                                totalPaymentAmount
-                            )
-                        } ${context.getString(R.string.toman)}"
-                    )
-                }
-//                Text(text = "${context.getString(R.string.balance)}: ${formatNumberWithCommas(balance)} ${context.getString(R.string.toman)}")
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            FilterType.entries.forEach { type ->
-                Button(
-                    onClick = { filterType = type },
-                    colors = if (filterType == type)
-                        ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary)
-                    else
-                        ButtonDefaults.buttonColors(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = type.getDisplayName(context),
-                        color = if (filterType == type) Color(context.getColor(R.color.white)) else Color(context.getColor(R.color.grey)),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        if (filteredTransactions.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = context.getString(R.string.no_transactions_recorded),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = modifier.fillMaxSize()) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                items(filteredTransactions) { item ->
-                    TransactionRow(item, onPayment = {
-                        coroutineScope.launch {
-                            val debt = sharedViewModel.getDebtById(item.id)
-                            debt?.let {
-                                val updatedDebt = it.copy(paymentFlag = true)
-                                sharedViewModel.updateDebt(updatedDebt)
-                                sharedViewModel.updateDebtPaymentFlag(it, true)
-
-                                val cost = sharedViewModel.getCostById(it.costId)
-                                val fundType = cost?.fundType ?: FundType.OPERATIONAL
-
-                                val success = sharedViewModel.increaseBalanceFund(
-                                    buildingId = it.buildingId,
-                                    amount = it.amount,
-                                    fundType = fundType
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "${context.getString(R.string.debt)}: ${
+                                formatNumberWithCommas(
+                                    totalDebtAmount
                                 )
-                                withContext(Dispatchers.Main) {
-                                    snackbarHostState.showSnackbar(
-                                        if (success) {
-                                            context.getString(
-                                                if (fundType == FundType.OPERATIONAL)
-                                                    R.string.success_pay_tooperational_fund
-                                                else
-                                                    R.string.success_pay_tocapital_fund
-                                            )
-                                        } else {
-                                            context.getString(R.string.failed)
-                                        }
+                            } ${context.getString(R.string.toman)}"
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "${context.getString(R.string.payments)}: ${
+                                formatNumberWithCommas(
+                                    totalPaymentAmount
+                                )
+                            } ${context.getString(R.string.toman)}"
+                        )
+                    }
+//                Text(text = "${context.getString(R.string.balance)}: ${formatNumberWithCommas(balance)} ${context.getString(R.string.toman)}")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                FilterType.entries.forEach { type ->
+                    Button(
+                        onClick = { filterType = type },
+                        colors = if (filterType == type)
+                            ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary)
+                        else
+                            ButtonDefaults.buttonColors(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text(
+                            text = type.getDisplayName(context),
+                            color = if (filterType == type) Color(context.getColor(R.color.white)) else Color(
+                                context.getColor(R.color.grey)
+                            ),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            if (filteredTransactions.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = context.getString(R.string.no_transactions_recorded),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredTransactions) { item ->
+                        TransactionRow(item, onPayment = {
+                            coroutineScope.launch {
+                                val debt = sharedViewModel.getDebtById(item.id)
+                                debt?.let {
+                                    val updatedDebt = it.copy(paymentFlag = true)
+                                    sharedViewModel.updateDebt(updatedDebt)
+                                    sharedViewModel.updateDebtPaymentFlag(it, true)
+
+                                    val cost = sharedViewModel.getCostById(it.costId)
+                                    val fundType = cost?.fundType ?: FundType.OPERATIONAL
+
+                                    val success = sharedViewModel.increaseBalanceFund(
+                                        buildingId = it.buildingId,
+                                        amount = it.amount,
+                                        fundType = fundType
                                     )
+                                    withContext(Dispatchers.Main) {
+                                        snackbarHostState.showSnackbar(
+                                            if (success) {
+                                                context.getString(
+                                                    if (fundType == FundType.OPERATIONAL)
+                                                        R.string.success_pay_tooperational_fund
+                                                    else
+                                                        R.string.success_pay_tocapital_fund
+                                                )
+                                            } else {
+                                                context.getString(R.string.failed)
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    })
+                        })
+                    }
                 }
             }
         }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .background(Color(context.getColor(R.color.white)))
+                .padding(16.dp)
+                .fillMaxWidth(),  // make the column fill max width so button can too
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        val ownerUnits = sharedViewModel.getUnitsForOwners(ownerId).first()  // collect once
+                        var hasTenant = false
+                        for (unitWithDang in ownerUnits) {
+                            val tenantCount = sharedViewModel.getNumberOfUnitsTenantForUnit(unitWithDang.unit.unitId)
+                            if ((tenantCount?.toIntOrNull() ?: 0) > 0) {
+                                hasTenant = true
+                                break
+                            }
+                        }
+                        if (!hasTenant) {
+                            snackbarHostState.showSnackbar(context.getString(R.string.no_tenants))
+                        } else {
+                            // Load debts for transfer and open dialog
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp), // typical FAB height
+                shape = RoundedCornerShape(28.dp), // makes pill-shaped button like extended FAB
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) {
+                Text(
+                    text = context.getString(R.string.transfer_debt_to_tenant),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
     }
 }
+
+@Composable
+fun TransferDebtsDialog(
+    debts: List<Debts>,
+    onConfirm: (List<Debts>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var selectedDebts by remember { mutableStateOf(debts.toSet()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(context.getString(R.string.transfer_debt_to_tenant), style = MaterialTheme.typography.bodyLarge) },
+        text = {
+            LazyColumn {
+                items(debts) { debt ->
+                    // Checkbox and debt info here, update selectedDebts accordingly
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(selectedDebts.toList()) }, enabled = selectedDebts.isNotEmpty()) {
+                Text(context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    )
+}
+
 
 @Composable
 fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {

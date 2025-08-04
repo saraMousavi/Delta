@@ -57,6 +57,7 @@ import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
 import com.github.mikephil.charting.listener.OnChartValueSelectedListener
+import kotlinx.coroutines.flow.first
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -138,9 +139,40 @@ fun ReportsActivityScreen(
     val allCostNames = (debtsByCostName.keys + paysByCostName.keys).distinct()
     val xAxisLabels = allCostNames.toTypedArray()
 
-    LaunchedEffect(debtsList, paysList, buildings) {
-        showNoDataChartDialog = debtsList.isEmpty() && paysList.isEmpty()
+    LaunchedEffect(Unit) {
+        val userId = Preference().getUserId(context)
+        sharedViewModel.getBuildingsForUser(userId).collect { buildingsList ->
+            buildings = buildingsList
+            if (buildings.isNotEmpty()) {
+                // Check debts and pays for ALL buildings in parallel or sequentially
+                var foundBuildingWithDataId: Long? = null
+
+                // Sequential for simplicity (can optimize with coroutines)
+                for (building in buildings) {
+                    val debts = sharedViewModel.getDebtsForBuilding(building.buildingId).first()
+                    val pays = sharedViewModel.getPaysForBuilding(building.buildingId).first()
+                    if (debts.isNotEmpty() || pays.isNotEmpty()) {
+                        foundBuildingWithDataId = building.buildingId
+                        break
+                    }
+                }
+
+                if (foundBuildingWithDataId != null) {
+                    selectedBuildingId = foundBuildingWithDataId
+                    showNoDataChartDialog = false
+                } else {
+                    // No building has debts or pays
+                    selectedBuildingId = buildings.first().buildingId
+                    showNoDataChartDialog = true
+                }
+            } else {
+                // No buildings at all
+                selectedBuildingId = null
+                showNoDataChartDialog = true
+            }
+        }
     }
+
 // Get debts and pays filtered by selectedCategory (cost description)
     val filteredDebtsByUnit = remember(debtsList, selectedCategory) {
         if (selectedCategory == null) emptyMap<String, Double>()

@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -138,13 +139,24 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
     // On building selection, load costs from sharedViewModel, map to CostInputModel
     var lastSavedCostItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
-
+    val allCosts = sharedViewModel.getCosts().collectAsState(initial = emptyList())
+    Log.d("allCosts", allCosts.toString())
     LaunchedEffect(selectedBuilding, selectedYear) {
         selectedBuilding?.let { building ->
-            val costs = sharedViewModel.getCostsForBuildingWithChargeFlag(building.buildingId)
+            var costs = sharedViewModel.getCostsForBuildingWithChargeFlagAndFiscalYear(building.buildingId, selectedYear)
                 .flowOn(Dispatchers.IO)
                 .first()
+            Log.d("costs1", costs.toString())
+            if (costs.isEmpty()) {
+                costs = sharedViewModel.getCostsForBuildingWithChargeFlag(building.buildingId)
+                    .flowOn(Dispatchers.IO)
+                    .first()
+
+                Log.d("costs2", costs.toString())
+            }
+
             costItems = costs
+            Log.d("costItems", costItems.toString())
             // Initialize amountInputs synced with loaded costItems
             amountInputs = costs.map { it.tempAmount.toString() }
 
@@ -161,6 +173,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             }
         }
     }
+
 
 
 
@@ -271,7 +284,6 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                     val costList = costItems   // Use costItems as source
 
                     items(costList.size) { index ->
-                        val item = costList[index]
                         CostInputRow(
                             costInput = costList[index],
                             amount = amountInputs.getOrElse(index) { "0" },  // Use the string input, can be ""

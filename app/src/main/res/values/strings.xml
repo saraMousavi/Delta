@@ -436,4 +436,6 @@
     <string name="no_tenant_recorded">ساکنی برای این ساختمان ثبت نشده است.</string>
     <string name="financial_dashboard">داشبورد مالی</string>
     <string name="display">نمایش</string>
+    <string name="no_tenants">برای واحد این مالک هیچ ساکنی ثبت نشده است.</string>
+    <string name="transfer_debt_to_tenant">انتقال شارژ</string>
 </resources>
