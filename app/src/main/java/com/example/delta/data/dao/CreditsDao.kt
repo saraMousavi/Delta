@@ -36,7 +36,7 @@ interface CreditsDao {
 
     @Query("SELECT * FROM credits c " +
             "where c.earningsId = :earningsId")
-    suspend fun getCreditFromEarning(earningsId: Long): List<Credits>
+    fun getCreditFromEarning(earningsId: Long): Flow<List<Credits>>
 
     @Query("SELECT * FROM credits WHERE earningsId = :earningsId")
     suspend fun getCreditsFromEarning(earningsId: Long): List<Credits>

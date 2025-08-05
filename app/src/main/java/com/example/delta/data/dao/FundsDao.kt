@@ -25,10 +25,10 @@ interface FundsDao {
     @Update
     suspend fun updateFunds(funds: Funds)
 
-    @Query("select balance from funds " +
-            " where buildingId =:buildingId" +
-            " and fund_type = :fundType")
-    suspend fun getOperationalOrCapitalFundBalance(buildingId: Long, fundType: FundType): Double
+
+    @Query("select balance from funds where buildingId =:buildingId and fund_type = :fundType")
+    fun getOperationalOrCapitalFundBalance(buildingId: Long, fundType: FundType): Flow<Double>
+
 
     @Query("SELECT * FROM funds WHERE buildingId = :buildingId AND fund_type = :fundType LIMIT 1")
     suspend fun getFundByType(buildingId: Long, fundType: FundType): Funds?

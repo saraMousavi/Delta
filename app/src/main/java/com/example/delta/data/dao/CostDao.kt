@@ -160,7 +160,7 @@ interface CostDao {
         and cost_name != 'اجاره' 
         ORDER BY due_date ASC
     """)
-    suspend fun getPendingCostsByFundType(buildingId: Long, fundType: FundType): List<Costs>
+    fun getPendingCostsByFundType(buildingId: Long, fundType: FundType): Flow<List<Costs>>
 
 
     /**

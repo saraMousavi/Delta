@@ -1,7 +1,6 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
@@ -17,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,6 +65,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -96,6 +96,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.BuildingTabItem
 import com.example.delta.data.entity.BuildingTabType
@@ -131,7 +132,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.NumberFormat
 import java.util.Locale
-import androidx.core.net.toUri
 
 
 class BuildingProfileActivity : ComponentActivity() {
@@ -375,8 +375,9 @@ class BuildingProfileActivity : ComponentActivity() {
         )
 
 
-        val chargesCost by sharedViewModel.getCostsForBuildingWithChargeFlag(buildingId = building.buildingId)
+        val chargesCost by sharedViewModel.getRawChargesCostsWithBuildingId(buildingId = building.buildingId)
             .collectAsState(initial = emptyList())
+        Log.d("chargesCost", chargesCost.toString())
         val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
             .collectAsState(initial = emptyList())
 
@@ -795,6 +796,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
     }
 
+    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     @Composable
     fun FundsTab(
         building: Buildings,
@@ -803,16 +805,17 @@ class BuildingProfileActivity : ComponentActivity() {
     ) {
         val context = LocalContext.current
 
+        val snackbarHostState = remember { SnackbarHostState() }
         val coroutineScope = rememberCoroutineScope()
         val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
             buildingId = building.buildingId,
             fundType = FundType.OPERATIONAL
-        ).collectAsState(initial = 0)
+        ).collectAsState(initial = 0.0)
 
         val capitalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
             buildingId = building.buildingId,
             fundType = FundType.CAPITAL
-        ).collectAsState(initial = 0)
+        ).collectAsState(initial = 0.0)
 
         val operationalCosts by sharedViewModel.getPendingCostsByFundType(
             building.buildingId,
@@ -836,9 +839,11 @@ class BuildingProfileActivity : ComponentActivity() {
         }
 
         Box(modifier = Modifier.fillMaxSize()) { // Use Box to allow overlay positioning of FAB
-            Column(modifier = Modifier
-                .padding(16.dp)
-                .fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxSize()
+            ) {
                 // Fund balances card and tab row (same as yours)
                 Card(
                     modifier = Modifier
@@ -846,17 +851,17 @@ class BuildingProfileActivity : ComponentActivity() {
                         .padding(8.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                        FundInfoBox(
-                            formattedFund = formatNumberWithCommas(operationalFund!!.toDouble()),
-                            context = context,
-                            title = context.getString(R.string.operation_funds)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        FundInfoBox(
-                            formattedFund = formatNumberWithCommas(capitalFund!!.toDouble()),
-                            context = context,
-                            title = context.getString(R.string.capital_funds)
-                        )
+                    FundInfoBox(
+                        formattedFund = formatNumberWithCommas(operationalFund!!.toDouble()),
+                        context = context,
+                        title = context.getString(R.string.operation_funds)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FundInfoBox(
+                        formattedFund = formatNumberWithCommas(capitalFund!!.toDouble()),
+                        context = context,
+                        title = context.getString(R.string.capital_funds)
+                    )
                 }
 
                 Row(
@@ -890,6 +895,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
                 when (selectedTab) {
                     0 -> {
+                        Column {
                         EarningsSection(
                             buildingId = building.buildingId,
                             sharedViewModel = sharedViewModel,
@@ -899,7 +905,9 @@ class BuildingProfileActivity : ComponentActivity() {
                                 context.startActivity(intent)
                             }
                         )
+                        }
                     }
+
                     1 -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             if (capitalCosts.isEmpty()) {
@@ -953,6 +961,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End
             ) {
+
+                SnackbarHost(hostState = snackbarHostState)
                 if (selectedTab == 0) {
                     FloatingActionButton(
                         onClick = { buildingViewModel.showEarningsDialog.value = true },
@@ -963,7 +973,7 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 } else if (selectedTab == 1) {
                     FloatingActionButton(
-                        onClick = { buildingViewModel.showCapitalCostDialog.value= true },
+                        onClick = { buildingViewModel.showCapitalCostDialog.value = true },
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ) {
@@ -980,29 +990,32 @@ class BuildingProfileActivity : ComponentActivity() {
                 }
             }
         }
-
         // Show dialogs if needed (unchanged)
-        if (buildingViewModel.showCapitalCostDialog.value) {
-            AddCapitalCostDialog (
+
+            if (buildingViewModel.showCapitalCostDialog.value) {
+                AddCapitalCostDialog(
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.showCapitalCostDialog.value = false },
-                onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate ->
-                    sharedViewModel.insertDebtPerNewCost(
-                        buildingId = building.buildingId,
-                        amount = amount,
-                        name = selectedCost.costName,
-                        period = period,
-                        fundType = FundType.CAPITAL,
-                        paymentLevel = selectedCost.paymentLevel,
-                        calculateMethod = calculateMethod,
-                        calculatedUnitMethod = calculatedUnitMethod,
-                        responsible = responsible,
-                        dueDate = dueDate,
-                        selectedUnitIds = selectedUnits.toList(),
-                        selectedOwnerIds = selectedOwners.toList()
-                    )
-                    buildingViewModel.showCapitalCostDialog.value = false
+                onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, message ->
+                    coroutineScope.launch {
+                        sharedViewModel.insertDebtPerNewCost(
+                            buildingId = building.buildingId,
+                            amount = amount,
+                            name = selectedCost.costName,
+                            period = period,
+                            fundType = FundType.CAPITAL,
+                            paymentLevel = selectedCost.paymentLevel,
+                            calculateMethod = calculateMethod,
+                            calculatedUnitMethod = calculatedUnitMethod,
+                            responsible = responsible,
+                            dueDate = dueDate,
+                            selectedUnitIds = selectedUnits.toList(),
+                            selectedOwnerIds = selectedOwners.toList()
+                        )
+                        buildingViewModel.showCapitalCostDialog.value = false
+                        snackbarHostState.showSnackbar(message)
+                    }
                 }
             )
         }
@@ -1012,23 +1025,12 @@ class BuildingProfileActivity : ComponentActivity() {
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.showOperationalCostDialog.value = false },
-                onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate ->
-                    sharedViewModel.insertDebtPerNewCost(
-                        buildingId = building.buildingId,
-                        amount = amount,
-                        name = selectedCost.costName,
-                        period = period,
-                        fundType = FundType.OPERATIONAL,
-                        paymentLevel = selectedCost.paymentLevel,
-                        calculateMethod = calculateMethod,
-                        calculatedUnitMethod = calculatedUnitMethod,
-                        responsible = responsible,
-                        dueDate = dueDate,
-                        selectedUnitIds = selectedUnits.toList(),
-                        selectedOwnerIds = selectedOwners.toList()
-                    )
+                onSave = { message ->
+                    coroutineScope.launch {
                     buildingViewModel.showOperationalCostDialog.value = false
+                    snackbarHostState.showSnackbar(message)
                 }
+        }
             )
         }
 
@@ -1045,19 +1047,17 @@ class BuildingProfileActivity : ComponentActivity() {
                                 buildingId = building.buildingId,
                                 earningsName = earning.earningsName,
                                 amount = earning.amount,
-                                period = earning.period ,
+                                period = earning.period,
                                 startDate = earning.startDate,
                                 endDate = earning.endDate
                             )
                             sharedViewModel.insertEarningsWithCredits(earningsToInsert)
+                            snackbarHostState.showSnackbar(context.getString(R.string.earning_inserted_successfully))
                         } catch (e: IllegalStateException) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.earnings_conflict_error),
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            Log.e("error", e.message.toString())
+                            snackbarHostState.showSnackbar(context.getString(R.string.earnings_conflict_error))
                         }
-                        }
+                    }
                     buildingViewModel.showEarningsDialog.value = false
                 },
                 sharedViewModel = sharedViewModel
@@ -1084,7 +1084,7 @@ class BuildingProfileActivity : ComponentActivity() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1108,7 +1108,6 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 }
                 Column(
-                    modifier = Modifier.width(IntrinsicSize.Min),
                     horizontalAlignment = Alignment.End
                 ) {
                     Text(
@@ -1118,14 +1117,13 @@ class BuildingProfileActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.End,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 1
                     )
                     Spacer(Modifier.height(4.dp))
                     TextButton(onClick = onDetailClick) {
                         Text(
                             text = LocalContext.current.getString(R.string.detail),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = Color(LocalContext.current.getColor(R.color.grey))
                         )
                     }
@@ -1276,8 +1274,8 @@ class BuildingProfileActivity : ComponentActivity() {
                                     TextButton(onClick = { onInvoiceClicked(earning) }) {
                                         Text(
                                             text = context.getString(R.string.detail),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.Gray
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = Color(context.getColor(R.color.grey))
                                         )
                                     }
                                 }
@@ -1495,28 +1493,39 @@ class BuildingProfileActivity : ComponentActivity() {
             shadowElevation = 0.dp,
             shape = RoundedCornerShape(6.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = cost.costName,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${formatNumberWithCommas(cost.tempAmount)} ${context.getString(R.string.toman)}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${context.getString(R.string.due)}: ${cost.dueDate}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${context.getString(R.string.fund_type)}: ${cost.fundType.getDisplayName(context)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = cost.costName,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "${formatNumberWithCommas(cost.tempAmount)} ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Column {
+                    Text(
+                        text = "${context.getString(R.string.due)}: ${cost.dueDate}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "${context.getString(R.string.fund_type)}: ${
+                            cost.fundType.getDisplayName(
+                                context
+                            )
+                        }",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
             }
         }
     }
@@ -1541,6 +1550,11 @@ class BuildingProfileActivity : ComponentActivity() {
         val residents by sharedViewModel.getResidents(buildingId).collectAsState(emptyList())
         val emergencyNumbers by sharedViewModel.getEmergencyNumbers(buildingId).collectAsState(emptyList())
         var showAddDialog by remember { mutableStateOf(false) }
+
+        val coroutineScope = rememberCoroutineScope()
+
+        // SnackbarHostState to show messages
+        val snackbarHostState = remember { SnackbarHostState() }
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -1628,6 +1642,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End
             ) {
+                SnackbarHost(hostState = snackbarHostState)
                 if (selectedTab == 0) {
                     FloatingActionButton(
                         onClick = { showAddDialog = true },
@@ -1652,8 +1667,15 @@ class BuildingProfileActivity : ComponentActivity() {
                 buildingId = building.buildingId,
                 onDismiss = { showAddDialog = false },
                 onConfirm = { entry ->
-                    sharedViewModel.addPhonebookEntry(entry)
-                    showAddDialog = false
+                    coroutineScope.launch {
+                        sharedViewModel.addPhonebookEntry(entry)
+                        showAddDialog = false
+                        if(entry.type == "emergency") {
+                            snackbarHostState.showSnackbar(context.getString(R.string.insert_emergency_phone_book_successfully))
+                        } else {
+                            snackbarHostState.showSnackbar(context.getString(R.string.insert_phone_book_successfully))
+                        }
+                    }
                 }
             )
         }
@@ -1716,7 +1738,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         // Your SharedViewModel's delete function here:
-                        // sharedViewModel.deletePhonebookEntry(entry)
+                         sharedViewModel.deletePhonebookEntry(entry)
                         showDeleteDialog = false
                     }) {
                         Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge)
@@ -2042,10 +2064,12 @@ fun EarningsDialog(
         val earningNameValid = earningsName.isNotBlank()
         val amountValid = amount.isNotBlank() && amount.toDoubleOrNull()?.let { it > 0.0 } == true
         val periodValid = selectedPeriod != null
+        val isPeriodNone = selectedPeriod == Period.NONE
+        val isEndDateValid = if (isPeriodNone) true else endDate.isNotBlank()
         val startDateValid = startDate.isNotBlank()
         val endDateValid = endDate.isNotBlank()
 
-        earningNameValid && amountValid && periodValid  && startDateValid && endDateValid
+        earningNameValid && amountValid && periodValid && startDateValid && isEndDateValid
     }
 
     AlertDialog(
@@ -2227,6 +2251,7 @@ fun AddCapitalCostDialog(
         Responsible,
         List<Long>,
         List<Long>,
+        String,
         String
     ) -> Unit
 ) {
@@ -2398,7 +2423,8 @@ fun AddCapitalCostDialog(
                         responsibleEnum,
                         selectedUnits.map { it.unitId },
                         selectedOwners.map { it.ownerId },
-                        dueDate
+                        dueDate,
+                        context.getString(R.string.insert_capital_successfully)
                     )
                 }
             ) {
@@ -2465,31 +2491,28 @@ fun AddOperationalCostDialog(
     buildingId: Long,
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
-    onSave: (
-        Costs,
-        String,
-        Period,
-        CalculateMethod,
-        CalculateMethod,
-        Responsible,
-        List<Long>,
-        List<Long>,
-        String
-    ) -> Unit
+    onSave: (String) -> Unit
 ) {
     val fixedFundType = FundType.OPERATIONAL
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+
     // Load necessary data (active units, owners, costs) same as before but filtered for capital if you want
-    val activeUnits by sharedViewModel.getActiveUnits(buildingId)
+    val activeUnits by sharedViewModel.getUnitsForBuilding(buildingId)
         .collectAsState(initial = emptyList())
     val owners by sharedViewModel.getOwnersForBuilding(buildingId)
         .collectAsState(initial = emptyList())
     val defaultChargedCosts by sharedViewModel.getChargesCostsWithNullBuildingId()
         .collectAsState(emptyList())
-    val chargeableCosts by sharedViewModel.getCostsForBuildingWithChargeFlag(buildingId)
+    var dueDate by remember { mutableStateOf("") }
+    var success by remember { mutableStateOf(false) }
+    val chargeableCosts by sharedViewModel.getCostsForBuildingWithChargeFlagAndFiscalYear(
+        buildingId,
+        dueDate.split("/")[0]
+    )
         .collectAsState(emptyList())
+    Log.d("chargeableCosts", chargeableCosts.toString())
     val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
         buildingId = buildingId,
         fundType = FundType.OPERATIONAL
@@ -2518,10 +2541,10 @@ fun AddOperationalCostDialog(
     var selectedUnitCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     val selectedUnits = remember { mutableStateListOf<Units>() }
     val selectedOwners = remember { mutableStateListOf<Owners>() }
-    var dueDate by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
     var isChargeableCost by remember { mutableStateOf(false) }
+
 
     // If no cost selected init
     LaunchedEffect(Unit) {
@@ -2571,7 +2594,8 @@ fun AddOperationalCostDialog(
         selectedOwners.toList()
     ) {
         val isCostNameValid = selectedCost != null && !selectedCost!!.costName.isBlank()
-        val isAmountValid = totalAmount.isNotBlank() && totalAmount.toDoubleOrNull()?.let { it > 0.0 } == true
+        val isAmountValid =
+            totalAmount.isNotBlank() && totalAmount.toDoubleOrNull()?.let { it > 0.0 } == true
         val isResponsibleValid = selectedResponsible.isNotBlank()
         val isCalculateMethodValid = selectedCalculateMethod.isNotBlank()
         val isUnitCalculateMethodValid = selectedUnitCalculateMethod.isNotBlank()
@@ -2597,7 +2621,6 @@ fun AddOperationalCostDialog(
                         )
     }
 
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -2610,6 +2633,7 @@ fun AddOperationalCostDialog(
         },
         text = {
             LazyColumn {
+
                 item {
                     // Cost dropdown or add new cost (filtered to Capital fund type)
                     ExposedDropdownMenuBoxExample(
@@ -2622,7 +2646,7 @@ fun AddOperationalCostDialog(
                                 totalAmount = it.tempAmount.toLong().toString()
                                 selectedPeriod = it.period
                                 isChargeableCost =
-                                    chargeableCosts.any { cc -> cc.costId == it.costId }
+                                    chargeableCosts.any { cc -> cc.costName == it.costName }
                             }
                         },
                         label = context.getString(R.string.cost_name),
@@ -2634,15 +2658,14 @@ fun AddOperationalCostDialog(
                     OutlinedTextField(
                         value = totalAmount,
                         onValueChange = {
-                            if (!isChargeableCost) {
-                                totalAmount = it.filter { ch -> ch.isDigit() }
-                            }
+//                            if (!isChargeableCost) {
+                            totalAmount = it.filter { ch -> ch.isDigit() }
+//                            }
                         },
                         label = { Text(context.getString(R.string.amount)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        enabled = !isChargeableCost
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -2753,51 +2776,53 @@ fun AddOperationalCostDialog(
                 enabled = isValid,
                 onClick = {
                     val cost = selectedCost ?: return@Button
-                    Log.d("selectedResponsible", selectedResponsible.toString())
                     if (selectedResponsible == Responsible.TENANT.getDisplayName(context) && isChargeableCost) {
                         coroutineScope.launch {
                             val amountDouble = totalAmount.toDoubleOrNull() ?: 0.0
-
-                            if (amountDouble >= ( operationalFund?.toDouble() ?:0.0) ) {
-                                val success = sharedViewModel.decreaseOperationalFund(
+                            if (amountDouble <= (operationalFund?.toDouble() ?: 0.0)) {
+                                sharedViewModel.insertNewCost(
+                                    Costs(
+                                        buildingId = buildingId,
+                                        costName = cost.costName,
+                                        chargeFlag = true,
+                                        fundType = FundType.OPERATIONAL,
+                                        responsible = Responsible.TENANT,
+                                        paymentLevel = PaymentLevel.UNIT,
+                                        calculateMethod = CalculateMethod.EQUAL,
+                                        period = Period.YEARLY,
+                                        tempAmount = amountDouble,
+                                        dueDate = dueDate,
+                                        invoiceFlag = true
+                                    )
+                                )
+                                success = sharedViewModel.decreaseOperationalFund(
                                     buildingId,
                                     amountDouble,
                                     FundType.OPERATIONAL
                                 )
-                                if (success) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.fund_decreased_successfully),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    onDismiss()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.insufficient_fund),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+
+                                onSave(context.getString(R.string.fund_decreased_successfully))
                             } else {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.insufficient_fund),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                success = false
+                                onSave(context.getString(R.string.insufficient_fund))
                             }
                         }
                     } else {
-                        onSave(
-                            cost,
-                            totalAmount,
-                            selectedPeriod ?: Period.NONE,
-                            calculateMethod,
-                            calculateUnitMethod,
-                            responsibleEnum,
-                            selectedUnits.map { it.unitId },
-                            selectedOwners.map { it.ownerId },
-                            dueDate
+                        sharedViewModel.insertDebtPerNewCost(
+                            buildingId = buildingId,
+                            amount = totalAmount,
+                            name = cost.costName,
+                            period = selectedPeriod ?: Period.NONE,
+                            fundType = FundType.OPERATIONAL,
+                            paymentLevel = cost.paymentLevel,
+                            calculateMethod = calculateMethod,
+                            calculatedUnitMethod = calculateUnitMethod,
+                            responsible = responsibleEnum,
+                            dueDate = dueDate,
+                            selectedUnitIds = selectedUnits.map { it.unitId },
+                            selectedOwnerIds = selectedOwners.map { it.ownerId },
                         )
+                        onSave(context.getString(R.string.cost_insert_and_pending))
                     }
                 }
             ) {
@@ -2818,7 +2843,7 @@ fun AddOperationalCostDialog(
         }
     )
 
-    // Nested DatePicker and AddNewCostNameDialog as you already have
+// Nested DatePicker and AddNewCostNameDialog as you already have
     if (showAddNewCostNameDialog) {
         AddNewCostNameDialog(
             buildingId = buildingId,
@@ -2836,7 +2861,7 @@ fun AddOperationalCostDialog(
                         fundType = fixedFundType,
                         dueDate = dueDate
                     )
-                    sharedViewModel.insertNewCost(newCost)
+//                    sharedViewModel.insertNewCost(newCost)
                     showAddNewCostNameDialog = false
                     selectedCost = newCost
                     totalAmount = "0"

@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -117,8 +119,17 @@ fun ReportsActivityScreen(
 
     val debtsList by sharedViewModel.getDebtsForBuilding(buildingId).collectAsState(initial = emptyList())
     val paysList by sharedViewModel.getPaysForBuilding(buildingId).collectAsState(initial = emptyList())
-
-    val excludedDescriptions = setOf("شارژ", "رهن", "اجاره")
+    Log.d("debtsList", debtsList.toString())
+    Log.d("paysList", paysList.toString())
+    var showNoRecordedData by remember { mutableStateOf(false) }
+    if(debtsList.isEmpty() && paysList.isEmpty()){
+        showNoRecordedData = true
+    } else {
+        showNoRecordedData = false
+    }
+    val excludedDescriptions = setOf(context.getString(R.string.charge),
+        context.getString(R.string.mortgage),
+        context.getString(R.string.rent))
 
     val debtsByCostName = debtsList
         .filter { it.description !in excludedDescriptions }
@@ -218,7 +229,12 @@ fun ReportsActivityScreen(
                         FilterChip(
                             selected = building.buildingId == selectedBuildingId,
                             onClick = { selectedBuildingId = building.buildingId },
-                            label = { Text(building.name, style = MaterialTheme.typography.bodyLarge) },
+                            label = {
+                                Text(
+                                    building.name,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
                             modifier = Modifier.padding(end = 8.dp)
                         )
                     }
@@ -232,7 +248,18 @@ fun ReportsActivityScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-
+                if (showNoRecordedData){
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = context.getString(R.string.no_data_recorded),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+                else {
                 AndroidView(
                     factory = { ctx ->
                         BarChart(ctx).apply {
@@ -248,6 +275,7 @@ fun ReportsActivityScreen(
                                 granularity = 1f
                                 typeface = yekanTypeface
                                 valueFormatter = MoneyValueFormatter()
+                                textSize = 13f
                             }
                             legend.apply {
                                 typeface = yekanTypeface
@@ -259,7 +287,7 @@ fun ReportsActivityScreen(
                                 granularity = 1f
                                 setDrawGridLines(false)
                                 typeface = yekanTypeface
-                                // labelRotationAngle = -45f
+                                 labelRotationAngle = -15f
                                 setCenterAxisLabels(true)
                                 valueFormatter = IndexAxisValueFormatter(xAxisLabels)
                             }
@@ -277,14 +305,18 @@ fun ReportsActivityScreen(
                         }
 
                         if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
-                            val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                                color = Color(context.getColor(R.color.Red_light)).toArgb()
-                                valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                                valueTextSize = 12f
-                                valueTypeface = yekanTypeface
-                                valueFormatter = MoneyValueFormatter()
-                            }
-                            val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                            val debtDataSet =
+                                BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                                    color = Color(context.getColor(R.color.Red_light)).toArgb()
+                                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                                    valueTextSize = 12f
+                                    valueTypeface = yekanTypeface
+                                    valueFormatter = MoneyValueFormatter()
+                                }
+                            val payDataSet = BarDataSet(
+                                paysEntries,
+                                context.getString(R.string.payments)
+                            ).apply {
                                 color = Color(context.getColor(R.color.Green)).toArgb()
                                 valueTextColor = Color(context.getColor(R.color.black)).toArgb()
                                 valueTextSize = 12f
@@ -307,8 +339,12 @@ fun ReportsActivityScreen(
                             chart.invalidate()
                         }
 
-                        chart.setOnChartValueSelectedListener(object : OnChartValueSelectedListener {
-                            override fun onValueSelected(e: com.github.mikephil.charting.data.Entry?, h: Highlight?) {
+                        chart.setOnChartValueSelectedListener(object :
+                            OnChartValueSelectedListener {
+                            override fun onValueSelected(
+                                e: com.github.mikephil.charting.data.Entry?,
+                                h: Highlight?
+                            ) {
                                 if (e == null) return
                                 val xIndex = e.x.toInt()
                                 selectedCategory = if (xIndex in allCostNames.indices) {
@@ -348,6 +384,7 @@ fun ReportsActivityScreen(
 
                 }
             }
+            }
         }
     }
     if (showNoDataChartDialog) {
@@ -386,7 +423,7 @@ fun CategoryDetailChartByUnit(
 
     Column(modifier = modifier) {
         Text(
-            text = "${context.getString(R.string.cost_detail)} $category",
+            text = "${context.getString(R.string.cost_detail)} $category ${context.getString(R.string.based_on_unit)}",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(bottom = 12.dp)
         )

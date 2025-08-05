@@ -134,7 +134,7 @@
     <string name="cost_managing">مدیریت هزینه ها</string>
     <string name="reporting">گزارش گیری</string>
     <string name="delete_building">حذف ساختمان</string>
-    <string name="are_you_sure">مطمئنی؟</string>
+    <string name="are_you_sure">آیا نسبت به حذف این آیتم اطمینان دارید؟</string>
     <string name="success_delete">با موفقیت حذف گردید.</string>
     <string name="today">امروز</string>
     <string name="building">ساختمان</string>
@@ -438,4 +438,12 @@
     <string name="display">نمایش</string>
     <string name="no_tenants">برای واحد این مالک هیچ ساکنی ثبت نشده است.</string>
     <string name="transfer_debt_to_tenant">انتقال شارژ</string>
+    <string name="ownerAndTenant">مالکین و مستاجرین</string>
+    <string name="no_data_recorded">داده ای جهت نمایش نمودار وجود ندارد.</string>
+    <string name="based_on_unit">به تفکیک واحدها</string>
+    <string name="earning_inserted_successfully">ثبت در آمد با موفقیت انجام شد.</string>
+    <string name="insert_capital_successfully">ثبت هزینه عمرانی با موفقیت انجام شد.</string>
+    <string name="cost_insert_and_pending">ثبت هزینه با موفقیت انجام شد و در انتظار پرداخت کاربران می باشد.</string>
+    <string name="insert_emergency_phone_book_successfully">ثبت تماس اضطراری با موفقیت انجام شد و در تب اضطراری قرار گرفت.</string>
+    <string name="insert_phone_book_successfully">ثبت تماس ساکنین با موفقیت انجام شد و در تب ساکنین قرار گرفت.</string>
 </resources>

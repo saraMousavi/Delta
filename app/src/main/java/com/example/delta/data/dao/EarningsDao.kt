@@ -37,7 +37,7 @@ interface EarningsDao {
     suspend fun getEarningsForBuilding(buildingId: Long): List<Earnings>
 
     @Query("SELECT * FROM earnings WHERE earningsId = :earningsId")
-    suspend fun getEarning(earningsId: Long): Earnings?
+    fun getEarning(earningsId: Long): Flow<Earnings?>
 
     @Query("SELECT * FROM earnings WHERE buildingId = :buildingId")
     fun getFlowEarningsForBuilding(buildingId: Long): Flow<List<Earnings>>

@@ -36,6 +36,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -43,6 +45,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +56,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Credits
 import com.example.delta.viewmodel.SharedViewModel
+import kotlinx.coroutines.launch
 
 class EarningDetailActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -95,6 +100,8 @@ fun EarningDetailScreen(
     Log.d("earningId", earningId.toString())
     val earning by viewModel.getEarning(earningId).collectAsState(initial = null)
     val credits by viewModel.getCreditFromEarning(earningId).collectAsState(initial = emptyList())
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(credits) {
         viewModel.updateCredits(credits)
     }
@@ -131,6 +138,7 @@ fun EarningDetailScreen(
         },
         bottomBar = {
             BottomAppBar {
+                SnackbarHost(hostState = snackbarHostState)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -149,15 +157,16 @@ fun EarningDetailScreen(
                     Button(
                         enabled = selectedCredits.isNotEmpty(),
                         onClick = {
-                            try {
-                                viewModel.markSelectedAsReceived(earningId)
-                                Toast.makeText(context,context.getString(R.string.transfer_to_operational),
-                                    Toast.LENGTH_LONG).show()
-                            } catch (e: Exception) {
-                                Log.e("markError", e.message.toString())
-                                Toast.makeText(context,context.getString(R.string.failed),
-                                    Toast.LENGTH_LONG).show()
+                            coroutineScope.launch {
+                                try {
+                                    viewModel.markSelectedAsReceived(earningId)
+                                    snackbarHostState.showSnackbar(context.getString(R.string.transfer_to_operational))
+                                } catch (e: Exception) {
+                                    Log.e("markError", e.message.toString())
+                                    snackbarHostState.showSnackbar(context.getString(R.string.failed))
+                                }
                             }
+
                         }
                     ) {
                         Text(
