@@ -240,7 +240,7 @@ interface DebtsDao {
     fun sumFundMinus(buildingId: Long, responsible:Responsible): Flow<Double>
 
     @Query("""
-        SELECT d.unitId, SUM(d.amount) as totalAmount
+        SELECT d.unitId, SUM(d.amount) / 12 as totalAmount
         FROM debts d
         INNER JOIN costs c ON d.costId = c.costId
         WHERE d.buildingId = :buildingId 

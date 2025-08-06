@@ -107,7 +107,7 @@ interface TenantDao {
     SELECT tenants.*, crossRef.startDate, crossRef.endDate, crossRef.status
     FROM tenants
     INNER JOIN tenants_units_cross_ref AS crossRef ON tenants.tenantId = crossRef.tenantId
-    WHERE crossRef.unitId = :unitId and crossRef.status = "فعال"  LIMIT 1
+    WHERE crossRef.unitId = :unitId and crossRef.status = "فعال" or crossRef.status = 1 LIMIT 1
 """)
     suspend fun getActiveTenantsWithRelationForUnit(unitId: Long): TenantWithRelation?
 

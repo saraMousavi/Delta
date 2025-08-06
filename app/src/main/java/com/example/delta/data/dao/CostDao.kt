@@ -86,7 +86,7 @@ interface CostDao {
     AND charge_flag = 1
     AND due_date LIKE (:fiscalYear || '%')
 """)
-    suspend fun getCostsForBuildingWithChargeFlagAndFiscalYear(buildingId: Long, fiscalYear: String): List<Costs>
+    fun getCostsForBuildingWithChargeFlagAndFiscalYear(buildingId: Long, fiscalYear: String): Flow<List<Costs>>
 
 
     @Query("""
@@ -130,7 +130,7 @@ interface CostDao {
 
 
     @Query("SELECT * FROM costs WHERE buildingId = :buildingId and charge_flag = 1 and temp_amount = 0.0 and due_date = ''")
-    fun getRawChargesCostsWithBuildingId(buildingId: Long): List<Costs>
+    fun getRawChargesCostsWithBuildingId(buildingId: Long): Flow<List<Costs>>
 
     @Query("SELECT * FROM costs WHERE costId = :costId LIMIT 1")
     suspend fun getCostById(costId: Long): Costs

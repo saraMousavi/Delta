@@ -2784,7 +2784,7 @@ fun AddOperationalCostDialog(
                                     Costs(
                                         buildingId = buildingId,
                                         costName = cost.costName,
-                                        chargeFlag = true,
+                                        chargeFlag = false,
                                         fundType = FundType.OPERATIONAL,
                                         responsible = Responsible.TENANT,
                                         paymentLevel = PaymentLevel.UNIT,

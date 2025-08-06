@@ -4,6 +4,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,7 +53,6 @@ fun OnboardingScreenWithModalSheet(
 
     val pagerState = rememberPagerState(initialPage = 0)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
     var showSheet by remember { mutableStateOf(false) }
     val thisActivity = LocalActivity.current ?: return
 

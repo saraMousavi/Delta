@@ -45,7 +45,9 @@ class FileManagement {
             val ownersList = readOwnersFromSheet(ownersSheet)
             val tenantsList = readTenantsFromSheet(tenantSheet)
             workbook.close()
+
             CoroutineScope(Dispatchers.Main).launch {
+                Log.d("tenantsList", tenantsList.toString())
                 sharedViewModel.saveBuildingsList(
                     buildingsList,
                     unitsList,
@@ -53,11 +55,7 @@ class FileManagement {
                     tenantsList
                 ) { successCount, errors ->
 
-                    Toast.makeText(
-                        activity,
-                        "ثبت $successCount ساختمان موفق بود.",
-                        Toast.LENGTH_LONG
-                    ).show()
+
                 }
                 withContext(Dispatchers.Main) {
                     val intent = Intent(activity, HomePageActivity::class.java)
@@ -206,6 +204,7 @@ class FileManagement {
                 excelUnitsNumber = unitsNumber,
                 excelBuildingName = buildingName
             )
+            Log.d("tenants", tenants.toString())
             list.add(tenants)
         }
         return list
