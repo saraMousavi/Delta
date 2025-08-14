@@ -51,7 +51,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,7 +80,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.example.delta.data.entity.BuildingTypes
@@ -136,7 +134,7 @@ class BuildingFormActivity : ComponentActivity() {
         Log.d("onCreate", true.toString())
         sharedViewModel.resetState()
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     // Fetch Building Types and Usages from your ViewModels
                     val buildingTypes by buildingTypeViewModel.getAllBuildingType()
@@ -575,6 +573,7 @@ fun BuildingInfoPage(
 
             item {
                 ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
                     items = buildingTypes + BuildingTypes(
                         0,
                         context.getString(R.string.addNew)
@@ -602,6 +601,7 @@ fun BuildingInfoPage(
 
                 item {
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = cityComplexes + CityComplex(
                             complexId = 0L,
                             name = context.getString(R.string.addNew),
@@ -629,6 +629,7 @@ fun BuildingInfoPage(
 
             item {
                 ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
                     items = buildingUsages + BuildingUsages(
                         0,
                         context.getString(R.string.addNew)
@@ -842,6 +843,7 @@ fun BuildingInfoPage(
         // Dialogs for Adding Items
         if (showBuildingTypeDialog) {
             AddItemDialog(
+                sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingTypeDialog = false },
                 onInsert = { newItem ->
                     val newType = BuildingTypes(buildingTypeName = newItem)
@@ -854,6 +856,7 @@ fun BuildingInfoPage(
 
         if (showBuildingUsageDialog) {
             AddItemDialog(
+                sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingUsageDialog = false },
                 onInsert = { name ->
                     val newUsage = BuildingUsages(buildingUsageName = name)
@@ -1314,6 +1317,7 @@ fun OwnerDialog(
                 // Add building selection row for owners
                 if (isOwner) {
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = buildings,
                         selectedItem = selectedBuilding,
                         onItemSelected = { selectedBuilding = it },
@@ -2127,6 +2131,7 @@ fun TenantDialog(
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                         ExposedDropdownMenuBoxExample(
+                            sharedViewModel = sharedViewModel,
                             items = buildings,
                             selectedItem = selectedBuilding,
                             onItemSelected = { building ->
@@ -2151,6 +2156,7 @@ fun TenantDialog(
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = filteredUnits,
                         selectedItem = selectedUnit,
                         onItemSelected = { unit ->
@@ -2165,6 +2171,7 @@ fun TenantDialog(
             }
             if (showStartDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         startDate = selected
                         dismissDatePicker()
@@ -2176,6 +2183,7 @@ fun TenantDialog(
 
             if (showEndDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         endDate = selected
                         dismissDatePicker()
@@ -2850,6 +2858,7 @@ fun DebtItem(
             ) {
                 // Period Dropdown (30%)
                 ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
                     items = sharedViewModel.periods,
                     selectedItem = cost?.period, // default value if empty
                     onItemSelected = { selectedPeriod ->
@@ -3359,6 +3368,7 @@ fun EditTenantDialog(
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                         ExposedDropdownMenuBoxExample(
+                            sharedViewModel = sharedViewModel,
                             items = buildings,
                             selectedItem = selectedBuilding,
                             onItemSelected = { building -> selectedBuilding = building },
@@ -3377,6 +3387,7 @@ fun EditTenantDialog(
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = filteredUnits,
                         selectedItem = selectedUnit,
                         onItemSelected = { unit -> selectedUnit = unit },
@@ -3388,6 +3399,7 @@ fun EditTenantDialog(
             }
             if (showStartDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         startDate = selected
                         dismissDatePicker()
@@ -3398,6 +3410,7 @@ fun EditTenantDialog(
             }
             if (showEndDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         endDate = selected
                         dismissDatePicker()

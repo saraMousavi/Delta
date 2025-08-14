@@ -31,7 +31,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -70,7 +69,7 @@ class GuestActivity : ComponentActivity() {
         roleDao = database.roleDao() // Initialize Role DAO
         authorizationDao = database.authorizationDao() // Initialize Role DAO
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     val context = LocalContext.current
                     Scaffold(
@@ -250,6 +249,7 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
 
         if (showRoleDialog) {
             RoleSelectionBottomSheet(
+                sharedViewModel = sharedViewModel,
                 roles = roles,
                 initialSelectedRole = selectedRole,
                 onDismissRequest = { showRoleDialog = false },
@@ -329,6 +329,7 @@ fun RoleSelectionBottomSheet(
     initialSelectedRole: Roles?,
     onDismissRequest: () -> Unit,
     onConfirm: (Roles) -> Unit,
+    sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -352,6 +353,7 @@ fun RoleSelectionBottomSheet(
             Text(text = context.getString(R.string.select_role_for_different_feature), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
             ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
                 items = roles,
                 selectedItem = selectedRole,
                 onItemSelected = {

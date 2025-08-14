@@ -23,12 +23,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -39,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -49,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -84,9 +89,10 @@ fun DetailDrawer(
     title: String,
     imageId: Int,
     sharedViewModel: SharedViewModel,
+    onImportExcel: () -> Unit,
     content: @Composable (PaddingValues) -> Unit
 ) {
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         // Right drawer state (main menu)
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         // Left drawer state (notifications)
@@ -97,9 +103,10 @@ fun DetailDrawer(
             .getNotificationsWithReadStatus()
             .collectAsState(initial = emptyList())
 
-
+        val isDarkModeEnabled = sharedViewModel.isDarkModeEnabled
         val unreadCount = notificationsWithRead.count { !it.isRead }
-
+        var showSheet by remember { mutableStateOf(false) }
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         // *** Left drawer: Notifications drawer wrapped in LTR to open from Left ***
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -178,22 +185,43 @@ fun DetailDrawer(
                                         }
                                     )
                                     Spacer(Modifier.height(12.dp))
+//                                    NavigationDrawerItem(
+//                                        label = { Text(context.getString(R.string.customizing)) },
+//                                        selected = false,
+//                                        onClick = {}
+//                                    )
+//                                    Spacer(Modifier.height(12.dp))
+//                                    NavigationDrawerItem(
+//                                        label = { Text(context.getString(R.string.change_language)) },
+//                                        selected = false,
+//                                        onClick = {}
+//                                    )
+//                                    Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.customizing)) },
+                                        label = { Text(context.getString(R.string.import_from_excel)) },
                                         selected = false,
-                                        onClick = {}
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.change_language)) },
-                                        selected = false,
-                                        onClick = {}
+                                        onClick = {
+                                            showSheet = true
+                                        }
                                     )
                                     Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.dark_mode)) },
                                         selected = false,
-                                        onClick = {}
+                                        onClick = {
+                                            sharedViewModel.isDarkModeEnabled = !isDarkModeEnabled
+                                            if (isDarkModeEnabled){
+                                                sharedViewModel.saveDarkModeState(context, false)
+                                            } else {
+                                                sharedViewModel.saveDarkModeState(context, true)
+                                            }
+                                        },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (isDarkModeEnabled) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                                contentDescription = null
+                                            )
+                                        }
                                     )
                                     Spacer(Modifier.height(12.dp))
                                     NavigationDrawerItem(
@@ -219,7 +247,7 @@ fun DetailDrawer(
                                         label = { Text(context.getString(R.string.logout)) },
                                         selected = false,
                                         onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-                                            prefs.edit() { putBoolean("is_logged_in", false) }
+                                            prefs.edit { putBoolean("is_logged_in", false) }
                                             context.startActivity(Intent(context, LoginPage::class.java))
                                         }
                                     )
@@ -287,6 +315,52 @@ fun DetailDrawer(
                             }
                         ) { innerPadding ->
                             content(innerPadding)
+                            if (showSheet) {
+                                ModalBottomSheet(
+                                    onDismissRequest = { showSheet = false },
+                                    sheetState = sheetState,
+                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = context.getString(R.string.select_data_input_method),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.padding(bottom = 16.dp)
+                                        )
+                                        Text(
+                                            text = context.getString(R.string.template_download),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable {
+                                                // Handle template download here
+                                            },
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Button(
+                                            onClick = {
+                                                showSheet = false
+                                                onImportExcel()  // Trigger your import Excel logic
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(52.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            Text(
+                                                text = context.getString(R.string.import_from_excel),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

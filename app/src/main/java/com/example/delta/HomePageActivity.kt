@@ -61,6 +61,7 @@ import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.User
 import com.example.delta.factory.BuildingsViewModelFactory
+import com.example.delta.init.FileManagement
 import com.example.delta.init.Preference
 import kotlinx.coroutines.flow.first
 
@@ -70,7 +71,33 @@ class HomePageActivity : ComponentActivity() {
         BuildingsViewModelFactory(this.application)
     }
     val sharedViewModel: SharedViewModel by viewModels()
+    private val REQUEST_CODE_PICK_EXCEL = 1001
 
+
+    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_PICK_EXCEL && resultCode == RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        FileManagement().handleExcelFile(inputStream, this, sharedViewModel)
+                        inputStream.close()
+                    } else {
+                        Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    runOnUiThread {
+                        Toast.makeText(this, "خطا: ${e.message}", Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+            }
+        }
+    }
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,11 +105,18 @@ class HomePageActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 DetailDrawer(
                     title = getString(R.string.menu_title),
                     sharedViewModel = sharedViewModel,
-                    imageId = R.drawable.profilepic
+                    imageId = R.drawable.profilepic,
+                    onImportExcel = {
+                        val selectFileIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                            type = "*/*"
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                        }
+                        startActivityForResult(selectFileIntent, REQUEST_CODE_PICK_EXCEL)
+                    }
                 ) { innerPadding ->
                     Box(
                         modifier = Modifier

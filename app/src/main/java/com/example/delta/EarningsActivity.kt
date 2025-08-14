@@ -26,11 +26,13 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.enums.Period
 import com.example.delta.factory.EarningsViewModelFactory
 import com.example.delta.viewmodel.EarningsViewModel
+import com.example.delta.viewmodel.SharedViewModel
 
 class EarningsActivity : ComponentActivity() {
     private val viewModel: EarningsViewModel by viewModels {
         EarningsViewModelFactory(application = this.application)
     }
+    val sharedViewModel : SharedViewModel by viewModels()
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -40,7 +42,7 @@ class EarningsActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 val incomes by viewModel.getAllEarnings().collectAsState(initial = emptyList())
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
@@ -64,6 +66,7 @@ class EarningsActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     CostForm(
+                        sharedViewModel = sharedViewModel,
                         viewModel = viewModel,
                         insertItem = { name ->
                             viewModel.insertEarnings(
@@ -78,9 +81,11 @@ class EarningsActivity : ComponentActivity() {
                         },
                         listContent = { vm ->
                             GenericList(
+                                sharedViewModel = sharedViewModel,
                                 items = incomes,
                                 itemContent = { item ->
                                     GenericItem(
+                                        sharedViewModel = sharedViewModel,
                                         item = item,
                                         itemName = { (it).earningsName })
                                 },

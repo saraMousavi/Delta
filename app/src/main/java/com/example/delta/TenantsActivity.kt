@@ -39,7 +39,7 @@ class TenantsActivity : ComponentActivity() {
 
 
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     var showTenantDialog by remember { mutableStateOf(false) }
                     val units by sharedViewModel.getAllUnits().collectAsState(initial = emptyList())

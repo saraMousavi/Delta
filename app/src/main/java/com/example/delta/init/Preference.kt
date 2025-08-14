@@ -9,6 +9,12 @@ class Preference {
         return prefs.getLong("user_id", -1L) // -1L or any invalid ID as default
     }
 
+    fun getDarkModeState(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("is_dark_mode", false) // -1L or any invalid ID as default
+    }
+
+
     fun isFirstLogin(context: Context): Boolean {
         val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
         return prefs.getBoolean("first_login", true)

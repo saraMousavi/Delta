@@ -66,7 +66,7 @@ class EarningDetailActivity : ComponentActivity() {
         val earningId = intent.getLongExtra(EXTRA_EARNING_ID, 0L)
 
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
                         EarningDetailScreen(

@@ -39,7 +39,7 @@ class OwnersActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     var showOwnerDialog by remember { mutableStateOf(false) }
                     val ownerUnitsState =

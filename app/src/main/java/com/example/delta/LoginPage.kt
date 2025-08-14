@@ -96,7 +96,7 @@ class LoginPage : ComponentActivity() {
         roleDao = database.roleDao() // Initialize Role DAO
         authorizationDao = database.authorizationDao() // Initialize Role DAO
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     var showOnboardingModal by remember { mutableStateOf(false) }
                     var navigateToIntent by remember { mutableStateOf<Intent?>(null) }

@@ -46,7 +46,7 @@ class UserManagementActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
                         UserManagementScreen(sharedViewModel)
@@ -114,6 +114,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
 
             if (showAuthDialog) {
                 AddAuthorizationDialog(
+                    sharedViewModel = viewModel,
                     onDismiss = { showAuthDialog = false },
                     onAddComplete = { showAuthDialog = false },
                     viewModel = viewModel,
@@ -141,6 +142,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
 
             ExposedDropdownMenuBoxExample(
+                sharedViewModel = viewModel,
                 items = roles,
                 selectedItem = selectedRole,
                 onItemSelected = { selectedRole = it },
@@ -290,6 +292,7 @@ fun FieldPermissionRow(
 
 @Composable
 fun AddAuthorizationDialog(
+    sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
     onAddComplete: () -> Unit,
     viewModel: SharedViewModel,
@@ -315,6 +318,7 @@ fun AddAuthorizationDialog(
         text = {
             Column {
                 ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
                     items = allAuthObjects,
                     selectedItem = selectedObject,
                     onItemSelected = {
@@ -352,6 +356,7 @@ fun AddAuthorizationDialog(
                                 modifier = Modifier.weight(1f).padding(start = 8.dp)
                             )
                             ExposedDropdownMenuBoxExample(
+                                sharedViewModel = sharedViewModel,
                                 items = PermissionLevel.entries,
                                 selectedItem = permission,
                                 onItemSelected = { newPerm ->

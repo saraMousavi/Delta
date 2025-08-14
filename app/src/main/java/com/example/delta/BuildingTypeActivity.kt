@@ -22,10 +22,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.viewmodel.BuildingTypeViewModel
+import com.example.delta.viewmodel.SharedViewModel
 
 class BuildingTypeActivity : ComponentActivity() {
 
     private val viewModel: BuildingTypeViewModel by viewModels()
+    val sharedViewModel: SharedViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -36,7 +38,7 @@ class BuildingTypeActivity : ComponentActivity() {
         setContent {
             val buildingTypes by viewModel.getAllBuildingType()
                 .collectAsState(initial = emptyList())
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
                     topBar = {
@@ -59,15 +61,18 @@ class BuildingTypeActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     CostForm(
+                        sharedViewModel = sharedViewModel,
                         viewModel = viewModel,
                         insertItem = { name ->
                             viewModel.insertBuildingType(BuildingTypes(buildingTypeName = name))
                         },
                         listContent = { vm ->
                             GenericList(
+                                sharedViewModel = sharedViewModel,
                                 items = buildingTypes,
                                 itemContent = { item ->
                                     GenericItem(
+                                        sharedViewModel = sharedViewModel,
                                         item = item,
                                         itemName = { (it).buildingTypeName })
                                 },

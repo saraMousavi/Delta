@@ -157,7 +157,7 @@ class BuildingProfileActivity : ComponentActivity() {
         buildingTypeName = intent.getStringExtra("BUILDING_TYPE_NAME") ?: "Unknown"
         buildingUsageName = intent.getStringExtra("BUILDING_USAGE_NAME") ?: "Unknown"
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
                         building?.let { BuildingProfileScreen(it) }
@@ -484,6 +484,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                         IranianLocations.provinces[editableBuilding.province]
                                             ?: emptyList()
                                     ExposedDropdownMenuBoxExample(
+                                        sharedViewModel = sharedViewModel,
                                         items = provinces,
                                         selectedItem = editableBuilding.province,
                                         onItemSelected = { selectedProvince ->
@@ -499,6 +500,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
                                     // State Selector
                                     ExposedDropdownMenuBoxExample(
+                                        sharedViewModel = sharedViewModel,
                                         items = availableStates,
                                         selectedItem = editableBuilding.state,
                                         onItemSelected = { selectedState ->
@@ -538,6 +540,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 if (isEditing) {
                                     ExposedDropdownMenuBoxExample(
+                                        sharedViewModel = sharedViewModel,
                                         items = buildingTypes + BuildingTypes(0, context.getString(R.string.addNew)),
                                         selectedItem = selectedBuildingType,
                                         onItemSelected = {
@@ -555,6 +558,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                     if (selectedBuildingType?.buildingTypeName == buildingTypeName) {
                                             Spacer(modifier = Modifier.height(8.dp))
                                             ExposedDropdownMenuBoxExample(
+                                                sharedViewModel = sharedViewModel,
                                                 items = cityComplexes + CityComplex(
                                                     complexId = 0L,
                                                     name = context.getString(R.string.addNew),
@@ -576,6 +580,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     ExposedDropdownMenuBoxExample(
+                                        sharedViewModel = sharedViewModel,
                                         items = buildingUsages + BuildingUsages(
                                             0,
                                             context.getString(R.string.addNew)
@@ -776,6 +781,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
         if (showBuildingTypeDialog) {
             AddItemDialog(
+                sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingTypeDialog = false },
                 onInsert = { newItem ->
                     val newType = BuildingTypes(buildingTypeName = newItem)
@@ -786,6 +792,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
         if (showBuildingUsageDialog) {
             AddItemDialog(
+                sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingUsageDialog = false },
                 onInsert = { name ->
                     val newUsage = BuildingUsages(buildingUsageName = name)
@@ -805,7 +812,7 @@ class BuildingProfileActivity : ComponentActivity() {
     ) {
         val context = LocalContext.current
 
-        val snackbarHostState = remember { SnackbarHostState() }
+        val snackBarHostState = remember { SnackbarHostState() }
         val coroutineScope = rememberCoroutineScope()
         val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
             buildingId = building.buildingId,
@@ -962,7 +969,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.End
             ) {
 
-                SnackbarHost(hostState = snackbarHostState)
+                SnackbarHost(hostState = snackBarHostState)
                 if (selectedTab == 0) {
                     FloatingActionButton(
                         onClick = { buildingViewModel.showEarningsDialog.value = true },
@@ -1014,7 +1021,7 @@ class BuildingProfileActivity : ComponentActivity() {
                             selectedOwnerIds = selectedOwners.toList()
                         )
                         buildingViewModel.showCapitalCostDialog.value = false
-                        snackbarHostState.showSnackbar(message)
+                        snackBarHostState.showSnackbar(message)
                     }
                 }
             )
@@ -1028,7 +1035,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 onSave = { message ->
                     coroutineScope.launch {
                     buildingViewModel.showOperationalCostDialog.value = false
-                    snackbarHostState.showSnackbar(message)
+                    snackBarHostState.showSnackbar(message)
                 }
         }
             )
@@ -1052,10 +1059,10 @@ class BuildingProfileActivity : ComponentActivity() {
                                 endDate = earning.endDate
                             )
                             sharedViewModel.insertEarningsWithCredits(earningsToInsert)
-                            snackbarHostState.showSnackbar(context.getString(R.string.earning_inserted_successfully))
+                            snackBarHostState.showSnackbar(context.getString(R.string.earning_inserted_successfully))
                         } catch (e: IllegalStateException) {
                             Log.e("error", e.message.toString())
-                            snackbarHostState.showSnackbar(context.getString(R.string.earnings_conflict_error))
+                            snackBarHostState.showSnackbar(context.getString(R.string.earnings_conflict_error))
                         }
                     }
                     buildingViewModel.showEarningsDialog.value = false
@@ -2116,6 +2123,7 @@ fun EarningsDialog(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = Period.entries,
                         selectedItem = selectedPeriod,
                         onItemSelected = { selectedPeriod = it },
@@ -2162,6 +2170,7 @@ fun EarningsDialog(
             // Date pickers
             if (showStartDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         startDate = selected
                         showStartDatePicker = false
@@ -2173,6 +2182,7 @@ fun EarningsDialog(
 
             if (showEndDatePicker) {
                 PersianDatePickerDialogContent(
+                    sharedViewModel = sharedViewModel,
                     onDateSelected = { selected ->
                         endDate = selected
                         showEndDatePicker = false
@@ -2476,6 +2486,7 @@ fun AddCapitalCostDialog(
     }
     if (showDatePicker) {
         PersianDatePickerDialogContent(
+            sharedViewModel = sharedViewModel,
             onDateSelected = { selected ->
                 dueDate = selected
                 showDatePicker = false
@@ -2637,6 +2648,7 @@ fun AddOperationalCostDialog(
                 item {
                     // Cost dropdown or add new cost (filtered to Capital fund type)
                     ExposedDropdownMenuBoxExample(
+                        sharedViewModel = sharedViewModel,
                         items = costsWithAddNew.filter { it.fundType == fixedFundType },
                         selectedItem = selectedCost,
                         onItemSelected = {
@@ -2716,7 +2728,8 @@ fun AddOperationalCostDialog(
                                 sharedViewModel.selectedUnits.addAll(newSelection)
                             },
                             units = activeUnits,
-                            label = context.getString(R.string.units)
+                            label = context.getString(R.string.units),
+                            context = context
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -2874,6 +2887,7 @@ fun AddOperationalCostDialog(
     }
     if (showDatePicker) {
         PersianDatePickerDialogContent(
+            sharedViewModel = sharedViewModel,
             onDateSelected = { selected ->
                 dueDate = selected
                 showDatePicker = false

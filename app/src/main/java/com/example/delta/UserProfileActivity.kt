@@ -63,7 +63,7 @@ class UserProfileActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     val context = LocalContext.current
                     Scaffold(
@@ -91,7 +91,7 @@ class UserProfileActivity : ComponentActivity() {
                               val userId = Preference().getUserId(context = context)
                               val user by sharedViewModel.getUserById(userId).collectAsState(initial = null)
                               user?.let {
-                                  UserProfileScreen(initialUser = user!!, onSave = {
+                                  UserProfileScreen(sharedViewModel = sharedViewModel, initialUser = user!!, onSave = {
                                       sharedViewModel.updateUser(user!!,
                                           onError = {
                                               Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
@@ -109,6 +109,7 @@ class UserProfileActivity : ComponentActivity() {
 
 @Composable
 fun UserProfileScreen(
+    sharedViewModel: SharedViewModel,
     initialUser: User,
     onSave: (User) -> Unit
 ) {
@@ -239,6 +240,7 @@ fun UserProfileScreen(
                         onValueChange = { userState = userState.copy(email = it) }
                     )
                     GenderDropdown(
+                        sharedViewModel = sharedViewModel,
                         selectedGender = userState.gender?.let {
                             Gender.fromDisplayName(
                                 context,
@@ -357,6 +359,7 @@ fun roleDisplayFromId(roleId: Long, context: Context): String = when (roleId) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenderDropdown(
+    sharedViewModel: SharedViewModel,
     selectedGender: Gender?,
     onGenderSelected: (Gender) -> Unit,
     modifier: Modifier = Modifier,
@@ -365,6 +368,7 @@ fun GenderDropdown(
     val context = LocalContext.current
 
     ExposedDropdownMenuBoxExample(
+        sharedViewModel = sharedViewModel,
         items = Gender.entries.toList(),
         selectedItem = selectedGender,
         onItemSelected = { selected ->

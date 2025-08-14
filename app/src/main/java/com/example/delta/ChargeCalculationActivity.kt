@@ -75,7 +75,7 @@ class ChargeCalculationActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Scaffold(
                         topBar = {
@@ -197,6 +197,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
                 items = buildings,
                 selectedItem = selectedBuilding,
                 onItemSelected = { selectedBuilding = it },
@@ -206,6 +207,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                     .weight(0.5f)
             )
             ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
                 items = fiscalYears,
                 selectedItem = selectedYear,
                 onItemSelected = { selectedYear = it },
@@ -245,18 +247,18 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
                     // If charge has been calculated and isEditMode == false, append units charges list as last item section
                     if (!isEditMode && lastCalculatedCharges != null && lastCalculatedCharges!!.isNotEmpty()) {
-                        item {
-                            // Show calculated charges per unit
-                            lastCalculatedCharges!!.forEach { (unit, charge) ->
-                                FundInfoBox(
-                                    formattedFund = formatNumberWithCommas(charge),
-                                    context = context,
-                                    title = "${context.getString(R.string.unit) }${unit.unitNumber}:"
-                                )
-                                Spacer(Modifier.height(8.dp))
-                            }
-                            Spacer(Modifier.height(16.dp))
-                        }
+//                        item {
+//                            // Show calculated charges per unit
+//                            lastCalculatedCharges!!.forEach { (unit, charge) ->
+//                                FundInfoBox(
+//                                    formattedFund = formatNumberWithCommas(charge),
+//                                    context = context,
+//                                    title = "${context.getString(R.string.unit) }${unit.unitNumber}:"
+//                                )
+//                                Spacer(Modifier.height(8.dp))
+//                            }
+//                            Spacer(Modifier.height(16.dp))
+//                        }
                     }
 
                     item {
@@ -290,6 +292,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
                     items(costList.size) { index ->
                         CostInputRow(
+                            sharedViewModel = sharedViewModel,
                             costInput = costList[index],
                             amount = amountInputs.getOrElse(index) { "0" },  // Use the string input, can be ""
                             calculateMethod = costItems[index].calculateMethod,
@@ -564,6 +567,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
 @Composable
 fun CostInputRow(
+    sharedViewModel: SharedViewModel,
     costInput: Costs,
     amount: String,
     calculateMethod: CalculateMethod,
@@ -607,6 +611,7 @@ fun CostInputRow(
                 )
                 Spacer(Modifier.width(8.dp))
                 ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
                     items = filteredMethods,
                     selectedItem = calculateMethod,
                     onItemSelected = onCalculateMethodChange,

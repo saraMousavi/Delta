@@ -87,7 +87,7 @@ class CostDetailActivity : ComponentActivity() {
         val cost = intent.getParcelableExtra<Parcelable>("COST_DATA") as? Costs
         Log.d("cost", cost.toString())
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
                         CostDetailScreen(

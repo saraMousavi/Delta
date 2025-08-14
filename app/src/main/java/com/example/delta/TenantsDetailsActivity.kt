@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.House
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MobileFriendly
 import androidx.compose.material.icons.filled.Person
@@ -52,7 +53,7 @@ class TenantsDetailsActivity : ComponentActivity() {
         val unitId = intent.getLongExtra("UNIT_DATA", -1L)
         val tenantId = intent.getLongExtra("TENANT_DATA", -1L)
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     TenantDetailsScreen(
                         unitId = unitId,
@@ -273,6 +274,7 @@ fun TenantOverviewTab(
                         )
                         if (showStartDatePicker) {
                             PersianDatePickerDialogContent(
+                                sharedViewModel = sharedViewModel,
                                 onDateSelected = { selected ->
                                     startDate = selected
                                     dismissStartDatePicker()
@@ -296,6 +298,7 @@ fun TenantOverviewTab(
                         )
                         if (showEndDatePicker) {
                             PersianDatePickerDialogContent(
+                                sharedViewModel = sharedViewModel,
                                 onDateSelected = { selected ->
                                     endDate = selected
                                     dismissEndDatePicker()
@@ -346,6 +349,11 @@ fun TenantOverviewTab(
                         OwnerInfoRow(Icons.Default.Person,
                             "${context.getString(R.string.number_of_tenants)}:" +
                                     " ${twr.tenant.numberOfTenants}")
+                        Spacer(Modifier.height(8.dp))
+                        OwnerInfoRow(
+                            Icons.Default.House,
+                            "${context.getString(R.string.unit_number)}: ${unit?.unitNumber}"
+                        )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Phone,

@@ -1,6 +1,7 @@
 package com.example.delta
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -91,7 +92,7 @@ class OwnerDetailsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val ownerId = intent.getLongExtra("ownerId", -1L)
         setContent {
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     OwnerDetailsScreen(
                         ownerId = ownerId,
@@ -169,7 +170,7 @@ fun OwnerOverviewTab(
     val context = LocalContext.current
     val owner by sharedViewModel.getOwner(ownerId).collectAsState(initial = null)
     var isEditing by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
@@ -177,7 +178,8 @@ fun OwnerOverviewTab(
     var phone by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-
+    val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner?.ownerId ?: 0)
+        .collectAsState(initial = emptyList())
     LaunchedEffect(owner) {
         owner?.let {
             firstName = it.firstName
@@ -255,7 +257,7 @@ fun OwnerOverviewTab(
                                         ),
                                         onError = {
                                             coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(context.getString(R.string.operation_problem))
+                                                snackBarHostState.showSnackbar(context.getString(R.string.operation_problem))
                                             }
                                         }
                                     )
@@ -273,6 +275,7 @@ fun OwnerOverviewTab(
                             OwnerInfoRow(Icons.Default.Person, "${owner!!.firstName} ${owner!!.lastName}")
                         }
                         item { Spacer(Modifier.height(16.dp)) }
+
                         item {
                             OwnerInfoRow(Icons.Default.Email, owner!!.email.ifBlank { context.getString(R.string.no_email) })
                         }
@@ -288,6 +291,33 @@ fun OwnerOverviewTab(
                         item {
                             OwnerInfoRow(Icons.Default.HomeWork, owner!!.address.ifBlank { context.getString(R.string.no) })
                         }
+                        item { Spacer(Modifier.height(16.dp)) }
+                        item {
+                            if (unitsForOwner.isNotEmpty()) {
+                                Text(
+                                    text = context.getString(R.string.units),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                                unitsForOwner.forEach { unit ->
+                                    Row {
+                                        Text(
+                                            text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
+                                                    "${context.getString(R.string.area)}: ${unit.unit.area}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(16.dp))
+                                        Text(
+                                            text = "${context.getString(R.string.dang)}: ${unit.dang}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                     }
                 }
             }
@@ -335,6 +365,7 @@ fun OwnerFinancialsTab(
     val context = LocalContext.current
 
     val debts by sharedViewModel.getDebtsForOwner(ownerId, null, "00").collectAsState(initial = emptyList())
+    val chargeDebts by sharedViewModel.getChargeDebtsForOwners(ownerId).collectAsState(initial = emptyList())
     val payments by sharedViewModel.getPaysForOwner(ownerId).collectAsState(initial = emptyList())
 
     val transactions = remember(debts, payments) {
@@ -356,6 +387,7 @@ fun OwnerFinancialsTab(
 
     val totalDebtAmount = debts.sumOf { it.amount }
     val totalPaymentAmount = payments.sumOf { it.amount }
+    var showTransferDialog by remember { mutableStateOf(false) }
 //    val balance = totalDebtAmount - totalPaymentAmount
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = modifier.fillMaxSize()) {
@@ -496,7 +528,7 @@ fun OwnerFinancialsTab(
                         if (!hasTenant) {
                             snackbarHostState.showSnackbar(context.getString(R.string.no_tenants))
                         } else {
-                            // Load debts for transfer and open dialog
+                            showTransferDialog = true
                         }
                     }
                 },
@@ -516,6 +548,18 @@ fun OwnerFinancialsTab(
             }
         }
 
+    }
+    if(showTransferDialog){
+        Log.d("chargeDebts", chargeDebts.toString())
+        TransferDebtsDialog(
+            debts = chargeDebts,
+            onConfirm = {
+                showTransferDialog = false
+            },
+            onDismiss = {
+                showTransferDialog = false
+            }
+        )
     }
 }
 

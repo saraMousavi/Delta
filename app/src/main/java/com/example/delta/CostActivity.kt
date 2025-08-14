@@ -24,11 +24,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.viewmodel.CostViewModel
 import com.example.delta.factory.CostViewModelFactory
+import com.example.delta.viewmodel.SharedViewModel
 
 class CostActivity : ComponentActivity() {
     private val viewModel: CostViewModel by viewModels {
         CostViewModelFactory(application = this.application)
     }
+    val sharedViewModel: SharedViewModel by viewModels()
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +41,7 @@ class CostActivity : ComponentActivity() {
 
         setContent {
             val costs by viewModel.getAllMenuCost().collectAsState(initial = emptyList())
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
                     topBar = {
@@ -62,15 +64,17 @@ class CostActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     CostForm(
+                        sharedViewModel = sharedViewModel,
                         viewModel = viewModel,
                         insertItem = { name ->
 //                            viewModel.insertCost(Costs(buildingId = 0 , costName = name, amount = 0.0  , period = "0", amountUnit = "1", currency = name))
                         },
                         listContent = { vm ->
                             GenericList(
+                                sharedViewModel = sharedViewModel,
                                 items = costs,
                                 itemContent = { item ->
-                                    GenericItem(item = item, itemName = { (it).costName })
+                                    GenericItem(sharedViewModel = sharedViewModel, item = item, itemName = { (it).costName })
                                 },
                                 onDeleteItem = { item ->
                                     vm.deleteCost(item)

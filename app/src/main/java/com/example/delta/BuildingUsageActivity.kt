@@ -22,9 +22,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.data.entity.BuildingUsages
+import com.example.delta.viewmodel.SharedViewModel
 
 class BuildingUsageActivity : ComponentActivity() {
     private val viewModel: BuildingUsageViewModel by viewModels()
+    val sharedViewModel: SharedViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -35,7 +37,7 @@ class BuildingUsageActivity : ComponentActivity() {
         setContent {
             val buildingUsages by viewModel.getAllBuildingUsage()
                 .collectAsState(initial = emptyList())
-            AppTheme {
+            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Scaffold(
                         topBar = {
@@ -58,15 +60,18 @@ class BuildingUsageActivity : ComponentActivity() {
                         }
                     ) { innerPadding ->
                         CostForm(
+                            sharedViewModel = sharedViewModel,
                             viewModel = viewModel,
                             insertItem = { name ->
                                 viewModel.insertBuildingUsage(BuildingUsages(buildingUsageName = name))
                             },
                             listContent = { vm ->
                                 GenericList(
+                                    sharedViewModel = sharedViewModel,
                                     items = buildingUsages,
                                     itemContent = { item ->
                                         GenericItem(
+                                            sharedViewModel = sharedViewModel,
                                             item = item,
                                             itemName = { (it).buildingUsageName })
                                     },

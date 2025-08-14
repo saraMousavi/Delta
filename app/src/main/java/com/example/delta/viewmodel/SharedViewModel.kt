@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
@@ -79,7 +80,6 @@ import org.json.JSONObject
 import java.io.File
 import kotlin.math.min
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 
 
 class SharedViewModel(application: Application) : AndroidViewModel(application) {
@@ -166,6 +166,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     val tenantUnitMap = mutableMapOf<Tenants, Units>()
     val ownerManagerMap = mutableMapOf<Owners, Boolean>()
 
+    private val _isDarkModeEnabled = mutableStateOf(false)  // Compose MutableState
+    var isDarkModeEnabled: Boolean
+        get() = _isDarkModeEnabled.value
+        set(value) {
+            _isDarkModeEnabled.value = value
+            saveDarkModeState(context, value)
+        }
 
     var automaticCharge by mutableStateOf(false)
     // State to hold current balance of operational fund
@@ -205,9 +212,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 //        loadOwners()
 //        loadTenants()
 //        loadNotification()
+        viewModelScope.launch {
+            val savedValue =
+                Preference().getDarkModeState(context) // suspend fun reading from DataStore
+            _isDarkModeEnabled.value = savedValue
+        }
         loadCosts()
         loadBuildingsWithTypesAndUsages()
 //        loadDefaultCosts()
+    }
+
+    fun saveDarkModeState(context: Context, isDarkMode: Boolean) {
+        Log.d("isDarkMode", isDarkMode.toString())
+        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        prefs.edit {
+            putBoolean("is_dark_mode", isDarkMode)
+        }
     }
 
     /**
@@ -340,6 +360,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun getPaysForUnit(unitId: Long): Flow<List<Debts>> = flow {
         val debts = debtsDao.getPaysForUnit(unitId)
+        emit(debts)
+    }.flowOn(Dispatchers.IO)
+
+    fun getChargeDebtsForOwners(ownerId: Long): Flow<List<Debts>> = flow {
+        val debts = debtsDao.getChargeDebtsForOwners(ownerId)
         emit(debts)
     }.flowOn(Dispatchers.IO)
 
@@ -1085,8 +1110,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         ownersUnitsCrossRefs = ownersUnitsCrossRefs
                     )
                     ownerPayments.forEach { (ownerId, amount) ->
+                        val unit = unitsDao.getUnitsForOwner(ownerId)
+                        //@todo analyze how to insert for all unit of owner
                         val debt = Debts(
-                            unitId = null,
+                            unitId = units[0].unitId,
                             ownerId = ownerId,
                             costId = costId,
                             buildingId = buildingId,

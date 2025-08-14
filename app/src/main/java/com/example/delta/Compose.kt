@@ -10,7 +10,6 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import android.webkit.MimeTypeMap
 import android.provider.OpenableColumns
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,7 +18,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -33,20 +31,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.MoneyOff
 import androidx.compose.material.icons.outlined.Support
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -105,31 +98,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
 import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Calculate
-import androidx.compose.material.icons.outlined.People
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.Owners
 import com.example.delta.enums.HomePageFields
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.AuthUtils
 import com.example.delta.init.Preference
-import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import java.io.File
 import java.io.FileOutputStream
 
@@ -150,12 +138,13 @@ fun SimpleOutlinedTextFieldSample(name: String, modifier: Modifier = Modifier) {
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun <VM : ViewModel> CostForm(
+    sharedViewModel: SharedViewModel,
     viewModel: VM,
     insertItem: (String) -> Unit,
     listContent: @Composable (VM) -> Unit,
     contextString: Int
 ) {
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         val context = LocalContext.current
         var showDialog by remember { mutableStateOf(false) }
 
@@ -195,6 +184,7 @@ fun <VM : ViewModel> CostForm(
 
         if (showDialog) {
             AddItemDialog(
+                sharedViewModel = sharedViewModel,
                 onDismiss = { showDialog = false },
                 onInsert = insertItem
             )
@@ -204,10 +194,10 @@ fun <VM : ViewModel> CostForm(
 
 
 @Composable
-fun InputAndButton(insertItem: (String) -> Unit, itemNameState: String, onDismiss: () -> Unit) {
+fun InputAndButton(sharedViewModel: SharedViewModel, insertItem: (String) -> Unit, itemNameState: String, onDismiss: () -> Unit) {
     var itemName by remember { mutableStateOf(itemNameState) }
     val context = LocalContext.current
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         OutlinedTextField(
             value = itemName,
             modifier = Modifier.fillMaxWidth(),
@@ -253,9 +243,10 @@ fun <T> GenericList(
     items: List<T>,
     itemContent: @Composable (T) -> Unit,
     onDeleteItem: (T) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedViewModel: SharedViewModel
 ) {
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         LazyColumn(
             modifier = modifier.fillMaxSize()
         ) {
@@ -275,12 +266,13 @@ fun <T> GenericList(
 
 @Composable
 fun <T> GenericItem(
+    sharedViewModel: SharedViewModel,
     item: T,
     itemName: (T) -> String, // Lambda to extract item name
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         Card(
             modifier = modifier
                 .fillMaxWidth()
@@ -336,10 +328,11 @@ fun SwipeToDeleteItem(
 
 @Composable
 fun AddItemDialog(
+    sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
     onInsert: (String) -> Unit
 ) {
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         Dialog(onDismissRequest = onDismiss) {
             Surface(
                 modifier = Modifier
@@ -354,6 +347,7 @@ fun AddItemDialog(
                 ) {
                     val itemName by remember { mutableStateOf("") }
                     InputAndButton(
+                        sharedViewModel = sharedViewModel,
                         insertItem = onInsert,
                         itemNameState = itemName,
                         onDismiss = onDismiss
@@ -368,6 +362,7 @@ fun AddItemDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> ExposedDropdownMenuBoxExample(
+    sharedViewModel: SharedViewModel,
     items: List<T>,
     selectedItem: T?,
     onItemSelected: (T) -> Unit,
@@ -376,7 +371,7 @@ fun <T> ExposedDropdownMenuBoxExample(
     modifier: Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         ExposedDropdownMenuBox(
             modifier = modifier,
             expanded = expanded,
@@ -439,6 +434,7 @@ fun ProvinceStateSelector(
     Column(modifier = modifier) {
         // Province Selector
         ExposedDropdownMenuBoxExample(
+            sharedViewModel = sharedViewModel,
             items = provinces,
             selectedItem = sharedViewModel.province,
             onItemSelected = { selectedProvince ->
@@ -454,6 +450,7 @@ fun ProvinceStateSelector(
 
         // State Selector
         ExposedDropdownMenuBoxExample(
+            sharedViewModel = sharedViewModel,
             items = availableStates,
             selectedItem = sharedViewModel.state,
             onItemSelected = { selectedState ->
@@ -472,7 +469,8 @@ fun ChipGroupUnits(
     selectedUnits: List<Units>,
     onSelectionChange: (List<Units>) -> Unit,
     units: List<Units>,
-    label: String
+    label: String,
+    context: Context
 ) {
     Text(
         text = label,
@@ -482,6 +480,27 @@ fun ChipGroupUnits(
     FlowRow(
         modifier = Modifier.padding(8.dp)
     ) {
+        val allSelected = units.isNotEmpty() && selectedUnits.size == units.size
+        InputChip(
+            selected = allSelected,
+            onClick = {
+                if (allSelected) {
+                    // Deselect all
+                    onSelectionChange(emptyList())
+                } else {
+                    // Select all
+                    onSelectionChange(units)
+                }
+            },
+            label = { Text(text = context.getString(R.string.all), style = MaterialTheme.typography.bodyLarge) },
+            colors = InputChipDefaults.inputChipColors(
+                selectedContainerColor = Color.Gray,
+                selectedLabelColor = Color.White,
+                containerColor = if (allSelected) Color.Gray else Color.LightGray,
+                labelColor = if (allSelected) Color.White else Color.Black
+            )
+        )
+
         units.forEach { unit ->
             InputChip(
                 selected = selectedUnits.contains(unit),
@@ -605,12 +624,13 @@ fun PasswordTextField(
 // Function for the date picker content to use
 @Composable
 fun PersianDatePickerDialogContent(
+    sharedViewModel: SharedViewModel,
     onDateSelected: (String) -> Unit,
     onDismiss: () -> Unit,
     context: Context
 ) {
     val activity = context as? Activity
-    AppTheme {
+    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
         LaunchedEffect(key1 = Unit) {
             activity?.let {
                 val picker = PersianDatePickerDialog(it)
@@ -1106,11 +1126,11 @@ fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): Stri
         null
     }
 }
-
 @Composable
 fun UploadFile(
     sharedViewModel: SharedViewModel,
     context: Context,
+    maxFileSizeBytes: Long = 5 * 1024 * 1024, // for example 5MB max size limit
     modifier: Modifier = Modifier,
     onFileSaved: (String) -> Unit
 ) {
@@ -1122,6 +1142,12 @@ fun UploadFile(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
+            // Before saving, check size
+            val fileSize = getFileSize(context, it)
+            if (fileSize != null && fileSize > maxFileSizeBytes) {
+                errorMessage = "${context.getString(R.string.file_exeed)}: ${maxFileSizeBytes / (1024 * 1024)} MB"
+                return@let
+            }
             isSaving = true
             val filename = queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
             val savedPath = copyUriToInternalStorage(context, it, filename)
@@ -1130,7 +1156,7 @@ fun UploadFile(
                 errorMessage = null
                 onFileSaved(savedPath)
             } else {
-                errorMessage = "Failed to save file"
+                errorMessage = context.getString(R.string.failed)
             }
             isSaving = false
         }
@@ -1143,29 +1169,30 @@ fun UploadFile(
             modifier = Modifier.fillMaxWidth()
         ) {
             Box {
-                Button(
-                    onClick = { filePicker.launch("*/*") }, // Allow all file types
-                    enabled = !isSaving
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
+                Row (horizontalArrangement = Arrangement.SpaceBetween){
+                    Button(
+                        onClick = { filePicker.launch("*/*") }, // Allow all file types
+                        enabled = !isSaving
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        } else {
+                            Text(
+                                text = context.getString(R.string.upload),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+
+                    errorMessage?.let {
                         Text(
-                            text = context.getString(R.string.upload),
-                            style = MaterialTheme.typography.bodyLarge
+                            text = it,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
-                }
-
-                errorMessage?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.BottomEnd)
-                    )
                 }
             }
         }
@@ -1187,6 +1214,23 @@ fun UploadFile(
                 )
             }
         }
+    }
+}
+
+// Helper function to get file size from Uri
+fun getFileSize(context: Context, uri: Uri): Long? {
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+        if (sizeIndex != -1) {
+            cursor.moveToFirst()
+            return cursor.getLong(sizeIndex)
+        }
+    }
+    // Fallback: try open inputStream and get available size (less efficient)
+    return try {
+        context.contentResolver.openInputStream(uri)?.available()?.toLong()
+    } catch (e: Exception) {
+        null
     }
 }
 
@@ -1282,133 +1326,6 @@ fun queryFileName(context: Context, uri: Uri): String? {
         }
     }
     return name
-}
-
-@Composable
-fun YearMonthSelector(
-    selectedYear: Int?, // nullable Int, null means no year selected
-    onYearChange: (Int) -> Unit,
-    selectedMonth: Int,
-    onMonthChange: (Int) -> Unit
-) {
-    val context = LocalContext.current
-    val persianMonths = listOf(
-        context.getString(R.string.farvardin),
-        context.getString(R.string.ordibehesht),
-        context.getString(R.string.khordad),
-        context.getString(R.string.tir),
-        context.getString(R.string.mordad),
-        context.getString(R.string.shahrivar),
-        context.getString(R.string.mehr),
-        context.getString(R.string.aban),
-        context.getString(R.string.azar),
-        context.getString(R.string.dey),
-        context.getString(R.string.bahman),
-        context.getString(R.string.esfand)
-    )
-
-    val currentYear = remember { PersianCalendar().persianYear }
-
-    BoxWithConstraints {
-        val maxWidth = maxWidth
-        // Allocate roughly 30% for year and 40% for month text widths, adjust as needed
-        val yearTextWidth = maxWidth * 0.1f
-        val monthTextWidth = maxWidth * 0.5f
-
-        Row(
-            modifier = Modifier.wrapContentWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Year selector with arrows and text
-            Row(
-                modifier = Modifier
-                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                    .padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                IconButton(
-                    onClick = {
-                        val year = selectedYear ?: currentYear
-                        onYearChange(year - 1)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = context.getString(R.string.previous_year)
-                    )
-                }
-
-                Text(
-                    text = selectedYear?.toString() ?: "",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .width(yearTextWidth),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                IconButton(
-                    onClick = {
-                        val year = selectedYear ?: currentYear
-                        onYearChange(year + 1)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropUp,
-                        contentDescription = context.getString(R.string.next_year)
-                    )
-                }
-            }
-
-            // Month selector with arrows and month name
-            Row(
-                modifier = Modifier
-                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                    .padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                IconButton(
-                    onClick = {
-                        val prevMonth = if (selectedMonth > 1) selectedMonth - 1 else 12
-                        onMonthChange(prevMonth)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = context.getString(R.string.previous_month),
-                        modifier = Modifier.size(24.dp), // explicit size
-                        tint = MaterialTheme.colorScheme.onSurface // ensure contrast
-                    )
-                }
-
-                Text(
-                    text = persianMonths.getOrNull(selectedMonth - 1) ?: "",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .width(monthTextWidth),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                IconButton(
-                    onClick = {
-                        val nextMonth = if (selectedMonth < 12) selectedMonth + 1 else 1
-                        onMonthChange(nextMonth)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropUp,
-                        contentDescription = context.getString(R.string.next_month)
-                    )
-                }
-            }
-        }
-    }
 }
 
 

@@ -292,6 +292,14 @@ interface DebtsDao {
         dueDate: String
     ): Debts?
 
+    @Query("""
+        SELECT * FROM debts 
+        WHERE ownerId = :ownerId AND payment_flag = 0 and description = 'شارژ' LIMIT 1
+    """)
+    suspend fun getChargeDebtsForOwners(
+        ownerId: Long
+    ): List<Debts>
+
 
     data class UnitChargeAggregate(
         val unitId: Long?,
