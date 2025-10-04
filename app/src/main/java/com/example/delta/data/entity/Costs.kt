@@ -36,6 +36,7 @@ data class Costs(
     @ColumnInfo(name = "responsible") val responsible: Responsible, // owner, tenant
     @ColumnInfo(name = "fund_type") var fundType: FundType,
     @ColumnInfo(name = "charge_flag") var chargeFlag: Boolean?= false,
+    @ColumnInfo(name = "capital_flag") var capitalFlag: Boolean?= false,
     @ColumnInfo(name = "invoice_flag") var invoiceFlag: Boolean?= false,
     @ColumnInfo(name = "due_date") val dueDate: String, // Due date of the debt
 ) : Parcelable

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "9f3133c230a8e26ded11745fc0153108",
+    "identityHash": "1d65a756dc64c3d0670a4ceebfb79a44",
     "entities": [
       {
         "tableName": "building_types",
@@ -225,7 +225,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_type` INTEGER NOT NULL, `charge_flag` INTEGER, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_type` INTEGER NOT NULL, `charge_flag` INTEGER, `capital_flag` INTEGER, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "costId",
@@ -283,6 +283,11 @@
           {
             "fieldPath": "chargeFlag",
             "columnName": "charge_flag",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "capitalFlag",
+            "columnName": "capital_flag",
             "affinity": "INTEGER"
           },
           {
@@ -1987,7 +1992,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9f3133c230a8e26ded11745fc0153108')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1d65a756dc64c3d0670a4ceebfb79a44')"
     ]
   }
 }

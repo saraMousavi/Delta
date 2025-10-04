@@ -722,6 +722,12 @@ fun SettingsScreen(
         onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
     )
 
+    val capitalInfoItem = NavItem(
+        title = R.string.capital_info,
+        icon = Icons.Outlined.AttachMoney,
+        onClick = { context.startActivity(Intent(context, CapitalActivity::class.java)) }
+    )
+
     val firstGroup = listOf(
         NavItem(
             title = R.string.supporting,
@@ -768,6 +774,16 @@ fun SettingsScreen(
                     title = context.getString(chargeItem.title),
                     icon = chargeItem.icon,
                     onClick = chargeItem.onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    iconOnTop = false
+                )
+            }
+            // Capital calculation full width row
+            item {
+                ClickableSettingItem(
+                    title = context.getString(capitalInfoItem.title),
+                    icon = capitalInfoItem.icon,
+                    onClick = capitalInfoItem.onClick,
                     modifier = Modifier.fillMaxWidth(),
                     iconOnTop = false
                 )

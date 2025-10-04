@@ -99,6 +99,24 @@ interface CostDao {
 """)
     suspend fun getCostsForBuildingWithChargeFlagAndFiscalYearAndCostName(buildingId: Long, fiscalYear: String, costName : String): Costs?
 
+    @Query("""
+    SELECT * FROM costs
+    WHERE buildingId = :buildingId
+    AND charge_flag = 0
+    AND cost_name = 'هزینه های عمرانی'
+    AND due_date LIKE (:fiscalYear || '%')
+    LIMIT 1
+""")
+    suspend fun getCapitalCostsForBuildingWithFiscalYear(buildingId: Long, fiscalYear: String): Costs?
+
+    @Query("""
+    SELECT * FROM costs
+    WHERE buildingId = :buildingId
+    AND charge_flag = 0
+    AND cost_name = 'هزینه های عمرانی'
+""")
+    suspend fun getCapitalCostsForBuilding(buildingId: Long): List<Costs>
+
 
     @Query("""
     SELECT * FROM costs c1
@@ -155,6 +173,7 @@ interface CostDao {
         AND (invoice_flag IS NULL OR invoice_flag = 0)
         AND fund_type = :fundType
         and charge_flag = 0
+        and capital_flag = 0
         and cost_name != 'شارژ' 
         and cost_name != 'رهن' 
         and cost_name != 'اجاره' 

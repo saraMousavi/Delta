@@ -146,12 +146,12 @@ interface DebtsDao {
 
     @Query(
         "SELECT * FROM debts inner join costs on costs.costId = debts.costId " +
-            "WHERE costs.buildingId = :buildingId and payment_flag = 0 ORDER BY due_date ASC")
+            "WHERE costs.buildingId = :buildingId and payment_flag = 0  ORDER BY due_date ASC")
     suspend fun getDebtsForBuilding(buildingId: Long): List<Debts>
 
     @Query(
         "SELECT * FROM debts inner join costs on costs.costId = debts.costId " +
-            "WHERE costs.buildingId = :buildingId and payment_flag = 1  ORDER BY due_date ASC")
+            "WHERE costs.buildingId = :buildingId and payment_flag = 1   ORDER BY due_date ASC")
     suspend fun getPaysForBuilding(buildingId: Long): List<Debts>
 
     data class CostAmountSummary(

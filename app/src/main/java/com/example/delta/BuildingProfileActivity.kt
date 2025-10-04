@@ -1000,28 +1000,47 @@ class BuildingProfileActivity : ComponentActivity() {
         // Show dialogs if needed (unchanged)
 
             if (buildingViewModel.showCapitalCostDialog.value) {
+                val capitalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
+                    buildingId = building.buildingId,
+                    fundType = FundType.CAPITAL
+                ).collectAsState(initial = 0)
+                var success by remember { mutableStateOf(false) }
                 AddCapitalCostDialog(
                 buildingId = building.buildingId,
                 sharedViewModel = sharedViewModel,
                 onDismiss = { buildingViewModel.showCapitalCostDialog.value = false },
                 onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, message ->
                     coroutineScope.launch {
-                        sharedViewModel.insertDebtPerNewCost(
-                            buildingId = building.buildingId,
-                            amount = amount,
-                            name = selectedCost.costName,
-                            period = period,
-                            fundType = FundType.CAPITAL,
-                            paymentLevel = selectedCost.paymentLevel,
-                            calculateMethod = calculateMethod,
-                            calculatedUnitMethod = calculatedUnitMethod,
-                            responsible = responsible,
-                            dueDate = dueDate,
-                            selectedUnitIds = selectedUnits.toList(),
-                            selectedOwnerIds = selectedOwners.toList()
-                        )
+                        if (amount.toDouble() <= (capitalFund.toDouble())) {
+                            sharedViewModel.insertNewCost(
+                                Costs(
+                                    buildingId = building.buildingId,
+                                    costName = selectedCost.costName,
+                                    fundType = FundType.CAPITAL,
+                                    responsible = Responsible.OWNER,
+                                    paymentLevel = PaymentLevel.UNIT,
+                                    calculateMethod = CalculateMethod.EQUAL,
+                                    period = Period.YEARLY,
+                                    tempAmount = amount.toDouble(),
+                                    dueDate = dueDate,
+                                    invoiceFlag = true
+                                )
+                            )
+                            success = sharedViewModel.decreaseOperationalFund(
+                                building.buildingId,
+                                amount.toDouble(),
+                                FundType.CAPITAL
+                            )
+                        } else {
+                            success = false
+                        }
                         buildingViewModel.showCapitalCostDialog.value = false
-                        snackBarHostState.showSnackbar(message)
+                        if(success){
+                            snackBarHostState.showSnackbar(context.getString(R.string.fund_decreased_successfully))
+                        } else {
+                            snackBarHostState.showSnackbar(context.getString(R.string.insufficient_fund))
+                        }
+
                     }
                 }
             )
@@ -1036,8 +1055,8 @@ class BuildingProfileActivity : ComponentActivity() {
                     coroutineScope.launch {
                     buildingViewModel.showOperationalCostDialog.value = false
                     snackBarHostState.showSnackbar(message)
+                    }
                 }
-        }
             )
         }
 
@@ -2328,15 +2347,13 @@ fun AddCapitalCostDialog(
     val isValid = remember(
         selectedCost,
         totalAmount,
-        dueDate,
-        selectedOwners.toList()
+        dueDate
     ) {
         selectedCost != null &&
                 !selectedCost!!.costName.isBlank() &&
                 totalAmount.isNotBlank() &&
                 totalAmount.toDoubleOrNull()?.let { it > 0.0 } == true &&
-                dueDate.isNotBlank() &&
-                selectedOwners.isNotEmpty()
+                dueDate.isNotBlank()
     }
 
     AlertDialog(
@@ -2405,17 +2422,17 @@ fun AddCapitalCostDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Owners chip group - only for Capital fund
-                    ChipGroupOwners(
-                        selectedOwners = selectedOwners,
-                        onSelectionChange = { newSelection ->
-                            selectedOwners.clear()
-                            selectedOwners.addAll(newSelection)
-                            sharedViewModel.selectedOwners.clear()
-                            sharedViewModel.selectedOwners.addAll(newSelection)
-                        },
-                        owners = owners,
-                        label = context.getString(R.string.owners)
-                    )
+//                    ChipGroupOwners(
+//                        selectedOwners = selectedOwners,
+//                        onSelectionChange = { newSelection ->
+//                            selectedOwners.clear()
+//                            selectedOwners.addAll(newSelection)
+//                            sharedViewModel.selectedOwners.clear()
+//                            sharedViewModel.selectedOwners.addAll(newSelection)
+//                        },
+//                        owners = owners,
+//                        label = context.getString(R.string.owners)
+//                    )
                 }
             }
         },
@@ -2547,7 +2564,7 @@ fun AddOperationalCostDialog(
     var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var totalAmount by remember { mutableStateOf("") }
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
-    var selectedResponsible by remember { mutableStateOf(Responsible.OWNER.getDisplayName(context)) }
+    var selectedResponsible by remember { mutableStateOf(Responsible.TENANT.getDisplayName(context)) }
     var selectedCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     var selectedUnitCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     val selectedUnits = remember { mutableStateListOf<Units>() }
@@ -2597,12 +2614,12 @@ fun AddOperationalCostDialog(
     val isValid = remember(
         selectedCost,
         totalAmount,
-        selectedResponsible,
-        selectedCalculateMethod,
+//        selectedResponsible,
+//        selectedCalculateMethod,
         selectedUnitCalculateMethod,
         dueDate,
-        selectedUnits.toList(),  // important to copy to detect changes inside list
-        selectedOwners.toList()
+//        selectedUnits.toList(),  // important to copy to detect changes inside list
+//        selectedOwners.toList()
     ) {
         val isCostNameValid = selectedCost != null && !selectedCost!!.costName.isBlank()
         val isAmountValid =
@@ -2620,16 +2637,17 @@ fun AddOperationalCostDialog(
 
         isCostNameValid &&
                 isAmountValid &&
-                isResponsibleValid &&
-                isCalculateMethodValid &&
+//                isResponsibleValid &&
+//                isCalculateMethodValid &&
                 isUnitCalculateMethodValid &&
-                isDueDateValid &&
-                (
-                        // If owner responsible, owners must be selected
-                        (responsibleIsOwner && isOwnersSelected)
-                                // If tenant responsible, units must be selected
-                                || (responsibleIsTenant && isUnitsSelected)
-                        )
+                isDueDateValid
+//                &&
+//                (
+//                        // If owner responsible, owners must be selected
+//                        (responsibleIsOwner && isOwnersSelected)
+//                                // If tenant responsible, units must be selected
+//                                || (responsibleIsTenant && isUnitsSelected)
+//                        )
     }
 
     AlertDialog(
@@ -2702,21 +2720,21 @@ fun AddOperationalCostDialog(
                         readOnly = true
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    ChipGroupShared(
-                        selectedItems = listOf(selectedResponsible),
-                        onSelectionChange = { newSelection ->
-                            if (newSelection.isNotEmpty()) {
-                                selectedResponsible = newSelection.first()
-                            }
-                        },
-                        items = listOf(
-                            context.getString(R.string.owners),
-                            context.getString(R.string.tenants)
-                        ),
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        label = context.getString(R.string.responsible),
-                        singleSelection = true
-                    )
+//                    ChipGroupShared(
+//                        selectedItems = listOf(selectedResponsible),
+//                        onSelectionChange = { newSelection ->
+//                            if (newSelection.isNotEmpty()) {
+//                                selectedResponsible = newSelection.first()
+//                            }
+//                        },
+//                        items = listOf(
+//                            context.getString(R.string.owners),
+//                            context.getString(R.string.tenants)
+//                        ),
+//                        modifier = Modifier.padding(vertical = 8.dp),
+//                        label = context.getString(R.string.responsible),
+//                        singleSelection = true
+//                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     if (selectedResponsible == context.getString(R.string.tenants)) {
                         ChipGroupUnits(
@@ -2733,54 +2751,56 @@ fun AddOperationalCostDialog(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        ChipGroupShared(
-                            selectedItems = listOf(selectedUnitCalculateMethod),
-                            onSelectionChange = { newSelection ->
-                                if (newSelection.isNotEmpty()) {
-                                    selectedUnitCalculateMethod = newSelection.first()
-                                }
-                            },
-                            items = listOf(
-                                context.getString(R.string.area),
-                                context.getString(R.string.people),
-                                context.getString(R.string.fixed)
-                            ),
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            label = context.getString(R.string.acount_base),
-                            singleSelection = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    } else {
-                        ChipGroupOwners(
-                            selectedOwners = selectedOwners,
-                            onSelectionChange = { newSelection ->
-                                selectedOwners.clear()
-                                selectedOwners.addAll(newSelection)
-                                sharedViewModel.selectedOwners.clear()
-                                sharedViewModel.selectedOwners.addAll(newSelection)
-                            },
-                            owners = owners,
-                            label = context.getString(R.string.owners)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
 
-                        ChipGroupShared(
-                            selectedItems = listOf(selectedCalculateMethod),
-                            onSelectionChange = { newSelection ->
-                                if (newSelection.isNotEmpty()) {
-                                    selectedCalculateMethod = newSelection.first()
-                                }
-                            },
-                            items = listOf(
-                                context.getString(R.string.area),
-                                context.getString(R.string.dang),
-                                context.getString(R.string.fixed)
-                            ),
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            label = context.getString(R.string.acount_base),
-                            singleSelection = true
-                        )
                     }
+                    ChipGroupShared(
+                        selectedItems = listOf(selectedUnitCalculateMethod),
+                        onSelectionChange = { newSelection ->
+                            if (newSelection.isNotEmpty()) {
+                                selectedUnitCalculateMethod = newSelection.first()
+                            }
+                        },
+                        items = listOf(
+                            context.getString(R.string.area),
+                            context.getString(R.string.people),
+                            context.getString(R.string.fixed)
+                        ),
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.acount_base),
+                        singleSelection = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+//                    else {
+//                        ChipGroupOwners(
+//                            selectedOwners = selectedOwners,
+//                            onSelectionChange = { newSelection ->
+//                                selectedOwners.clear()
+//                                selectedOwners.addAll(newSelection)
+//                                sharedViewModel.selectedOwners.clear()
+//                                sharedViewModel.selectedOwners.addAll(newSelection)
+//                            },
+//                            owners = owners,
+//                            label = context.getString(R.string.owners)
+//                        )
+//                        Spacer(modifier = Modifier.height(8.dp))
+//
+//                        ChipGroupShared(
+//                            selectedItems = listOf(selectedCalculateMethod),
+//                            onSelectionChange = { newSelection ->
+//                                if (newSelection.isNotEmpty()) {
+//                                    selectedCalculateMethod = newSelection.first()
+//                                }
+//                            },
+//                            items = listOf(
+//                                context.getString(R.string.area),
+//                                context.getString(R.string.dang),
+//                                context.getString(R.string.fixed)
+//                            ),
+//                            modifier = Modifier.padding(vertical = 8.dp),
+//                            label = context.getString(R.string.acount_base),
+//                            singleSelection = true
+//                        )
+//                    }
                 }
             }
         },
@@ -2789,6 +2809,7 @@ fun AddOperationalCostDialog(
                 enabled = isValid,
                 onClick = {
                     val cost = selectedCost ?: return@Button
+                    Log.d("selectedResponsible", selectedResponsible.toString())
                     if (selectedResponsible == Responsible.TENANT.getDisplayName(context) && isChargeableCost) {
                         coroutineScope.launch {
                             val amountDouble = totalAmount.toDoubleOrNull() ?: 0.0

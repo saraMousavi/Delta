@@ -410,6 +410,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             buildingId, fiscalYear
         ).flowOn(Dispatchers.IO)
 
+
+    fun getCapitalCostsForBuilding(buildingId: Long): Flow<List<Costs>> = flow {
+        val costs = costsDao.getCapitalCostsForBuilding(
+            buildingId
+        )
+        emit(costs)
+    }.flowOn(Dispatchers.IO)
+
     fun getChargesCostsNotInBuilding(buildingId: Long): Flow<List<Costs>> = flow {
         val costs = costsDao.getChargesCostsNotInBuilding(
             buildingId
@@ -968,6 +976,46 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    fun insertDebtForCapitalCost(
+        buildingId: Long,
+        cost: Costs,
+        amountPerOwner: Double,
+        dueDate: String,
+        description: String
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Check if cost with same description and fiscal year already exists
+            val existingCost = costsDao.getCapitalCostsForBuildingWithFiscalYear(buildingId, dueDate)
+
+            val costId = if (existingCost != null) {
+                existingCost.costId
+            } else {
+                // Insert cost and get new costId
+                costsDao.insertCost(cost)
+            }
+
+            // 2. Get owners for building
+            val ownersList = ownersDao.getOwnersForBuilding(buildingId)
+
+            // 3. Insert debts for each owner with unitId = null since owner responsible
+            ownersList.forEach { owner ->
+                val debt = Debts(
+                    unitId = null,
+                    costId = costId,
+                    buildingId = buildingId,
+                    ownerId = owner.ownerId,
+                    description = description,
+                    dueDate = dueDate,
+                    amount = amountPerOwner,
+                    paymentFlag = false
+                )
+                debtsDao.insertDebt(debt)
+            }
+        }
+    }
+
+
     fun insertDebtPerNewCost(
         buildingId: Long,
         amount: String,
@@ -1030,9 +1078,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 dueDate = dueDate
             )
             costId = costsDao.insertCost(cost)
+            Log.d("newResponsible", newResponsible.toString())
             // Insert debts according to responsible and units/owners selected
             when {
                 newResponsible == Responsible.TENANT  && selectedUnitIds.isNotEmpty() -> {
+                    Log.d("selectedUnitIds", selectedUnitIds.toString())
                     val units = unitsDao.getUnitsByIds(selectedUnitIds)
                     for (unit in units) {
                         val activeTenant = tenantsDao.getActiveTenantForUnit(unit.unitId)
@@ -1064,6 +1114,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         } else {
 // Unit inactive, find owners of this unit and insert debt for owners
 
+                            Log.d("unit.unitId", unit.unitId.toString())
                             val ownersForUnit = ownersDao.getOwnersForUnits(listOf(unit.unitId))
                             val ownersUnitsCrossRefs = ownersDao.getOwnersWithUnitsList(ownersForUnit.map { it.ownerId })
                             val areaByOwner = Calculation().calculateAreaByOwners(
@@ -1077,7 +1128,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 areaByOwner = areaByOwner,
                                 ownersUnitsCrossRefs = ownersUnitsCrossRefs
                             )
-
+                            Log.d("ownerPayments", ownerPayments.toString())
                             ownerPayments.forEach { (ownerId, amount) ->
                                 val debt = Debts(
                                     unitId = null,
@@ -1109,6 +1160,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         areaByOwner = areaByOwner,
                         ownersUnitsCrossRefs = ownersUnitsCrossRefs
                     )
+                    Log.d("ownerPayments", ownerPayments.toString())
                     ownerPayments.forEach { (ownerId, amount) ->
                         val unit = unitsDao.getUnitsForOwner(ownerId)
                         //@todo analyze how to insert for all unit of owner
@@ -1122,6 +1174,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             amount = amount,
                             paymentFlag = false
                         )
+                        Log.d("debt.owner", debt.toString())
                         debtsDao.insertDebt(debt)
                     }
                 }
@@ -1142,6 +1195,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                             getTenantCountForUnit = getTenantCountForUnit,
                             calculationMethod = CalculateMethod.EQUAL  // use your method for per-unit calculation
                         )
+                        Log.d("activeTenant", activeTenant.toString())
                         if (activeTenant != null) {
                             // Unit is active, insert debt for unit
 
@@ -1157,6 +1211,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 amount = amountForUnit,
                                 paymentFlag = false
                             )
+                            Log.d("debt.all", debt.toString())
                             debtsDao.insertDebt(debt)
                         } else {
 // Unit inactive, find owners of this unit and insert debt for owners
@@ -1174,6 +1229,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                 areaByOwner = areaByOwner,
                                 ownersUnitsCrossRefs = ownersUnitsCrossRefs
                             )
+                            Log.d("ownerPayments", ownerPayments.toString())
                             ownerPayments.forEach { (ownerId, amount) ->
                                 val debt = Debts(
                                     unitId = unit.unitId,

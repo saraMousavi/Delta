@@ -119,6 +119,10 @@ fun ReportsActivityScreen(
 
     val debtsList by sharedViewModel.getDebtsForBuilding(buildingId).collectAsState(initial = emptyList())
     val paysList by sharedViewModel.getPaysForBuilding(buildingId).collectAsState(initial = emptyList())
+    val allDebt by sharedViewModel.getDebtsForBuilding(buildingId).collectAsState(initial = emptyList())
+    val allCosts by sharedViewModel.getCosts().collectAsState(initial = emptyList())
+    Log.d("allCosts", allCosts.toString())
+    Log.d("debts", allDebt.toString())
     Log.d("debtsList", debtsList.toString())
     Log.d("paysList", paysList.toString())
     var showNoRecordedData by remember { mutableStateOf(false) }

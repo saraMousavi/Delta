@@ -447,4 +447,6 @@
     <string name="insert_emergency_phone_book_successfully">ثبت تماس اضطراری با موفقیت انجام شد و در تب اضطراری قرار گرفت.</string>
     <string name="insert_phone_book_successfully">ثبت تماس ساکنین با موفقیت انجام شد و در تب ساکنین قرار گرفت.</string>
     <string name="file_exeed">حداکثر اندازه فایل جهت بارگذاری</string>
+    <string name="capital_info">هزینه عمرانی</string>
+    <string name="capital_info_insert">ثبت هزینه عمرانی</string>
 </resources>
