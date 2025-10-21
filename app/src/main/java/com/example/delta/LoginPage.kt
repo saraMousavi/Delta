@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.offset
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.init.FileManagement
 import com.example.delta.screens.OnboardingScreenWithModalSheet
+import com.example.delta.screens.OtpScreen
 
 
 private lateinit var roleDao: RoleDao // Add Role DAO
@@ -314,7 +315,21 @@ fun SignUpScreen(
     var password by remember { mutableStateOf("") }
     var mobileError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
+    var showOtp by remember { mutableStateOf(false) }
+    var registeredPhone by remember { mutableStateOf("") }
     val context = LocalContext.current
+
+    if (showOtp) {
+        OtpScreen(
+            phone = registeredPhone,
+            onVerified = {
+                onShowBoarding()
+                showOtp = false
+            },
+            onBack = { showOtp = false }
+        )
+        return
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -336,16 +351,24 @@ fun SignUpScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 },
-                divider = {}  // hide the default bottom divider for cleaner look
+                divider = {}
             ) {
-                Tab(selected = false, onClick = {onTabChange(0)}, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Tab(
+                    selected = false,
+                    onClick = { onTabChange(0) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
                     Text(
                         context.getString(R.string.login),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(16.dp)
                     )
                 }
-                Tab(selected = true, onClick = {  },modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Tab(
+                    selected = true,
+                    onClick = {},
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
                     Text(
                         context.getString(R.string.sign_up),
                         style = MaterialTheme.typography.bodyLarge,
@@ -354,7 +377,6 @@ fun SignUpScreen(
                 }
             }
         }
-
 
         Column(
             modifier = Modifier
@@ -415,12 +437,15 @@ fun SignUpScreen(
                         roleId = 1L
                     )
 
-                    sharedViewModel.insertUser(context, user,
+                    sharedViewModel.insertUser(
+                        context,
+                        user,
                         onSuccess = { userId ->
                             user.userId = userId
                             insertDefaultAuthorizationData()
                             onSignUpSuccess(user)
-                            onShowBoarding()
+                            registeredPhone = user.mobileNumber.ifBlank { mobile }
+                            showOtp = true
                         }
                     )
                 },
@@ -432,7 +457,9 @@ fun SignUpScreen(
             ) {
                 Text(text = stringResource(R.string.sign_up), style = MaterialTheme.typography.bodyLarge)
             }
+
             Spacer(modifier = Modifier.height(24.dp))
+
             LoginFooter(
                 onGuestClick = {
                     context.startActivity(
@@ -445,6 +472,7 @@ fun SignUpScreen(
         }
     }
 }
+
 
 @Composable
 fun LoginFooter(onGuestClick: () -> Unit) {

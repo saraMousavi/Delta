@@ -9,7 +9,7 @@ import com.android.volley.toolbox.Volley
 import org.json.JSONObject
 
 class Tenant {
-    private val baseUrl = "http://89.42.211.69:3000/tenants"
+    private val baseUrl = "http://217.144.107.231:3000/tenant"
 
     fun fetchTenants(context: Context, onSuccess: (String) -> Units, onError: (Exception) -> Units) {
         val queue = Volley.newRequestQueue(context)

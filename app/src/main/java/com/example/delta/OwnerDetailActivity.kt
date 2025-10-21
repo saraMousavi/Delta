@@ -153,7 +153,7 @@ fun OwnerDetailsScreen(
                 OwnerTabType.FINANCIALS -> OwnerFinancialsTab(
                     ownerId,
                     sharedViewModel,
-                    snackbarHostState = snackbarHostState,
+                    snackBarHostState = snackbarHostState,
                     coroutineScope = coroutineScope
                 )
             }
@@ -358,7 +358,7 @@ fun OwnerTextField(label: Int, value: String, onValueChange: (String) -> Unit) {
 fun OwnerFinancialsTab(
     ownerId: Long,
     sharedViewModel: SharedViewModel,
-    snackbarHostState: SnackbarHostState,
+    snackBarHostState: SnackbarHostState,
     coroutineScope: CoroutineScope,
     modifier: Modifier = Modifier
 ) {
@@ -479,24 +479,30 @@ fun OwnerFinancialsTab(
                                     val fundType = cost?.fundType ?: FundType.OPERATIONAL
 
                                     val success = sharedViewModel.increaseBalanceFund(
+                                        context = context,
                                         buildingId = it.buildingId,
                                         amount = it.amount,
-                                        fundType = fundType
-                                    )
-                                    withContext(Dispatchers.Main) {
-                                        snackbarHostState.showSnackbar(
-                                            if (success) {
-                                                context.getString(
-                                                    if (fundType == FundType.OPERATIONAL)
-                                                        R.string.success_pay_tooperational_fund
-                                                    else
-                                                        R.string.success_pay_tocapital_fund
+                                        fundType = fundType,
+                                        onSuccess = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(
+                                                        if (fundType == FundType.OPERATIONAL)
+                                                            R.string.success_pay_tooperational_fund
+                                                        else
+                                                            R.string.success_pay_tocapital_fund
+                                                    )
                                                 )
-                                            } else {
-                                                context.getString(R.string.failed)
                                             }
-                                        )
-                                    }
+                                        },
+                                        onError = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.failed)
+                                                )
+                                            }
+                                        }
+                                    )
                                 }
                             }
                         })
@@ -526,7 +532,7 @@ fun OwnerFinancialsTab(
                             }
                         }
                         if (!hasTenant) {
-                            snackbarHostState.showSnackbar(context.getString(R.string.no_tenants))
+                            snackBarHostState.showSnackbar(context.getString(R.string.no_tenants))
                         } else {
                             showTransferDialog = true
                         }

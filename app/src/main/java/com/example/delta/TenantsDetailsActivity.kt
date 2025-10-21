@@ -597,25 +597,31 @@ fun TenantFinancialsTab(
                                 val cost = sharedViewModel.getCostById(it.costId)
                                 val fundType = cost?.fundType ?: FundType.OPERATIONAL
 
-                                val success = sharedViewModel.increaseBalanceFund(
+                                 sharedViewModel.increaseBalanceFund(
+                                    context = context,
                                     buildingId = it.buildingId,
                                     amount = it.amount,
-                                    fundType = fundType
-                                )
-                                withContext(Dispatchers.Main) {
-                                    snackBarHostState.showSnackbar(
-                                        if (success) {
-                                            context.getString(
-                                                if (fundType == FundType.OPERATIONAL)
-                                                    R.string.success_pay_tooperational_fund
-                                                else
-                                                    R.string.success_pay_tocapital_fund
+                                    fundType = fundType,
+                                    onSuccess = {
+                                        coroutineScope.launch {
+                                            snackBarHostState.showSnackbar(
+                                                context.getString(
+                                                    if (fundType == FundType.OPERATIONAL)
+                                                        R.string.success_pay_tooperational_fund
+                                                    else
+                                                        R.string.success_pay_tocapital_fund
+                                                )
                                             )
-                                        } else {
-                                            context.getString(R.string.failed)
                                         }
-                                    )
-                                }
+                                    },
+                                    onError = {
+                                        coroutineScope.launch {
+                                            snackBarHostState.showSnackbar(
+                                                context.getString(R.string.failed)
+                                            )
+                                        }
+                                    }
+                                )
                             }
                         }
                     })

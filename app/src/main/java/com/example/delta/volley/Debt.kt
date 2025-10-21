@@ -8,10 +8,10 @@ import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import org.json.JSONObject
 
-class Units {
-    private val baseUrl = "http://217.144.107.231:3000/unit"
+class Debt {
+    private val baseUrl = "http://217.144.107.231:3000/debts"
 
-    fun fetchUnits(context: Context, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
+    fun fetchDebts(context: Context, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
         val queue = Volley.newRequestQueue(context)
         val request = JsonArrayRequest(
             Request.Method.GET, baseUrl, null,
@@ -21,11 +21,11 @@ class Units {
         queue.add(request)
     }
 
-    fun insertUnit(context: Context, unitJson: JSONObject, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
+    fun insertDebt(context: Context, debtJson: JSONObject, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
         val queue = Volley.newRequestQueue(context)
-        Log.d("UnitVolley", "Insert unit JSON: $unitJson")
+        Log.d("DebtVolley", "Insert debt JSON: $debtJson")
         val request = JsonObjectRequest(
-            Request.Method.POST, baseUrl, unitJson,
+            Request.Method.POST, baseUrl, debtJson,
             { response -> onSuccess(response.toString()) },
             { error -> onError(Exception(error.message)) }
         )

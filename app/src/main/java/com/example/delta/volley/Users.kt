@@ -13,7 +13,7 @@ import org.json.JSONObject
 
 class Users {
     fun fetchUsers(context: Context?, onSuccess: (List<User>) -> Unit, onError: (Exception) -> Unit) {
-        val url = "http://89.42.211.69:3000/users"
+        val url = "http://217.144.107.231:3000/user"
 
         val queue = Volley.newRequestQueue(context)
 
@@ -28,7 +28,7 @@ class Users {
                         val user = User(
                             userId = userJson.getLong("userId"), // Map from backend JSON
                             mobileNumber = userJson.getString("mobileNumber"),
-                            password = userJson.getString("passwordHash"), // Changed from password
+                            password = userJson.getString("password"), // Changed from password
                             roleId = userJson.getLong("roleId")
                         )
                         userList.add(user)
@@ -48,7 +48,7 @@ class Users {
     }
 
     fun insertUser(context: Context, userJson: JSONObject) {
-        val url = "http://89.42.211.69:3000/users"  // Replace with your VPS IP and port
+        val url = "http://217.144.107.231:3000/user"  // Replace with your VPS IP and port
 
         val queue = Volley.newRequestQueue(context)
 

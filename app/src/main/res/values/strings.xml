@@ -449,4 +449,10 @@
     <string name="file_exeed">حداکثر اندازه فایل جهت بارگذاری</string>
     <string name="capital_info">هزینه عمرانی</string>
     <string name="capital_info_insert">ثبت هزینه عمرانی</string>
+    <string name="network_error">خطای شبکه</string>
+    <string name="wrong_expired_code">کد نادرست/منقضی</string>
+    <string name="code_sent">ارسال کد با موفقیت انجام شد.</string>
+    <string name="six_digit_code">" کد 6 رقمی"</string>
+    <string name="confirmed">تایید شد</string>
+    <string name="returned">بازگشت</string>
 </resources>

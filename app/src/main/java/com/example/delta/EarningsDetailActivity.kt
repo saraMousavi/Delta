@@ -159,7 +159,7 @@ fun EarningDetailScreen(
                         onClick = {
                             coroutineScope.launch {
                                 try {
-                                    viewModel.markSelectedAsReceived(earningId)
+                                    viewModel.markSelectedAsReceived(context, earningId)
                                     snackbarHostState.showSnackbar(context.getString(R.string.transfer_to_operational))
                                 } catch (e: Exception) {
                                     Log.e("markError", e.message.toString())

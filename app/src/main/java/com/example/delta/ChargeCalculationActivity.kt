@@ -464,13 +464,21 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                         chargeUnitMap = map,
                                         costsAmountMap = costsAmountMap,
                                         onError = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                                            }
+
                                         },
-                                        onSuccess = {
+                                        onSuccess = { costs, debts ->
                                             coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                                sharedViewModel.insertCostToServer (context, costs, debts,
+                                                    onSuccess = {
+                                                        coroutineScope.launch {
+                                                            snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                                        }
+                                                    }, onError = {
+                                                        coroutineScope.launch {
+                                                            snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                        }
+                                                    })
+
                                             }
                                         }
                                     )
@@ -516,7 +524,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             tempAmount = 0.0,
                             dueDate = ""
                         )
-                        sharedViewModel.insertNewCost(newCost)
+                        sharedViewModel.insertNewCost(newCost, onSuccess = {})
                         sharedViewModel.chargeCostsList.value += newCost
                     }
 
@@ -541,21 +549,26 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                     fiscalYear = selectedYear,
                     chargeUnitMap = calculatedCharges,
                     onError = {
-                        coroutineScope.launch {
-                            showChargeResultDialog = false
-                            snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                        }
+
                     },
                     costsAmountMap = costsAmountMap,
-                    onSuccess = {
-                        coroutineScope.launch {
-                            lastCalculatedCharges = calculatedCharges
-                            isEditMode = false
-                            chargeAlreadyCalculated = true
+                    onSuccess = { costs, debts ->
+                            sharedViewModel.insertCostToServer (context, costs, debts,
+                                onSuccess = {
+                                    coroutineScope.launch {
+                                        lastCalculatedCharges = calculatedCharges
+                                        isEditMode = false
+                                        chargeAlreadyCalculated = true
 
-                            showChargeResultDialog = false
-                            snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
-                        }
+                                        showChargeResultDialog = false
+                                        snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                    }
+                                }, onError = {
+                                    coroutineScope.launch {
+                                        showChargeResultDialog = false
+                                        snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                    }
+                                })
                     }
                 )
             },

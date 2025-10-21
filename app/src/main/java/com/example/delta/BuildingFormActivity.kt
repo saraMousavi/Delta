@@ -227,44 +227,45 @@ fun BuildingFormScreen(
                             val tenantsUnitsCrossRef = tenantViewModel.getAllTenantUnitRelations()
                             sharedViewModel.saveBuildingWithUnitsAndOwnersAndTenants(
                                 onSuccess = { building ->
-                                    //                                    sharedViewModel.insertBuildingToServer(
-//                                        context = context,
-//                                        building = building,
-//                                        tenantsUnitsCrossRef = tenantsUnitsCrossRef,
-//                                        onSuccess = { message ->
-//                                            Log.e(
-//                                                "SaveSuccess",
-//                                                "Error saving building on Server: ${message}"
-//                                            )
-//                                            sharedViewModel.resetState()
-//                                            // Create an Intent to start HomePageActivity
-//                                            val intent =
-//                                                Intent(context, HomePageActivity::class.java)
-//                                            sharedViewModel.isLoading = false
-//                                            // Start the activity
-//                                            context.startActivity(intent)
-//                                        },
-//                                        onError = { e ->
-//                                            Log.e(
-//                                                "SaveError",
-//                                                "Error saving building on Server: ${e.message}"
-//                                            )
-//                                            sharedViewModel.resetState()
-//                                            // Create an Intent to start HomePageActivity
-//                                            val intent =
-//                                                Intent(context, HomePageActivity::class.java)
-//                                            sharedViewModel.isLoading = false
-//                                            // Start the activity
-//                                            context.startActivity(intent)
-//                                        }
-//                                    )
-                                    sharedViewModel.resetState()
+                                    sharedViewModel.insertBuildingToServer(
+                                        context = context,
+                                        building = building,
+                                        tenantsUnitsCrossRef = tenantsUnitsCrossRef,
+                                        onSuccess = { message ->
+                                            Log.d(
+                                                "SaveSuccess",
+                                                "saving building on Server: $message"
+                                            )
+                                            sharedViewModel.resetState()
+                                            // Create an Intent to start HomePageActivity
+                                            val intent =
+                                                Intent(context, HomePageActivity::class.java)
+                                            sharedViewModel.isLoading = false
+                                            // Start the activity
+                                            context.startActivity(intent)
+                                        },
+                                        onError = { e ->
+                                            Log.e(
+                                                "SaveError",
+                                                "Error saving building on Server: ${e.message}"
+                                            )
+                                            sharedViewModel.resetState()
+                                            // Create an Intent to start HomePageActivity
+                                            val intent =
+                                                Intent(context, HomePageActivity::class.java)
+                                            sharedViewModel.isLoading = false
+                                            // Start the activity
+                                            context.startActivity(intent)
+                                        }
+                                    )
+//                                    insertBuildingToServer(context, building, onSuccess = {}, onError = {})
+//                                    sharedViewModel.resetState()
                                     // Create an Intent to start HomePageActivity
-                                    val intent =
-                                        Intent(context, HomePageActivity::class.java)
-                                    sharedViewModel.isLoading = false
+//                                    val intent =
+//                                        Intent(context, HomePageActivity::class.java)
+//                                    sharedViewModel.isLoading = false
                                     // Start the activity
-                                    context.startActivity(intent)
+//                                    context.startActivity(intent)
                                 },
                                 onError = { errorMessage ->
                                     sharedViewModel.isLoading = false
@@ -2792,6 +2793,7 @@ fun EditUnitDialog(
     )
 }
 
+@RequiresApi(Build.VERSION_CODES.M)
 @Composable
 fun DebtItem(
     debts: Debts,

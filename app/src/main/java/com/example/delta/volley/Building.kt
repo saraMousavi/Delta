@@ -3,13 +3,11 @@ package com.example.delta.volley
 import android.content.Context
 import android.util.Log
 import com.android.volley.Request
-import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
-import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Owners
@@ -17,12 +15,11 @@ import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
-import com.example.delta.enums.CalculateMethod
 import org.json.JSONArray
 import org.json.JSONObject
 
 class Building {
-    private val baseUrl = "http://89.42.211.69:3000/building"
+    private val baseUrl = "http://217.144.107.231:3000/building"
 
     fun insertBuilding(
         context: Context,
@@ -30,7 +27,7 @@ class Building {
         unitsJsonArray: JSONArray,
         ownersJsonArray: JSONArray,
         tenantsJsonArray: JSONArray,
-        costsJsonArray: JSONArray,
+//        costsJsonArray: JSONArray,
         ownerUnitsJsonArray: JSONArray,
         tenantUnitsJsonArray: JSONArray,
         onSuccess: (String) -> Unit,
@@ -44,18 +41,25 @@ class Building {
             put("units", unitsJsonArray)
             put("owners", ownersJsonArray)
             put("tenants", tenantsJsonArray)
-            put("costs", costsJsonArray)
+//            put("costs", costsJsonArray)
             put("ownerUnits", ownerUnitsJsonArray)
             put("tenantUnits", tenantUnitsJsonArray)
         }
 
         Log.d("BuildingVolley", "Payload: $payload")
 
-        val request = JsonObjectRequest(
+        val request = object : JsonObjectRequest(
             Request.Method.POST, baseUrl, payload,
-            { response -> onSuccess(response.toString()) },
-            { error -> onError(Exception(error.message)) }
-        )
+            { response ->
+                Log.d("InsertBuilding", "Building inserted: $response")
+                onSuccess(response.toString())
+            },
+            { error ->
+                onError(formatVolleyError("InsertBuildingServer", error))
+            }
+        ) {
+            override fun getBodyContentType() = "application/json; charset=utf-8"
+        }
 
         queue.add(request)
     }
@@ -78,8 +82,8 @@ class Building {
 
     fun unitToJson(unit: Units): JSONObject {
         return JSONObject().apply {
-            put("ownerId", unit.ownerId ?: JSONObject.NULL)
-            put("unitId", unit.unitId)
+            put("ownerId", unit.ownerId ?: 0)
+//            put("unitId", unit.unitId)
             put("unitNumber", unit.unitNumber)
             put("area", unit.area)
             put("numberOfRooms", unit.numberOfRooms)
@@ -89,7 +93,7 @@ class Building {
 
     fun ownerToJson(owner: Owners): JSONObject {
         return JSONObject().apply {
-            put("ownerId", owner.ownerId)
+//            put("ownerId", owner.ownerId)
             put("firstName", owner.firstName)
             put("lastName", owner.lastName)
             put("phoneNumber", owner.phoneNumber)
@@ -102,7 +106,7 @@ class Building {
 
     fun tenantToJson(tenant: Tenants): JSONObject {
         return JSONObject().apply {
-            put("tenantId", tenant.tenantId)
+//            put("tenantId", tenant.tenantId)
             put("firstName", tenant.firstName)
             put("lastName", tenant.lastName)
             put("phoneNumber", tenant.phoneNumber)
@@ -136,20 +140,39 @@ class Building {
         return jsonArray
     }
 
-    fun tenantUnitListToJsonArray(tenantUnitList: List<TenantsUnitsCrossRef>): JSONArray {
+    fun tenantUnitListToJsonArray(tenantUnitMap: Map<Tenants, Units>): JSONArray {
         val jsonArray = JSONArray()
-        tenantUnitList.forEach { tu ->
+        tenantUnitMap.forEach { tu ->
             val jsonObject = JSONObject().apply {
-                put("tenantId", tu.tenantId)
-                put("unitId", tu.unitId)
-                put("startDate", tu.startDate)
-                put("endDate", tu.endDate)
-                put("status", tu.status)
+                put("tenantId", tu.key.tenantId)
+                put("unitId", tu.value.unitId)
+                put("startDate", tu.key.startDate)
+                put("endDate", tu.key.endDate)
+                put("status", tu.key.status)
             }
             jsonArray.put(jsonObject)
         }
+        Log.d("jsonArray", jsonArray.toString())
         return jsonArray
     }
+
+    private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {
+        val resp = error.networkResponse
+        if (resp != null) {
+            val charsetName = resp.headers?.get("Content-Type")
+                ?.substringAfter("charset=", "UTF-8") ?: "UTF-8"
+            val body = try { String(resp.data ?: ByteArray(0), charset(charsetName)) }
+            catch (_: Exception) { String(resp.data ?: ByteArray(0)) }
+            Log.e(tag, "HTTP ${resp.statusCode}")
+            Log.e(tag, "Headers: ${resp.headers}")
+            Log.e(tag, "Body: $body")
+            return Exception("HTTP ${resp.statusCode}: $body")
+        } else {
+            Log.e(tag, "No networkResponse: ${error.message}", error)
+            return Exception(error.toString())
+        }
+    }
+
 
     suspend fun buildOwnerUnitsJsonArray(
         ownersList: List<Owners>,
@@ -157,7 +180,7 @@ class Building {
         ownersDao: OwnersDao
     ): JSONArray {
         val ownerUnitsJsonArray = JSONArray()
-
+        Log.d("ownersList", ownersList.toString())
         for (owner in ownersList) {
             // Insert owner and get generated ownerId (assumed suspend function)
             val ownerId = ownersDao.insertOwners(owner)
@@ -175,7 +198,7 @@ class Building {
                 ownerUnitsJsonArray.put(jsonObject)
             }
         }
-
+        Log.d("ownerUnitsJsonArray", ownerUnitsJsonArray.toString())
         return ownerUnitsJsonArray
     }
 

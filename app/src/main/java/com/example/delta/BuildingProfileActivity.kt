@@ -105,6 +105,7 @@ import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.CityComplex
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.PhonebookEntry
@@ -1012,24 +1013,40 @@ class BuildingProfileActivity : ComponentActivity() {
                 onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, message ->
                     coroutineScope.launch {
                         if (amount.toDouble() <= (capitalFund.toDouble())) {
+                            val cost = Costs(
+                                buildingId = building.buildingId,
+                                costName = selectedCost.costName,
+                                fundType = FundType.CAPITAL,
+                                responsible = Responsible.OWNER,
+                                paymentLevel = PaymentLevel.UNIT,
+                                calculateMethod = CalculateMethod.EQUAL,
+                                period = Period.YEARLY,
+                                tempAmount = amount.toDouble(),
+                                dueDate = dueDate,
+                                invoiceFlag = true
+                            )
                             sharedViewModel.insertNewCost(
-                                Costs(
-                                    buildingId = building.buildingId,
-                                    costName = selectedCost.costName,
-                                    fundType = FundType.CAPITAL,
-                                    responsible = Responsible.OWNER,
-                                    paymentLevel = PaymentLevel.UNIT,
-                                    calculateMethod = CalculateMethod.EQUAL,
-                                    period = Period.YEARLY,
-                                    tempAmount = amount.toDouble(),
-                                    dueDate = dueDate,
-                                    invoiceFlag = true
-                                )
+                                cost,
+                                onSuccess = {
+                                    sharedViewModel.insertCostToServer (context, listOf(cost),               // ⬅️ تبدیل به لیست یک‌عضوی
+                                        emptyList<Debts>(),
+                                        onSuccess = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                            }
+                                        }, onError = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                            }
+                                        })
+                                }
                             )
                             success = sharedViewModel.decreaseOperationalFund(
                                 building.buildingId,
                                 amount.toDouble(),
-                                FundType.CAPITAL
+                                FundType.CAPITAL,
+                                onSuccess = {},
+                                onError = {}
                             )
                         } else {
                             success = false
@@ -2305,7 +2322,7 @@ fun AddCapitalCostDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
     var isChargeableCost by remember { mutableStateOf(false) }
-
+    val snackBarHostState = remember { SnackbarHostState() }
     // If no cost selected init
     LaunchedEffect(Unit) {
         if (selectedCost == null) {
@@ -2490,7 +2507,20 @@ fun AddCapitalCostDialog(
                         fundType = fixedFundType,
                         dueDate = dueDate
                     )
-                    sharedViewModel.insertNewCost(newCost)
+                    sharedViewModel.insertNewCost(newCost,
+                        onSuccess = {
+                            sharedViewModel.insertCostToServer (context, listOf(newCost),               // ⬅️ تبدیل به لیست یک‌عضوی
+                                emptyList<Debts>(),
+                                onSuccess = {
+                                    coroutineScope.launch {
+                                        snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                    }
+                                }, onError = {
+                                    coroutineScope.launch {
+                                        snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                    }
+                                })
+                        })
                     showAddNewCostNameDialog = false
                     selectedCost = newCost
                     totalAmount = "0"
@@ -2572,7 +2602,7 @@ fun AddOperationalCostDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
     var isChargeableCost by remember { mutableStateOf(false) }
-
+    val snackBarHostState = remember { SnackbarHostState() }
 
     // If no cost selected init
     LaunchedEffect(Unit) {
@@ -2621,6 +2651,7 @@ fun AddOperationalCostDialog(
 //        selectedUnits.toList(),  // important to copy to detect changes inside list
 //        selectedOwners.toList()
     ) {
+
         val isCostNameValid = selectedCost != null && !selectedCost!!.costName.isBlank()
         val isAmountValid =
             totalAmount.isNotBlank() && totalAmount.toDoubleOrNull()?.let { it > 0.0 } == true
@@ -2813,26 +2844,42 @@ fun AddOperationalCostDialog(
                     if (selectedResponsible == Responsible.TENANT.getDisplayName(context) && isChargeableCost) {
                         coroutineScope.launch {
                             val amountDouble = totalAmount.toDoubleOrNull() ?: 0.0
-                            if (amountDouble <= (operationalFund?.toDouble() ?: 0.0)) {
+                            if (amountDouble <= (operationalFund.toDouble())) {
+                                val cost = Costs(
+                                    buildingId = buildingId,
+                                    costName = cost.costName,
+                                    chargeFlag = false,
+                                    fundType = FundType.OPERATIONAL,
+                                    responsible = Responsible.TENANT,
+                                    paymentLevel = PaymentLevel.UNIT,
+                                    calculateMethod = CalculateMethod.EQUAL,
+                                    period = Period.YEARLY,
+                                    tempAmount = amountDouble,
+                                    dueDate = dueDate,
+                                    invoiceFlag = true
+                                )
                                 sharedViewModel.insertNewCost(
-                                    Costs(
-                                        buildingId = buildingId,
-                                        costName = cost.costName,
-                                        chargeFlag = false,
-                                        fundType = FundType.OPERATIONAL,
-                                        responsible = Responsible.TENANT,
-                                        paymentLevel = PaymentLevel.UNIT,
-                                        calculateMethod = CalculateMethod.EQUAL,
-                                        period = Period.YEARLY,
-                                        tempAmount = amountDouble,
-                                        dueDate = dueDate,
-                                        invoiceFlag = true
-                                    )
+                                    cost,
+                                    onSuccess = {
+                                        sharedViewModel.insertCostToServer (context, listOf(cost),               // ⬅️ تبدیل به لیست یک‌عضوی
+                                            emptyList<Debts>(),
+                                            onSuccess = {
+                                                coroutineScope.launch {
+                                                    snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                                }
+                                            }, onError = {
+                                                coroutineScope.launch {
+                                                    snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                }
+                                        })
+                                    }
                                 )
                                 success = sharedViewModel.decreaseOperationalFund(
                                     buildingId,
                                     amountDouble,
-                                    FundType.OPERATIONAL
+                                    FundType.OPERATIONAL,
+                                    onSuccess = {},
+                                    onError = {}
                                 )
 
                                 onSave(context.getString(R.string.fund_decreased_successfully))
@@ -2855,6 +2902,21 @@ fun AddOperationalCostDialog(
                             dueDate = dueDate,
                             selectedUnitIds = selectedUnits.map { it.unitId },
                             selectedOwnerIds = selectedOwners.map { it.ownerId },
+                            onSuccess = { costs, debts ->
+                                sharedViewModel.insertCostToServer (context, costs, debts,
+                                    onSuccess = {
+                                        coroutineScope.launch {
+                                            snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                        }
+                                    }, onError = {
+                                        coroutineScope.launch {
+                                            snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                        }
+                                })
+                            },
+                            onError = {
+
+                            }
                         )
                         onSave(context.getString(R.string.cost_insert_and_pending))
                     }

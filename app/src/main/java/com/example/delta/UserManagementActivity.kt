@@ -384,7 +384,13 @@ fun AddAuthorizationDialog(
                                     roleId = selectedRoleId,
                                     objectId = obj.objectId,
                                     fields = listOf(field),
-                                    permissionLevel = perm.value
+                                    permissionLevel = perm.value,
+                                    onSuccess = {
+
+                                    },
+                                    onError = {
+
+                                    }
                                 )
                             }
                             onAddComplete()
