@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -116,7 +117,7 @@ fun CapitalInfoList(
     var amountInputs by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
-
+    val snackBarHostState = remember { SnackbarHostState() }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -195,8 +196,27 @@ fun CapitalInfoList(
                             tempAmount = amount.toDouble(),
                             dueDate = "$fiscalYear/01/01"
                         )
-                        sharedViewModel.insertDebtForCapitalCost(building.buildingId, newCost, amount.toDouble(),
-                            "$fiscalYear/01/01", description = context.getString(R.string.capital_info))
+                        sharedViewModel.insertDebtForCapitalCost(building.buildingId,
+                            newCost, amount.toDouble(),
+                            "$fiscalYear/01/01", description = context.getString(R.string.capital_info),
+                            onSuccess = { costs, debts ->
+                                coroutineScope.launch {
+                                    sharedViewModel.insertCostToServer (context, costs, debts,
+                                        onSuccess = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                            }
+                                        }, onError = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                            }
+                                        })
+
+                                }
+                            },
+                            onError = {
+
+                            })
                         showDialog = false
                     }
                 }

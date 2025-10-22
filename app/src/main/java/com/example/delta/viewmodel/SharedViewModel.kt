@@ -1058,38 +1058,69 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         cost: Costs,
         amountPerOwner: Double,
         dueDate: String,
-        description: String
+        description: String,
+        onSuccess: (insertedCosts: List<Costs>, insertedDebts: List<Debts>) -> Unit,
+        onError: (Throwable) -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            // 1. Check if cost with same description and fiscal year already exists
-            val existingCost = costsDao.getCapitalCostsForBuildingWithFiscalYear(buildingId, dueDate)
+            val insertedCosts = mutableListOf<Costs>()
+            val insertedDebts = mutableListOf<Debts>()
 
-            val costId = if (existingCost != null) {
-                existingCost.costId
-            } else {
-                // Insert cost and get new costId
-                costsDao.insertCost(cost)
-            }
+            try {
+                val existingCost = costsDao.getCapitalCostsForBuildingWithFiscalYear(buildingId, dueDate)
+                val costId = if (existingCost != null) {
+                    costsDao.updateCost(cost.copy(costId = existingCost.costId, buildingId = buildingId, dueDate = dueDate))
+                    existingCost.costId
+                } else {
+                    val id = costsDao.insertCost(cost.copy(buildingId = buildingId, dueDate = dueDate))
+                    insertedCosts.add(cost.copy(costId = id, buildingId = buildingId, dueDate = dueDate))
+                    id
+                }
 
-            // 2. Get owners for building
-            val ownersList = ownersDao.getOwnersForBuilding(buildingId)
+                val ownersList = ownersDao.getOwnersForBuilding(buildingId)
 
-            // 3. Insert debts for each owner with unitId = null since owner responsible
-            ownersList.forEach { owner ->
-                val debt = Debts(
-                    unitId = null,
-                    costId = costId,
-                    buildingId = buildingId,
-                    ownerId = owner.ownerId,
-                    description = description,
-                    dueDate = dueDate,
-                    amount = amountPerOwner,
-                    paymentFlag = false
-                )
-                debtsDao.insertDebt(debt)
+                ownersList.forEach { owner ->
+                    val existingDebt = debtsDao.getDebtByKeys(
+                        buildingId = buildingId,
+                        costId = costId,
+                        unitId = null,
+                        dueDate = dueDate,
+                        ownerId = owner.ownerId
+                    )
+
+                    if (existingDebt != null) {
+                        debtsDao.updateDebt(
+                            existingDebt.copy(
+                                amount = amountPerOwner,
+                                paymentFlag = false,
+                                description = description
+                            )
+                        )
+                    } else {
+                        val debt = Debts(
+                            unitId = null,
+                            costId = costId,
+                            buildingId = buildingId,
+                            ownerId = owner.ownerId,
+                            description = description,
+                            dueDate = dueDate,
+                            amount = amountPerOwner,
+                            paymentFlag = false
+                        )
+                        val newId = debtsDao.insertDebt(debt)
+                        insertedDebts.add(debt.copy(debtId = newId))
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    onSuccess(insertedCosts, insertedDebts)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e) }
             }
         }
     }
+
 
 
     fun insertDebtPerNewCost(
@@ -1410,7 +1441,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             // Convert all lists to JSONArray using the helper's toJson functions
             Log.d("debtsListSer", debtsList.toString())
             val debtsJsonArray =
-                costsHelper.listToJsonArray(debtsList, costsHelper::debtToJson)
+                costsHelper.listToJsonArray(debts, costsHelper::debtToJson)
 
             // Convert building object to JSONObject
             val costJsonArray = costsHelper.listToJsonArray(
@@ -1444,22 +1475,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
         CoroutineScope(Dispatchers.IO).launch {
             // Convert all lists to JSONArray using the helper's toJson functions
-            Log.d("building", building.toString())
             val unitsJsonArray =
                 buildingHelper.listToJsonArray(unitsList, buildingHelper::unitToJson)
-            Log.d("unitsJsonArray", unitsJsonArray.toString())
             val ownersJsonArray =
                 buildingHelper.listToJsonArray(ownersList, buildingHelper::ownerToJson)
-            Log.d("ownersJsonArray", ownersJsonArray.toString())
             val tenantsJsonArray =
                 buildingHelper.listToJsonArray(tenantsList, buildingHelper::tenantToJson)
-            Log.d("tenantsJsonArray", tenantsJsonArray.toString())
+
 //            val costsJsonArray =
 //                buildingHelper.listToJsonArray(costsList.value, buildingHelper::costToJson)
             Log.d("ownerUnitMap", ownerUnitMap.toString())
             val ownerUnitsJsonArray =
                 buildingHelper.buildOwnerUnitsJsonArray(ownersList, ownerUnitMap, ownersDao)
-            Log.d("tenantsUnitsCrossRef", tenantsUnitsCrossRef.toString())
             val tenantUnitsJsonArray =
                 buildingHelper.tenantUnitListToJsonArray(tenantUnitMap)
 
@@ -1469,7 +1496,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 selectedBuildingTypes,
                 selectedBuildingUsages
             )
-            Log.d("buildingJson", buildingJson.toString())
 
             // Call your Volley helper to insert the building and related data
             buildingHelper.insertBuilding(
@@ -1740,7 +1766,6 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 units.forEach { unit ->
                     val tmpBuilding = buildingDao.getBuilding(unit.excelBuildingName ?: "-1")
-                    val allBuilding = buildingDao.getAllBuildingsList()
                     unit.buildingId = tmpBuilding.buildingId
                     unitsDao.insertUnit(unit)
                 }
@@ -1856,13 +1881,77 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     )
 
                 }
-                val tenants = tenantsDao.getAllTenants()
-                val tenantCrossRef = tenantsDao.getAllTenantUnitRelationships()
+
             } catch (e: Exception) {
                 Log.e("error", "${e.message}")
                 errors.add("${e.message}")
             }
             withContext(Dispatchers.Main) {
+                val items = buildings.map { b ->
+                    val bUnits = units.filter { it.excelBuildingName == b.name }
+                    val bOwners = owners.filter { it.excelBuildingName == b.name }
+                    val bTenants = tenants.filter { it.excelBuildingName == b.name }
+
+                    // assign local sequential ids to avoid 0/null collisions in temp mapping
+                    var uid = 1L
+                    var oid = 1L
+                    var tid = 1L
+                    val unitsWithLocalIds = bUnits.map { it.copy(unitId = uid++) }
+                    val ownersWithLocalIds = bOwners.map { it.copy(ownerId = oid++) }
+                    val tenantsWithLocalIds = bTenants.map { it.copy(tenantId = tid++) }
+
+                    // cross refs from excel columns
+                    val ownerUnits = ownersWithLocalIds.mapNotNull { o ->
+                        val u = unitsWithLocalIds.firstOrNull {
+                            it.unitNumber == (o.excelUnitsNumber ?: "") &&
+                                    it.excelBuildingName == (o.excelBuildingName ?: "")
+                        } ?: return@mapNotNull null
+                        OwnersUnitsCrossRef(
+                            ownerId = o.ownerId,
+                            unitId = u.unitId,
+                            dang = o.excelDang ?: 0.0
+                        )
+                    }
+
+                    val tenantUnits = tenantsWithLocalIds.mapNotNull { t ->
+                        val u = unitsWithLocalIds.firstOrNull {
+                            it.unitNumber == (t.excelUnitsNumber ?: "") &&
+                                    it.excelBuildingName == (t.excelBuildingName ?: "")
+                        } ?: return@mapNotNull null
+                        TenantsUnitsCrossRef(
+                            tenantId = t.tenantId,
+                            unitId = u.unitId,
+                            startDate = t.startDate,
+                            endDate = t.endDate,
+                            status = t.status
+                        )
+                    }
+
+                    Building.BulkItem(
+                        building = b,
+                        buildingType = null,
+                        buildingUsage = null,
+                        units = unitsWithLocalIds,
+                        owners = ownersWithLocalIds,
+                        tenants = tenantsWithLocalIds,
+                        ownerUnits = ownerUnits,
+                        tenantUnits = tenantUnits
+                    )
+                }
+
+                Building().insertBuildingsBulk(
+                    context = context,
+                    items = items,
+                    onSuccess = { resp ->
+                        Log.d("InsertBuildingsBulk", resp)
+                        onComplete(successCount, errors)
+                    },
+                    onError = { e ->
+                        Log.e("InsertBuildingsBulk", e.message ?: "error")
+                        errors.add(e.message ?: "error")
+                        onComplete(successCount, errors)
+                    }
+                )
                 onComplete(successCount, errors)
             }
         }

@@ -47,7 +47,6 @@ class FileManagement {
             workbook.close()
 
             CoroutineScope(Dispatchers.Main).launch {
-                Log.d("tenantsList", tenantsList.toString())
                 sharedViewModel.saveBuildingsList(
                     buildingsList,
                     unitsList,
@@ -204,7 +203,6 @@ class FileManagement {
                 excelUnitsNumber = unitsNumber,
                 excelBuildingName = buildingName
             )
-            Log.d("tenants", tenants.toString())
             list.add(tenants)
         }
         return list
@@ -262,7 +260,6 @@ class FileManagement {
     }
 
     private fun getCellStringValue(cell: Cell?): String {
-        Log.d("cell.cellType", cell.toString())
         if (cell == null) return ""
         return when (cell.cellType) {
             CellType.STRING -> {
