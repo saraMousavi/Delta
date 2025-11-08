@@ -21,6 +21,12 @@ interface TenantDao {
     @Query("SELECT * FROM tenants")
     fun getAllTenants(): Flow<List<Tenants>>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(tenants: List<Tenants>)
+
+    @Query("SELECT COUNT(1) FROM tenants t INNER JOIN tenants_units_cross_ref tu ON tu.tenantId=t.tenantId WHERE tu.unitId IN (SELECT unitId FROM units WHERE buildingId=:buildingId)")
+    suspend fun countForBuilding(buildingId: Long): Int
+
     @Query("SELECT * FROM Tenants")
     suspend fun getTenants(): List<Tenants>
 

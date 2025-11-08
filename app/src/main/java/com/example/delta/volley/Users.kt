@@ -6,66 +6,178 @@ import com.android.volley.Request
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
-import com.google.gson.Gson
+import com.example.delta.data.entity.UserRoleCrossRef
+import com.example.delta.enums.Roles
+import org.json.JSONArray
 import org.json.JSONObject
 
-
 class Users {
-    fun fetchUsers(context: Context?, onSuccess: (List<User>) -> Unit, onError: (Exception) -> Unit) {
-        val url = "http://217.144.107.231:3000/user"
 
+    private val BASE_URL = "http://217.144.107.231:3000"
+
+    /** Optional: keep existing list fetch */
+    fun fetchUsers(context: Context?, onSuccess: (List<User>) -> Unit, onError: (Exception) -> Unit) {
+        val url = "$BASE_URL/user"
         val queue = Volley.newRequestQueue(context)
 
-        val jsonArrayRequest = JsonArrayRequest(
+        val req = JsonArrayRequest(
             Request.Method.GET, url, null,
             { response ->
-                // Parse JSON array and map to your User model
-                val userList = mutableListOf<User>()
-                for (i in 0 until response.length()) {
-                    try {
-                        val userJson = response.getJSONObject(i)
-                        val user = User(
-                            userId = userJson.getLong("userId"), // Map from backend JSON
-                            mobileNumber = userJson.getString("mobileNumber"),
-                            password = userJson.getString("password"), // Changed from password
-                            roleId = userJson.getLong("roleId")
+                val out = ArrayList<User>(response.length())
+                try {
+                    for (i in 0 until response.length()) {
+                        val o = response.getJSONObject(i)
+                        out.add(
+                            User(
+                                userId = o.getLong("userId"),
+                                mobileNumber = o.getString("mobileNumber"),
+                                password = o.getString("password"),
+                                roleId = o.getLong("roleId")
+                            )
                         )
-                        userList.add(user)
-                    } catch (e: Exception) {
-                        onError(e)  // Handle JSON parsing error
-                        return@JsonArrayRequest
                     }
-                }
-                onSuccess(userList)
+                    onSuccess(out)
+                } catch (e: Exception) { onError(e) }
             },
-            { error ->
-                // Handle error
-                onError(error)
-            })
-
-        queue.add(jsonArrayRequest)
+            { error -> onError(Exception(error)) }
+        )
+        queue.add(req)
     }
 
-    fun insertUser(context: Context, userJson: JSONObject) {
-        val url = "http://217.144.107.231:3000/user"  // Replace with your VPS IP and port
-
+    /** Insert user on server (if needed elsewhere) */
+    fun insertUser(context: Context, userJson: JSONObject, onSuccess: () -> Unit = {}, onError: (Throwable) -> Unit = {}) {
+        val url = "$BASE_URL/user"
         val queue = Volley.newRequestQueue(context)
 
-        Log.d("userJson", userJson.toString())
-
-        val jsonObjectRequest = JsonObjectRequest(
+        val req = JsonObjectRequest(
             Request.Method.POST, url, userJson,
-            { response ->
-                // Success: handle response
-                Log.d("InsertUser", "User inserted: $response")
+            { onSuccess() },
+            { error -> onError(error) }
+        )
+        queue.add(req)
+    }
+
+    /**
+     * Login against server.
+     * Prefer a real auth endpoint (POST /auth/login). If your backend exposes a different path,
+     * adjust LOGIN_PATH accordingly.
+     */
+    private fun normalizeFa(s: String): String =
+        s.trim()
+            .replace('\u200c'.toString(), "")
+            .replace('ي', 'ی')
+            .replace('ك', 'ک')
+
+    private fun roleDisplayToEnum(displayRaw: String): Roles? {
+        val display = normalizeFa(displayRaw)
+        val map = mapOf(
+            normalizeFa("مدیر سیستم")   to Roles.ADMIN,
+            normalizeFa("مدیر ساختمان") to Roles.BUILDING_MANAGER,
+            normalizeFa("مالک")          to Roles.PROPERTY_OWNER,
+            normalizeFa("ساکن")          to Roles.PROPERTY_TENANT,
+            normalizeFa("کاربر مستقل")   to Roles.INDEPENDENT_USER
+        )
+        return map[display]
+    }
+
+    fun login(
+        context: Context,
+        mobileNumber: String,
+        password: String,
+        onSuccess: (ArrayList<Role>) -> Unit,
+        onInvalid: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$BASE_URL/user/login?mobileNumber=$mobileNumber&password=$password"
+        Log.d("url", url)
+        val queue = Volley.newRequestQueue(context)
+
+        val req = JsonObjectRequest(
+            Request.Method.GET, url, null,
+            { resp ->
+                try {
+                    if (!resp.has("user")) {
+                        onInvalid(); return@JsonObjectRequest
+                    }
+                    val u = resp.getJSONObject("user")
+                    val user = User(
+                        userId = u.getLong("userId"),
+                        mobileNumber = u.getString("mobileNumber"),
+                        password = password,
+                        roleId = u.optLong("roleId", 0L)
+                    )
+                    Log.d("resp", resp.toString())
+
+                    val rolesJson: JSONArray = resp.optJSONArray("roles") ?: JSONArray()
+                    val userRoles = ArrayList<Role>(rolesJson.length())
+
+                    for (i in 0 until rolesJson.length()) {
+                        val r: JSONObject = rolesJson.getJSONObject(i)
+
+                        val roleId = r.optLong("roleId")
+                        val roleKey = r.optString("roleKey", "")
+                        val roleNameDisplay = r.optString("roleName", "")
+
+                        val enumVal: Roles? =
+//                            if (roleKey.isNotBlank()) {
+//                                runCatching { Roles.valueOf(roleKey) }.getOrNull()
+//                            } else {
+                                roleDisplayToEnum(roleNameDisplay)
+//                            }
+
+                        if (enumVal == null) {
+                            Log.w("login", "Unknown role display/key: '$roleNameDisplay'/'$roleKey' (id=$roleId)")
+                            continue
+                        }
+
+                        userRoles.add(
+                            Role(
+                                roleId = roleId,
+                                roleName = enumVal,
+                                roleDescription = r.optString("roleDescription", "")
+                            )
+                        )
+                    }
+
+                    onSuccess(userRoles)
+                } catch (e: Exception) {
+                    onError(e)
+                }
             },
-            { error ->
-                // Error: handle error
-                Log.e("InsertUser", "Error: $error")
+            { err ->
+                val code = err.networkResponse?.statusCode
+                if (code == 401 || code == 403 || code == 404) onInvalid() else onError(err)
             }
         )
-
-        queue.add(jsonObjectRequest)
+        queue.add(req)
     }
+
+
+    /**
+     * Fallback login when no auth endpoint exists.
+     * It downloads all users and matches client-side. Use only for testing.
+     */
+    fun loginFallbackByFetchingAll(
+        context: Context,
+        mobileNumber: String,
+        password: String,
+        onSuccess: (User) -> Unit,
+        onInvalid: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        fetchUsers(context,
+            onSuccess = { list ->
+                val matched = list.firstOrNull { it.mobileNumber == mobileNumber && it.password == password }
+                if (matched != null) onSuccess(matched) else onInvalid()
+            },
+            onError = { onError(it) }
+        )
+    }
+
+    private fun roleDisplayToEnum(context: Context, display: String): Roles? {
+        return enumValues<Roles>().firstOrNull { it.getDisplayName(context) == display.trim() }
+    }
+
 }

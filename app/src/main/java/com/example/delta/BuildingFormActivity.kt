@@ -163,7 +163,6 @@ class BuildingFormActivity : ComponentActivity() {
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun BuildingFormScreen(
     unitsViewModel: UnitsViewModel,
@@ -258,14 +257,6 @@ fun BuildingFormScreen(
                                             context.startActivity(intent)
                                         }
                                     )
-//                                    insertBuildingToServer(context, building, onSuccess = {}, onError = {})
-//                                    sharedViewModel.resetState()
-                                    // Create an Intent to start HomePageActivity
-//                                    val intent =
-//                                        Intent(context, HomePageActivity::class.java)
-//                                    sharedViewModel.isLoading = false
-                                    // Start the activity
-//                                    context.startActivity(intent)
                                 },
                                 onError = { errorMessage ->
                                     sharedViewModel.isLoading = false

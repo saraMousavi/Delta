@@ -54,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -97,6 +98,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.BuildingTabItem
 import com.example.delta.data.entity.BuildingTabType
@@ -126,6 +128,7 @@ import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.Building
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -153,15 +156,38 @@ class BuildingProfileActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
-        val building = intent.getParcelableExtra<Parcelable>("BUILDING_DATA") as? Buildings
-
+        val buildingId = intent.getLongExtra("BUILDING_DATA", 0L)
+        Log.d("buildingId", buildingId.toString())
+        if (buildingId == 0L) {
+            Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
         buildingTypeName = intent.getStringExtra("BUILDING_TYPE_NAME") ?: "Unknown"
         buildingUsageName = intent.getStringExtra("BUILDING_USAGE_NAME") ?: "Unknown"
         setContent {
             AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    MaterialTheme {
-                        building?.let { BuildingProfileScreen(it) }
+                    LaunchedEffect(buildingId) {
+                        try {
+                            sharedViewModel.ensureBuildingCachedFromServer(
+                                context = this@BuildingProfileActivity,
+                                buildingId = buildingId
+                            )
+                        } catch (e: Exception) {
+                        }
+                    }
+
+                    val building by sharedViewModel
+                        .getBuilding(buildingId)
+                        .collectAsStateWithLifecycle(initialValue = null)
+
+                    building?.let { nonNullBuilding ->
+                        BuildingProfileScreen(nonNullBuilding)
+                    } ?: run {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.example.delta.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +26,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDirection
 
 
@@ -70,9 +73,17 @@ fun OtpScreen(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(Modifier.height(112.dp))
         Text("کد تایید برای $phone ارسال شد", style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(16.dp))
 
+        Image(
+            painter = painterResource(R.drawable.delta_logo),
+            contentDescription = null,
+            modifier = Modifier.size(250.dp),
+            contentScale = ContentScale.Fit
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
         OtpFields(
             value = code,
             length = 6,

@@ -20,13 +20,16 @@ class OTPApi {
     ) {
         val url = "$BASE_URL/auth/otp/send"
         val body = JSONObject().apply { put("phone", phone) }
+        Log.d("body", body.toString())
         val req = JsonObjectRequest(
             Request.Method.POST, url, body,
             { resp ->
                 val ok = resp.optBoolean("ok", false)
                 if (ok) onSuccess() else onError(resp.optString("error", context.getString(R.string.failed)))
             },
-            { err -> onError(err.message ?: context.getString(R.string.network_error)) }
+            { err ->
+                Log.d("err.message1", err.message.toString())
+                onError(err.message ?: context.getString(R.string.network_error)) }
         ).apply {
             retryPolicy = DefaultRetryPolicy(
                 10_000, // 10s

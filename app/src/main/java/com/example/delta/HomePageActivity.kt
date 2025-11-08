@@ -1,7 +1,9 @@
 package com.example.delta
 
-import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
@@ -55,16 +57,16 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
-import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.User
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.FileManagement
 import com.example.delta.init.Preference
+import com.example.delta.permission.Notification
+import com.example.delta.volley.Building
 import kotlinx.coroutines.flow.first
-
 
 class HomePageActivity : ComponentActivity() {
     private val buildingViewModel: BuildingsViewModel by viewModels {
@@ -73,8 +75,9 @@ class HomePageActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
     private val REQUEST_CODE_PICK_EXCEL = 1001
 
+    private lateinit var notifHelper: Notification
 
-    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    @Deprecated("Use Activity Result API instead")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_PICK_EXCEL && resultCode == RESULT_OK) {
@@ -91,21 +94,31 @@ class HomePageActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     e.printStackTrace()
                     runOnUiThread {
-                        Toast.makeText(this, "خطا: ${e.message}", Toast.LENGTH_LONG)
-                            .show()
+                        Toast.makeText(this, "خطا: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
         }
     }
 
-    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+    @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val roleId: Long? = intent.getLongExtra("role_id", 0L).let { if (it == 0L) null else it }
+
+        // Build the permission helper BEFORE the Activity reaches STARTED/RESUMED
+        notifHelper = Notification(
+            caller = this,
+            context = this,
+            onGranted = { ensureGeneralChannel() },
+            onDenied = { /* no-op */ }
+        )
+        // You can request immediately (or from UI later)
+        notifHelper.ensurePermission()
 
         enableEdgeToEdge()
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 DetailDrawer(
                     title = getString(R.string.menu_title),
                     sharedViewModel = sharedViewModel,
@@ -133,149 +146,127 @@ class HomePageActivity : ComponentActivity() {
                                     sharedViewModel = sharedViewModel
                                 )
                             }
-                        ) { padding ->
+                        ) { _ ->
                             NavHost(
                                 navController = navController,
                                 startDestination = Screen.Home.route
-//                                modifier = Modifier.padding(padding)
                             ) {
                                 composable(Screen.Home.route) {
-                                    // List of buildings
                                     BuildingList(
-                                        viewModel = buildingViewModel,
-                                        sharedViewModel = sharedViewModel
+                                        sharedViewModel = sharedViewModel,
+                                        roleId = roleId
                                     )
-
                                 }
-
                                 composable(Screen.Settings.route) {
-                                    SettingsScreen(
-                                        LocalContext.current
-                                    )
+                                    SettingsScreen(LocalContext.current)
                                 }
                             }
                         }
-
                     }
                 }
             }
         }
     }
+
+    private fun ensureGeneralChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "general_channel"
+            val name: CharSequence = "General"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(channelId, name, importance)
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+        }
+    }
 }
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildingList(
-    viewModel: BuildingsViewModel,
-    sharedViewModel: SharedViewModel
+    sharedViewModel: SharedViewModel,
+    roleId: Long?
 ) {
-
     val context = LocalContext.current
-    val userId = Preference().getUserId(context = context)
-    Log.d("userId", userId.toString())
+    val userId = Preference().getUserId(context)
+
     var showGuestDialog by remember { mutableStateOf(false) }
-
     var user by remember { mutableStateOf<User?>(null) }
-    LaunchedEffect(userId) {
-        val fetchedUser = sharedViewModel.getUserById(userId).first()
-        user = fetchedUser
-        Log.d("MyScreen", "user: $fetchedUser")
 
-        if (fetchedUser != null && fetchedUser.roleId >= 6) {
-            showGuestDialog = true
-        }
+    // load user once
+    LaunchedEffect(userId) {
+        val fetched = sharedViewModel.getUserById(userId).first()
+        user = fetched
+        if (fetched != null && fetched.roleId >= 6) showGuestDialog = true
     }
 
-
-
-
-
-
-
-
-    if(showGuestDialog) {
+    if (showGuestDialog) {
         AlertDialog(
             onDismissRequest = { showGuestDialog = false },
-            title = {
-                Text(
-                    text = LocalContext.current.getString(R.string.guest_user),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            },
-            text = {
-                Text(
-                    text = LocalContext.current.getString(R.string.guest_dialog_info),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            },
+            title = { Text(LocalContext.current.getString(R.string.guest_user), style = MaterialTheme.typography.bodyLarge) },
+            text = { Text(LocalContext.current.getString(R.string.guest_dialog_info), style = MaterialTheme.typography.bodyLarge) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showGuestDialog = false
-                        context.startActivity(Intent(context, LoginPage::class.java))
-                    }
-                ) {
-                    Text(
-                        LocalContext.current.getString(R.string.sign_up),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
+                TextButton(onClick = {
+                    showGuestDialog = false
+                    context.startActivity(Intent(context, LoginPage::class.java))
+                }) { Text(LocalContext.current.getString(R.string.sign_up), style = MaterialTheme.typography.bodyLarge) }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showGuestDialog = false
-                    }
-                ) {
-                    Text(
-                        LocalContext.current.getString(R.string.continue_to),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                TextButton(onClick = { showGuestDialog = false }) {
+                    Text(LocalContext.current.getString(R.string.continue_to), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         )
     }
-//    val buildingsWithTypesAndUsages by sharedViewModel.buildingList.collectAsState()
-    val buildingsWithTypesAndUsages by sharedViewModel.getBuildingsWithUserRole(userId)//getAllBuildingsWithTypeAndUsage()
-        .collectAsState(initial = emptyList())
-    Log.d("buildingsWithTypesAndUsages", buildingsWithTypesAndUsages.toString())
-    sharedViewModel.allUsers(context = context)
-//    val userRole = permissionsManager.getUserRole()
-//    val permissions = permissionsManager.getPermissionsForRole(userRole)
 
-//    if (permissions?.authorizationObject?.contains(AppActivities.HomePageActivity.activityName) == true) {
+    var buildingUserList by remember { mutableStateOf<List<BuildingWithCounts>>(emptyList()) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+
+    // run only when we actually have a non-blank mobile
+    val mobile = user?.mobileNumber?.takeIf { it.isNotBlank() }
+    LaunchedEffect(mobile, roleId) {
+        if (mobile == null) return@LaunchedEffect  // prevent first bogus call
+        Building().fetchBuildingsForUser(
+            context = context,
+            mobileNumber = mobile,
+            roleId = roleId,
+            onSuccess = { list ->
+                buildingUserList = list
+                loadError = null
+            },
+            onError = { e ->
+                loadError = e.message
+                buildingUserList = emptyList()
+            }
+        )
+    }
+
+    if (loadError != null) {
+        Text(
+            text = loadError!!,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(16.dp)
+        )
+    }
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
             .padding(16.dp, bottom = 32.dp)
-
     ) {
-        items(buildingsWithTypesAndUsages) { buildingWithTypesAndUsages ->
+        items(buildingUserList) { buildingWithTypesAndUsages ->
             BuildingCard(
-                buildingWithTypesAndUsages = buildingWithTypesAndUsages,
-                building = buildingWithTypesAndUsages.building,
-                sharedViewModel = sharedViewModel,
+                building = buildingWithTypesAndUsages,
                 onClick = {
-                    Log.d(".building", buildingWithTypesAndUsages.building.toString())
                     val intent = Intent(context, BuildingProfileActivity::class.java).apply {
                         putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
-                        putExtra(
-                            "BUILDING_USAGE_NAME",
-                            buildingWithTypesAndUsages.buildingUsageName
-                        )
-                        // Only put Parcelable if your Buildings class implements Parcelable!
-                        putExtra(
-                            "BUILDING_DATA",
-                            buildingWithTypesAndUsages.building as? Parcelable
-                        )
+                        putExtra("BUILDING_USAGE_NAME", buildingWithTypesAndUsages.buildingUsageName)
+                        putExtra("BUILDING_DATA", buildingWithTypesAndUsages.buildingId)
                     }
                     context.startActivity(intent)
                 },
-                onDelete = { building ->
+                onDelete = { buildingId ->
                     sharedViewModel.deleteBuildingWithRelations(
-                        buildingId = building.buildingId,
+                        buildingId = buildingId,
                         onSuccess = {
                             Toast.makeText(
                                 context,
@@ -290,32 +281,26 @@ fun BuildingList(
                 }
             )
         }
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
-        }
+        item { Spacer(modifier = Modifier.height(32.dp)) }
     }
 }
-//}
-
 
 @Composable
 fun BuildingCard(
-    buildingWithTypesAndUsages: BuildingWithTypesAndUsages,
-    building: Buildings,
+    building: BuildingWithCounts,
     onClick: () -> Unit,
-    sharedViewModel: SharedViewModel,
-    onDelete: (Buildings) -> Unit // Pass a callback for deletion
+    onDelete: (Long) -> Unit
 ) {
-    // Load units and owners for this building
-    val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
-        .collectAsState(initial = emptyList())
-    val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
-        .collectAsState(initial = emptyList())
-    Log.d("owners_size", owners.toString())
+//    val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
+//        .collectAsState(initial = emptyList())
+//    val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
+//        .collectAsState(initial = emptyList())
+//    Log.d("owners_size", owners.toString())
+
+
 
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-
 
     Card(
         modifier = Modifier
@@ -323,27 +308,18 @@ fun BuildingCard(
             .padding(16.dp)
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(16.dp), // Rounded corners
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // Set background color
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-        ) {
-            // Image with matching corner radius
+        Column(modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(id = R.drawable.building_image),
                 contentDescription = "Building Image",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .fillMaxWidth() // Match card width
+                    .fillMaxWidth()
                     .height(200.dp)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 16.dp,  // Match card's top corners
-                            topEnd = 16.dp
-                        )
-                    ) // Top corners only
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -356,7 +332,7 @@ fun BuildingCard(
             )
 
             Spacer(Modifier.height(16.dp))
-            // Display building type and usage
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -364,37 +340,37 @@ fun BuildingCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${LocalContext.current.getString(R.string.building_type)}: ${buildingWithTypesAndUsages.buildingTypeName}",
+                    text = "${LocalContext.current.getString(R.string.building_type)}: ${building.buildingTypeName}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "${LocalContext.current.getString(R.string.building_usage)}: ${buildingWithTypesAndUsages.buildingUsageName}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-            // Number of units and owners
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "${LocalContext.current.getString(R.string.number_of_units)}: ${units.size}", // Replace with actual unit count
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${LocalContext.current.getString(R.string.number_of_owners)}: ${owners.size}", // Replace with actual owner count
+                    text = "${LocalContext.current.getString(R.string.building_usage)}: ${building.buildingUsageName}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // Top-right action icon
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${LocalContext.current.getString(R.string.number_of_units)}: ${building.unitsCount}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${LocalContext.current.getString(R.string.number_of_owners)}: ${building.ownersCount}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
@@ -424,8 +400,8 @@ fun BuildingCard(
                     )
                 }
             }
-
         }
+
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
@@ -442,12 +418,10 @@ fun BuildingCard(
                     )
                 },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            onDelete(building)
-                        }
-                    ) {
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        onDelete(building.buildingId)
+                    }) {
                         Text(
                             LocalContext.current.getString(R.string.delete),
                             style = MaterialTheme.typography.bodyLarge
@@ -455,9 +429,7 @@ fun BuildingCard(
                     }
                 },
                 dismissButton = {
-                    TextButton(
-                        onClick = { showDeleteDialog = false }
-                    ) {
+                    TextButton(onClick = { showDeleteDialog = false }) {
                         Text(
                             LocalContext.current.getString(R.string.cancel),
                             style = MaterialTheme.typography.bodyLarge

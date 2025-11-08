@@ -49,10 +49,20 @@ import kotlin.collections.forEach
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyColumn
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.init.FileManagement
 import com.example.delta.screens.OnboardingScreenWithModalSheet
 import com.example.delta.screens.OtpScreen
+import com.example.delta.volley.TokenUploader
+import com.google.firebase.messaging.FirebaseMessaging
+import com.example.delta.data.entity.Role
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.delta.LoginPage
+import com.example.delta.data.entity.UserRoleCrossRef
 
 
 private lateinit var roleDao: RoleDao // Add Role DAO
@@ -107,7 +117,7 @@ class LoginPage : ComponentActivity() {
                     if (isUserLoggedIn(this@LoginPage)) {
                         val userId = Preference().getUserId(context = this@LoginPage)
                         val userRole by sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
-                        Log.d("userRole", userRole.toString())
+
                         userRole?.let { role ->
                             // When not signing up and userRole is available, navigate accordingly
                             LaunchedEffect(role) {
@@ -147,11 +157,11 @@ class LoginPage : ComponentActivity() {
 //                            }
                         }
                     } else {
-                        val users by sharedViewModel.getUsers().collectAsState(initial = emptyList())
                         val selectedTab = remember { mutableIntStateOf(0) }
 
                         when (selectedTab.intValue) {
-                            0 -> LoginFormScreen(users, viewModel, onTabChange = { selectedTab.intValue = it })
+                            0 -> LoginFormScreen(buildingsViewModel = viewModel, sharedViewModel = sharedViewModel,
+                                onTabChange = { selectedTab.intValue = it })
                             1 -> SignUpScreen(
                                 sharedViewModel = sharedViewModel,
                                 onSignUpSuccess = { user ->
@@ -201,107 +211,174 @@ class LoginPage : ComponentActivity() {
 
     }
 }
-
+//
+//fun handleServerLogin(
+//    context: Context,
+//    mobile: String,
+//    password: String,
+//    onSuccess: (User) -> Unit,
+//    onInvalid: () -> Unit,
+//    onError: (Throwable) -> Unit,
+//    onFinally: () -> Unit
+//) {
+//    val api = com.example.delta.volley.Users()
+//    api.login(
+//        context = context,
+//        mobileNumber = mobile,
+//        password = password,
+//        onSuccess = { user ->
+//            onSuccess(user)
+//            onFinally()
+//        },
+//        onInvalid = {
+//            onInvalid()
+//            onFinally()
+//        },
+//        onError = { err ->
+//            onError(err)
+//            onFinally()
+//        }
+//    )
+//}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginFormScreen(
-    users: List<User>,
+    sharedViewModel: SharedViewModel,
     buildingsViewModel: BuildingsViewModel,
     onTabChange: (Int) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+
+    val tabTitles = listOf(context.getString(R.string.login), context.getString(R.string.sign_up))
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var roleDialogVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TabRow(
-                selectedTabIndex = 0,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                indicator = { tabPositions ->
-                    TabRowDefaults.Indicator(
-                        Modifier
-                            .tabIndicatorOffset(tabPositions[0])
-                            .height(3.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                divider = {}  // hide the default bottom divider for cleaner look
-            ) {
-                Tab(selected = true, onClick = {}, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        context.getString(R.string.login),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-                Tab(selected = false, onClick = { onTabChange(1) },modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        context.getString(R.string.sign_up),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+    var serverRoles by remember { mutableStateOf<List<Role>>(emptyList()) }
+
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)
+    ) {
+
+        TabRow(selectedTabIndex = selectedTab) {
+            tabTitles.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = {
+                        selectedTab = index
+                        onTabChange(index)
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    text = { Text(text = title, style = MaterialTheme.typography.bodyLarge) }
+                )
             }
         }
 
-        Column(
+        Spacer(Modifier.height(20.dp))
+
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text(text = context.getString(R.string.mobile_number), style = MaterialTheme.typography.bodyLarge) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text(text = context.getString(R.string.password), style = MaterialTheme.typography.bodyLarge) },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+        )
+
+        if (errorText != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = errorText!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Button(
+            onClick = {
+                if (username.isBlank() || password.isBlank()) return@Button
+                errorText = null
+                isLoading = true
+
+                com.example.delta.volley.Users().login(
+                    context = context,
+                    mobileNumber = username.trim(),
+                    password = password,
+                    onSuccess = { result ->
+                        serverRoles = result
+                        isLoading = false
+                        roleDialogVisible = true
+                    },
+                    onInvalid = {
+                        isLoading = false
+                        errorText = context.getString(R.string.invalid_username)
+                    },
+                    onError = { t ->
+                        isLoading = false
+                        errorText = t.message ?: context.getString(R.string.invalid_username)
+                    }
+                )
+            },
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text(stringResource(R.string.mobile_number)) },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(stringResource(R.string.password)) },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(30.dp))
-
-            Button(
-                onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        handleLogin(context, users, username, password, buildingsViewModel)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
+            if (isLoading) {
+                CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+            } else {
                 Text(
-                    text = stringResource(R.string.login),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = if (selectedTab == 0) context.getString(R.string.login)
+                    else context.getString(R.string.sign_up),
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             }
-
         }
     }
+
+    if (roleDialogVisible) {
+        RolePickerDialog(
+            context = context,
+            roles = serverRoles,
+            onDismiss = { roleDialogVisible = false },
+            onConfirm = { chosen ->
+                roleDialogVisible = false
+                saveLoginState(context, true, sharedViewModel.userId, password)
+                saveFirstLoginState(context, true)
+                val intent = Intent(context, DashboardActivity::class.java).apply {
+                    putExtra("user_id", sharedViewModel.userId)
+                    putExtra("role_id", chosen.roleId)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+                context.startActivity(intent)
+                if (context is Activity) context.finish()
+            }
+        )
+    }
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -311,20 +388,49 @@ fun SignUpScreen(
     onShowBoarding: () -> Unit,
     onTabChange: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var mobile by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var mobileError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     var showOtp by remember { mutableStateOf(false) }
-    var registeredPhone by remember { mutableStateOf("") }
-    val context = LocalContext.current
+    var pendingUser by remember { mutableStateOf<User?>(null) }
 
     if (showOtp) {
         OtpScreen(
-            phone = registeredPhone,
+            phone = pendingUser?.mobileNumber.orEmpty(),
             onVerified = {
-                onShowBoarding()
-                showOtp = false
+                val user = pendingUser ?: return@OtpScreen
+                scope.launch(Dispatchers.IO) {
+                    sharedViewModel.insertUser(
+                        context,
+                        user,
+                        onSuccess = { userId ->
+                            user.userId = userId
+                            insertDefaultAuthorizationData()
+                            FirebaseMessaging.getInstance().token
+                                .addOnSuccessListener { token ->
+                                    TokenUploader.uploadFcmToken(
+                                        context = context,
+                                        user = user,
+                                        fcmToken = token,
+                                        onSuccess = {},
+                                        onError = {}
+                                    )
+                                }
+                            saveLoginState(context, true, user.userId, user.mobileNumber)
+                            saveFirstLoginState(context, true)
+                            onSignUpSuccess(user)
+                            showOtp = false
+                            onShowBoarding()
+                        },
+                        onError = {
+                            Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
             },
             onBack = { showOtp = false }
         )
@@ -345,9 +451,7 @@ fun SignUpScreen(
                 contentColor = MaterialTheme.colorScheme.primary,
                 indicator = { tabPositions ->
                     TabRowDefaults.Indicator(
-                        Modifier
-                            .tabIndicatorOffset(tabPositions[1])
-                            .height(3.dp),
+                        Modifier.tabIndicatorOffset(tabPositions[1]).height(3.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 },
@@ -359,7 +463,7 @@ fun SignUpScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        context.getString(R.string.login),
+                        stringResource(R.string.login),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -370,7 +474,7 @@ fun SignUpScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        context.getString(R.string.sign_up),
+                        stringResource(R.string.sign_up),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -393,7 +497,7 @@ fun SignUpScreen(
                 label = { Text(stringResource(R.string.mobile_number)) },
                 isError = mobileError,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
             if (mobileError) {
                 Text(
@@ -431,23 +535,13 @@ fun SignUpScreen(
 
             Button(
                 onClick = {
-                    val user = User(
+                    val candidate = User(
                         mobileNumber = mobile,
                         password = password,
                         roleId = 1L
                     )
-
-                    sharedViewModel.insertUser(
-                        context,
-                        user,
-                        onSuccess = { userId ->
-                            user.userId = userId
-                            insertDefaultAuthorizationData()
-                            onSignUpSuccess(user)
-                            registeredPhone = user.mobileNumber.ifBlank { mobile }
-                            showOtp = true
-                        }
-                    )
+                    pendingUser = candidate
+                    showOtp = true
                 },
                 enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier
@@ -472,6 +566,7 @@ fun SignUpScreen(
         }
     }
 }
+
 
 
 @Composable
@@ -667,6 +762,78 @@ fun AnimatedTabRow(
         }
     }
 }
+@Composable
+fun RolePickerDialog(
+    context: Context,
+    roles: List<Role>,
+    onDismiss: () -> Unit,
+    onConfirm: (Role) -> Unit
+) {
+    val uniqueRoles = remember(roles) { roles.distinctBy { it.roleId to it.roleName } }
+    var selected by remember(uniqueRoles) { mutableStateOf<Role?>(uniqueRoles.firstOrNull()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { selected?.let(onConfirm) }, enabled = selected != null) {
+                Text(
+                    context.getString(R.string.continue_to),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        title = {
+            Text(
+                context.getString(R.string.choose_role),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            if (uniqueRoles.isEmpty()) {
+                Text(
+                    context.getString(R.string.no_role_found),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+                    items(
+                        items = uniqueRoles,
+                        key = { "${it.roleId}-${it.roleName.name}" }
+                    ) { role ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(
+                                selected = selected?.roleId == role.roleId && selected?.roleName == role.roleName,
+                                onClick = { selected = role }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    role.roleName.getDisplayName(context),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+
+
 
 
 

@@ -394,7 +394,8 @@ fun NotificationsDrawerContent(
                 // Merge owners and tenants user IDs
                 val targetUserIds = selectedOwnerIds + selectedTenantIds
                 Log.d("targetUserIds", targetUserIds.toString())
-                sharedViewModel.insertNotification(notification, targetUserIds)
+                sharedViewModel.insertNotification(notification, listOf("5".toLong()))
+//                sharedViewModel.insertNotification(notification, targetUserIds)
                 showDialog = false
             },
             sharedViewModel = sharedViewModel

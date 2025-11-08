@@ -455,4 +455,5 @@
     <string name="six_digit_code">" کد 6 رقمی"</string>
     <string name="confirmed">تایید شد</string>
     <string name="returned">بازگشت</string>
+    <string name="no_role_found">نقشی ثبت نشده است.</string>
 </resources>

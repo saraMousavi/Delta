@@ -24,6 +24,7 @@ import com.example.delta.data.entity.BuildingOwnerCrossRef
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
+import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.CityComplex
@@ -57,12 +58,14 @@ import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
 import com.example.delta.enums.UserType
 import com.example.delta.enums.UserWithUnit
+import com.example.delta.init.AppFirebaseMessagingService
 import com.example.delta.init.Calculation
 import com.example.delta.init.Preference
 import com.example.delta.volley.AuthObjectFieldCross
 import com.example.delta.volley.Building
 import com.example.delta.volley.Cost
 import com.example.delta.volley.Fund
+import com.example.delta.volley.UserRole
 import com.example.delta.volley.Users
 import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +76,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -112,7 +116,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _invoiceResult = MutableSharedFlow<Boolean>() // true=success, false=failure
     val invoiceResult = _invoiceResult.asSharedFlow()
-
+    private val _userRoles = MutableStateFlow<List<Role>>(emptyList())
+    val userRoles = _userRoles.asStateFlow()
 
     // State for Building Info Page
     var name by mutableStateOf("")
@@ -490,6 +495,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         emit(costs)
     }.flowOn(Dispatchers.IO)
 
+    fun getBuildingsWithCountsForUser(userId: Long): Flow<List<BuildingWithCounts>> = flow {
+        val buildings = buildingDao.getBuildingsWithCountsForUser(userId)
+        emit(buildings)
+    }.flowOn(Dispatchers.IO)
 
     fun getUnitsForBuilding(buildingId: Long?): Flow<List<Units>> = flow {
         val units = unitsDao.getUnitsByBuildingId(buildingId)
@@ -584,6 +593,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             targetUserIds.forEach { userId ->
                 notificationDao.insertUsersNotificationCrossRef(UsersNotificationCrossRef(userId, notificationId, isRead = false))
             }
+            val data = mapOf(
+                "type" to "notification",
+                "notificationId" to notificationId.toString()
+            )
+            AppFirebaseMessagingService().sendPushNotification(
+                context = context,
+                userIds = targetUserIds,
+                template = "ALERT",
+                params = mapOf("text" to notification.message, "title" to notification.title)
+            )
         }
     }
 
@@ -780,19 +799,25 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
 
-    fun insertUser(context: Context, user: User, onSuccess: (Long) -> Unit) {
+    fun insertUser(context: Context, user: User, onSuccess: (Long) -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val userJson = JSONObject().apply {
                 put("mobileNumber", user.mobileNumber)
                 put("password", user.password)
                 put("roleId", user.roleId)
             }
-            val userId = userDao.insertUser(user)
-            userJson.put("userId", userId)
-            userDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = user.roleId, userId = userId))
-            Log.d("userJson", userJson.toString())
-            Users().insertUser(context, userJson)
-            onSuccess(userId)
+            try{
+                val userId = userDao.insertUser(user)
+                userJson.put("userId", userId)
+                userDao.insertUserRoleCrossRef(UserRoleCrossRef(roleId = user.roleId, userId = userId))
+                Log.d("userJson", userJson.toString())
+                Users().insertUser(context, userJson)
+                onSuccess(userId)
+            } catch (e: Exception){
+                onError(e.message.toString())
+            }
+
+
         }
 
     }
@@ -1370,7 +1395,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 //                    val clampedDang = oUnit.dang.coerceIn(0.0, 6.0)
                     if (oUnit.dang != 0.0) {
                         if (isNotForm) {
-                            ownersDao.insertBuildingOwner(
+                            ownersDao.insertBuildingOwnerCrossRef(
                                 BuildingOwnerCrossRef(
                                     ownerId = newOwnerId,
                                     buildingId = buildingId,
@@ -1491,7 +1516,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 buildingHelper.tenantUnitListToJsonArray(tenantUnitMap)
 
             // Convert building object to JSONObject
+            val mobileNumber = userDao.getUserById(building.userId)
             val buildingJson = buildingHelper.buildingToJson(
+                mobileNumber?.mobileNumber ?: "",
                 building,
                 selectedBuildingTypes,
                 selectedBuildingUsages
@@ -1499,6 +1526,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
             // Call your Volley helper to insert the building and related data
             buildingHelper.insertBuilding(
+                mobileNumber?.mobileNumber ?: "",
                 context,
                 buildingJson,
                 unitsJsonArray,
@@ -1605,7 +1633,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
                         val ownerUnits = ownerUnitMap[owner] ?: emptyList()
                         val isManager: Boolean = ownerManagerMap[owner] ?: false
-                        ownersDao.insertBuildingOwner(
+                        ownersDao.insertBuildingOwnerCrossRef(
                             BuildingOwnerCrossRef(
                                 ownerId = ownerId,
                                 buildingId = buildingId,
@@ -1779,7 +1807,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         owner.excelBuildingName ?: ""
                     )
                     val isManager: Boolean = owner.excelIsManager ?: false
-                    ownersDao.insertBuildingOwner(
+                    ownersDao.insertBuildingOwnerCrossRef(
                         BuildingOwnerCrossRef(
                             ownerId = ownerId,
                             buildingId = tmpBuilding.buildingId,
@@ -1927,7 +1955,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         )
                     }
 
-                    Building.BulkItem(
+                    Building.BulkBuildingItem(
                         building = b,
                         buildingType = null,
                         buildingUsage = null,
@@ -1938,8 +1966,9 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                         tenantUnits = tenantUnits
                     )
                 }
-
+                val mobileNumber = userDao.getUserById(Preference().getUserId(context = context))
                 Building().insertBuildingsBulk(
+                    mobileNumber = mobileNumber?.mobileNumber ?: "",
                     context = context,
                     items = items,
                     onSuccess = { resp ->
@@ -2610,6 +2639,15 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     }
 
+    fun getUserRoles(context: Context, mobileNumber: String) {
+        UserRole().getRolesByMobile(
+            context,
+            mobileNumber,
+            onSuccess = { _userRoles.value = it },
+            onError = { _userRoles.value = emptyList() }
+        )
+    }
+
 
 
     fun deleteFile(path: String) {
@@ -2949,10 +2987,64 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         false
     }
 
+    suspend fun ensureBuildingCachedFromServer(
+        context: Context,
+        buildingId: Long
+    ) {
+        val hasUnits = unitsDao.countForBuilding(buildingId) > 0
+        val hasOwners = ownersDao.countForBuilding(buildingId) > 0
+        val hasTenants = tenantsDao.countForBuilding(buildingId) > 0
+        val hasBuilding = buildingDao.hasBuilding(buildingId) > 0
 
+        if (hasBuilding && (hasUnits || hasOwners || hasTenants)) {
+            return
+        }
 
+        val bulk = Building().fetchBuildingByIdSuspend(context, buildingId)
 
+        viewModelScope.launch {
+            val b = bulk.building.copy(
+                buildingId = bulk.building.buildingId
+            )
+            buildingDao.insertBuilding(b)
+
+            val units = bulk.units.map { it.copy(buildingId = b.buildingId) }
+            if (units.isNotEmpty()) unitsDao.upsertAll(units)
+
+            if (bulk.owners.isNotEmpty()) ownersDao.upsertAll(bulk.owners)
+
+            if (bulk.tenants.isNotEmpty()) tenantsDao.upsertAll(bulk.tenants)
+
+            bulk.ownerUnits.forEach { ou ->
+                ownersDao.insertOwnerUnitCrossRef(
+                    OwnersUnitsCrossRef(
+                        ownerId = ou.ownerId,
+                        unitId = ou.unitId,
+                        dang = ou.dang
+                    )
+                )
+                ownersDao.insertBuildingOwnerCrossRef(
+                    BuildingOwnerCrossRef(
+                        ownerId = ou.ownerId,
+                        buildingId = b.buildingId,
+                        isManager = false
+                    )
+                )
+            }
+
+            bulk.tenantUnits.forEach { tu ->
+                tenantsDao.insertTenantUnitCrossRef(
+                    TenantsUnitsCrossRef(
+                        tenantId = tu.tenantId,
+                        unitId = tu.unitId,
+                        startDate = tu.startDate,
+                        endDate = tu.endDate,
+                        status = tu.status
+                    )
+                )
+            }
+        }
+    }
 }
-
 
 

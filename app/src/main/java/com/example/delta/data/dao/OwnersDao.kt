@@ -14,14 +14,22 @@ interface OwnersDao {
     suspend fun insertOwners(owners: Owners) : Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBuildingOwner(buildingOwners: BuildingOwnerCrossRef) : Long
+    suspend fun insertBuildingOwnerCrossRef(buildingOwners: BuildingOwnerCrossRef) : Long
 
     @Delete
     suspend fun deleteOwners(owners: Owners)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(owners: List<Owners>)
+
     // Delete tenants linked to building
     @Query("DELETE FROM owners_units_cross_ref WHERE ownerId IN (SELECT ownerId FROM owners WHERE ownerId = :ownerId)")
     suspend fun deleteOwnersWithUnits(ownerId: Long)
+
+
+
+    @Query("SELECT COUNT(1) FROM owners o INNER JOIN building_owner_cross_ref bo ON bo.ownerId=o.ownerId WHERE bo.buildingId=:buildingId")
+    suspend fun countForBuilding(buildingId: Long): Int
 
     @Update
     suspend fun updateOwner(owners: Owners)

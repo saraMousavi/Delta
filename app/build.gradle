@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.kotlin.room)
     id 'kotlin-parcelize'
+    alias(libs.plugins.google.service)
 //    alias(libs.plugins.hilt)
 }
 
@@ -105,7 +106,9 @@ dependencies {
     implementation(libs.mpandroidchart)
     implementation(libs.apache.poi)
     implementation(libs.apache.poi.ooxml)
-//    implementation (libs.firebase)
+    implementation (libs.firebase)
+    implementation (platform(libs.firebase.bom))
+    implementation (libs.firebase.analytics)
     testImplementation libs.junit
     // Mockito for mocking dependencies
     testImplementation(libs.mockito.core)

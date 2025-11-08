@@ -4,6 +4,7 @@ import androidx.room.*
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
+import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.BuildingWithUsage
@@ -27,6 +28,9 @@ interface BuildingsDao {
 
     @Query("SELECT * FROM buildings")
     fun getAllBuildingsList(): List<Buildings>
+
+    @Query("SELECT COUNT(1) FROM buildings WHERE buildingId = :buildingId")
+    suspend fun hasBuilding(buildingId: Long): Int
 
     @Query("""
     SELECT b.*, r.roleName,    
@@ -122,4 +126,65 @@ interface BuildingsDao {
 """)
     fun getTotalResidentsInBuilding(buildingId: Long): Int
 
+    @Query("""
+        SELECT 
+            b.buildingId,
+            b.complexId,
+            b.name,
+            b.phone,
+            b.email,
+            b.postCode,
+            b.street,
+            b.province,
+            b.state,
+            b.buildingTypeId,
+            b.buildingUsageId,
+            b.fund,
+            b.userId,
+            bt.building_type_name AS buildingTypeName,
+            bu.building_usage_name AS buildingUsageName,
+            COUNT(u.unitId) AS unitsCount,
+            COUNT(DISTINCT u.ownerId) AS ownersCount
+        FROM buildings b
+        LEFT JOIN building_types bt ON bt.buildingTypeId = b.buildingTypeId
+        LEFT JOIN building_usages bu ON bu.buildingUsageId = b.buildingUsageId
+        LEFT JOIN units u ON u.buildingId = b.buildingId
+        GROUP BY b.buildingId
+        ORDER BY b.name COLLATE NOCASE ASC
+    """)
+    suspend fun getAllBuildingsWithCounts(): List<BuildingWithCounts>
+
+    @Query("""
+        SELECT 
+            b.buildingId,
+            b.complexId,
+            b.name,
+            b.phone,
+            b.email,
+            b.postCode,
+            b.street,
+            b.province,
+            b.state,
+            b.buildingTypeId,
+            b.buildingUsageId,
+            b.fund,
+            b.userId,
+            bt.building_type_name AS buildingTypeName,
+            bu.building_usage_name AS buildingUsageName,
+            COUNT(u.unitId) AS unitsCount,
+            COUNT(DISTINCT u.ownerId) AS ownersCount
+        FROM buildings b
+        INNER JOIN users_buildings_cross_ref ub ON ub.buildingId = b.buildingId
+        LEFT JOIN building_types bt ON bt.buildingTypeId = b.buildingTypeId
+        LEFT JOIN building_usages bu ON bu.buildingUsageId = b.buildingUsageId
+        LEFT JOIN units u ON u.buildingId = b.buildingId
+        WHERE ub.userId = :userId
+        GROUP BY b.buildingId
+        ORDER BY b.name COLLATE NOCASE ASC
+    """)
+    suspend fun getBuildingsWithCountsForUser(userId: Long): List<BuildingWithCounts>
+
+
 }
+
+

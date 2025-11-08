@@ -20,6 +20,12 @@ interface UnitsDao {
     @Delete
     suspend fun deleteUnit(unit: Units)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(units: List<Units>)
+
+    @Query("SELECT COUNT(1) FROM units WHERE buildingId = :buildingId")
+    suspend fun countForBuilding(buildingId: Long): Int
+
     @Query("SELECT buildingId FROM units WHERE unitId = :unitId LIMIT 1")
     suspend fun getBuildingIdFromUnit(unitId: Long): Long?
 
