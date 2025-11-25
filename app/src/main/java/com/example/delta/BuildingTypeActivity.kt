@@ -8,21 +8,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.BuildingType
+import kotlinx.coroutines.launch
 
 class BuildingTypeActivity : ComponentActivity() {
 
@@ -36,58 +30,84 @@ class BuildingTypeActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+
             val buildingTypes by viewModel.getAllBuildingType()
                 .collectAsState(initial = emptyList())
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Scaffold(
-                    topBar = {
-                        CenterAlignedTopAppBar(
-                            title = {
-                                Text(
-                                    text = getString(R.string.building_type_list),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = { finish() }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back"
-                                    )
-                                }
-                            }
-                        )
+
+            LaunchedEffect(Unit) {
+                try {
+                    val remoteList = BuildingType().fetchAllSuspend(context)
+                    remoteList.forEach { t ->
+                        viewModel.insertBuildingType(t)
                     }
-                ) { innerPadding ->
-                    CostForm(
-                        sharedViewModel = sharedViewModel,
-                        viewModel = viewModel,
-                        insertItem = { name ->
-                            viewModel.insertBuildingType(BuildingTypes(buildingTypeName = name))
-                        },
-                        listContent = { vm ->
-                            GenericList(
-                                sharedViewModel = sharedViewModel,
-                                items = buildingTypes,
-                                itemContent = { item ->
-                                    GenericItem(
-                                        sharedViewModel = sharedViewModel,
-                                        item = item,
-                                        itemName = { (it).buildingTypeName })
-                                },
-                                onDeleteItem = { item ->
-                                    vm.deleteBuildingType(item)
-                                }
-                            )
-                        },
-                        contextString = R.string.building_type_list
-                    )
-                }
+                } catch (_: Exception) {}
             }
 
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+
+                    Scaffold(
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = getString(R.string.building_type_list),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = { finish() }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    ) { innerPadding ->
+                        CostForm(
+                            sharedViewModel = sharedViewModel,
+                            viewModel = viewModel,
+                            insertItem = { name ->
+
+                                scope.launch {
+                                    try {
+                                        val created = BuildingType()
+                                            .createBuildingTypeSuspend(context, name)
+
+                                        if (created != null) {
+                                            viewModel.insertBuildingType(created)
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            },
+
+                            listContent = { vm ->
+                                GenericList(
+                                    sharedViewModel = sharedViewModel,
+                                    items = buildingTypes,
+                                    itemContent = { item ->
+                                        GenericItem(
+                                            sharedViewModel = sharedViewModel,
+                                            item = item,
+                                            itemName = { it.buildingTypeName }
+                                        )
+                                    },
+                                    onDeleteItem = { item ->
+                                        vm.deleteBuildingType(item)
+                                        BuildingType().deleteBuildingType(context, item.buildingTypeId, onError = {}, onSuccess = {})
+                                    }
+                                )
+                            },
+
+                            contextString = R.string.building_type_list
+                        )
+                    }
+                }
             }
         }
     }
-
 }

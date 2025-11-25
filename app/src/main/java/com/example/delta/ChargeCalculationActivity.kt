@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +50,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.CalculateMethod
@@ -61,10 +60,9 @@ import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
 import com.example.delta.init.Calculation
 import com.example.delta.init.NumberCommaTransformation
+import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOn
+import com.example.delta.volley.Building
 import kotlinx.coroutines.launch
 
 class ChargeCalculationActivity : ComponentActivity() {
@@ -75,7 +73,7 @@ class ChargeCalculationActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Scaffold(
                         topBar = {
@@ -96,7 +94,7 @@ class ChargeCalculationActivity : ComponentActivity() {
                                 }
                             )
                         }
-                    ) { innerPadding ->
+                    ) { _ ->
                         ChargeCalculationScreen(sharedViewModel)
                     }
                 }
@@ -110,17 +108,18 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     val context = LocalContext.current
     var amountInputs by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // State variables
-    var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
+    var selectedBuilding by remember { mutableStateOf<BuildingWithCounts?>(null) }
     var isEditMode by remember { mutableStateOf(true) }
     var costItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
-    var equalChargeAmount by remember { mutableStateOf<String>("") }
+    var equalChargeAmount by remember { mutableStateOf("") }
     var showAddCostDialog by remember { mutableStateOf(false) }
     var showChargeResultDialog by remember { mutableStateOf(false) }
     var calculatedCharges by remember { mutableStateOf<Map<Units, Double>?>(null) }
 
-    // Load buildings and periods (assumed from ViewModel or static)
-    val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
+    var buildings by remember { mutableStateOf<List<BuildingWithCounts>>(emptyList()) }
+    var buildingFull by remember { mutableStateOf<Building.BuildingFullDto?>(null) }
+    var unitsForSelectedBuilding by remember { mutableStateOf<List<Units>>(emptyList()) }
+
     val fiscalYears = (1404..1415).map { it.toString() }
     var selectedYear by remember { mutableStateOf(fiscalYears.first()) }
 
@@ -130,7 +129,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     val coroutineScope = rememberCoroutineScope()
     val snackBarHostState = remember { SnackbarHostState() }
     var selectedCalculation by remember {
-        mutableStateOf(CalculateMethod.AUTOMATIC.getDisplayName(context)) // Default to "Owners"
+        mutableStateOf(CalculateMethod.AUTOMATIC.getDisplayName(context))
     }
     val isCalculateEnabled by remember(costItems) {
         derivedStateOf {
@@ -138,54 +137,69 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
         }
     }
 
-    // On building selection, load costs from sharedViewModel, map to CostInputModel
     var lastSavedCostItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
     val transformation = remember { NumberCommaTransformation() }
-    LaunchedEffect(selectedBuilding, selectedYear) {
-        selectedBuilding?.let { building ->
-            sharedViewModel.getCostsForBuildingWithChargeFlagAndFiscalYear(building.buildingId, selectedYear)
-                .flowOn(Dispatchers.IO)
-                .collect { costs ->
-                    if (costs.isEmpty()) {
-                        // If cost list is empty, collect raw charges once and emit that instead
-                        val rawCharges = sharedViewModel.getRawChargesCostsWithBuildingId(building.buildingId)
-                            .flowOn(Dispatchers.IO)
-                            .first()
 
-                        costItems = rawCharges
-                        amountInputs = rawCharges.map { it.tempAmount.toString() }
-                        lastSavedCostItems = rawCharges
-                        sharedViewModel.chargeCostsList.value = rawCharges
-                        chargeAlreadyCalculated = rawCharges.isNotEmpty()
+    val mobileNumber = remember { Preference().getUserMobile(context) }
 
-                        if (chargeAlreadyCalculated) {
-                            isEditMode = false
-                            lastCalculatedCharges = sharedViewModel.getLastCalculatedCharges(building.buildingId, selectedYear)
-                        } else {
-                            isEditMode = true
-                            lastCalculatedCharges = null
-                        }
-                    } else {
-                        // Normal case: costs from DB
-                        costItems = costs
-                        amountInputs = costs.map { it.tempAmount.toString() }
-                        lastSavedCostItems = costs
-                        sharedViewModel.chargeCostsList.value = costs
-                        chargeAlreadyCalculated = costs.isNotEmpty()
-                        if (chargeAlreadyCalculated) {
-                            isEditMode = false
-                            lastCalculatedCharges = sharedViewModel.getLastCalculatedCharges(building.buildingId, selectedYear)
-                        } else {
-                            isEditMode = true
-                            lastCalculatedCharges = null
-                        }
-                    }
-                }
-        }
+    LaunchedEffect(mobileNumber) {
+        if (mobileNumber.isNullOrBlank()) return@LaunchedEffect
+        Building().fetchBuildingsForUser(
+            context = context,
+            mobileNumber = mobileNumber,
+            onSuccess = { list -> buildings = list },
+            onError = { }
+        )
     }
 
+    LaunchedEffect(selectedBuilding, selectedYear) {
+        if (selectedBuilding == null) {
+            buildingFull = null
+            unitsForSelectedBuilding = emptyList()
+            costItems = emptyList()
+            amountInputs = emptyList()
+            lastSavedCostItems = emptyList()
+            sharedViewModel.chargeCostsList.value = emptyList()
+            chargeAlreadyCalculated = false
+            isEditMode = true
+            lastCalculatedCharges = null
+            return@LaunchedEffect
+        }
+        try {
+            val dto = Building().fetchBuildingFullSuspend(
+                context = context,
+                buildingId = selectedBuilding!!.buildingId,
+                fiscalYear = selectedYear
+            )
+            buildingFull = dto
+            unitsForSelectedBuilding = dto.units
 
+            val serverCostsForYear = dto.chargeCostsForYear
+            val serverCosts = when {
+                serverCostsForYear.isNotEmpty() -> serverCostsForYear
+                dto.costs.isNotEmpty() -> dto.costs.filter { it.chargeFlag == true }
+                else -> dto.defaultChargeCosts
+            }
 
+            costItems = serverCosts
+            amountInputs = serverCosts.map { it.tempAmount.toString() }
+            lastSavedCostItems = serverCosts
+            sharedViewModel.chargeCostsList.value = serverCosts
+            chargeAlreadyCalculated = serverCosts.any { it.tempAmount > 0.0 }
+            isEditMode = !chargeAlreadyCalculated
+            lastCalculatedCharges = null
+        } catch (_: Exception) {
+            buildingFull = null
+            unitsForSelectedBuilding = emptyList()
+            costItems = emptyList()
+            amountInputs = emptyList()
+            lastSavedCostItems = emptyList()
+            sharedViewModel.chargeCostsList.value = emptyList()
+            chargeAlreadyCalculated = false
+            isEditMode = true
+            lastCalculatedCharges = null
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -241,25 +255,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
         when (selectedCalculation) {
             CalculateMethod.AUTOMATIC.getDisplayName(context) -> {
 
-
-                // List of cost items (input + dropdown)
                 LazyColumn(modifier = Modifier.weight(1f)) {
-
-                    // If charge has been calculated and isEditMode == false, append units charges list as last item section
-                    if (!isEditMode && lastCalculatedCharges != null && lastCalculatedCharges!!.isNotEmpty()) {
-//                        item {
-//                            // Show calculated charges per unit
-//                            lastCalculatedCharges!!.forEach { (unit, charge) ->
-//                                FundInfoBox(
-//                                    formattedFund = formatNumberWithCommas(charge),
-//                                    context = context,
-//                                    title = "${context.getString(R.string.unit) }${unit.unitNumber}:"
-//                                )
-//                                Spacer(Modifier.height(8.dp))
-//                            }
-//                            Spacer(Modifier.height(16.dp))
-//                        }
-                    }
 
                     item {
                         Row(
@@ -288,19 +284,25 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
-                    val costList = costItems   // Use costItems as source
+                    val costList = costItems
 
                     items(costList.size) { index ->
                         CostInputRow(
                             sharedViewModel = sharedViewModel,
                             costInput = costList[index],
-                            amount = amountInputs.getOrElse(index) { "0" },  // Use the string input, can be ""
+                            amount = amountInputs.getOrElse(index) { "0" },
                             calculateMethod = costItems[index].calculateMethod,
                             isEditMode = isEditMode,
                             onAmountChange = { newAmount ->
-                                amountInputs = amountInputs.toMutableList().also { it[index] = newAmount }
+                                amountInputs = amountInputs.toMutableList().also {
+                                    if (index < it.size) it[index] = newAmount else it.add(
+                                        newAmount
+                                    )
+                                }
                                 costItems = costItems.toMutableList().also {
-                                    it[index] = it[index].copy(tempAmount = newAmount.toDoubleOrNull() ?: 0.0)
+                                    it[index] = it[index].copy(
+                                        tempAmount = newAmount.toDoubleOrNull() ?: 0.0
+                                    )
                                 }
                             },
                             onCalculateMethodChange = { newMethod ->
@@ -317,11 +319,16 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
                 if (isEditMode) {
                     Row(
-                        horizontalArrangement  = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(
-                            modifier = Modifier.weight(0.4f).padding(),onClick = { showAddCostDialog = true }, enabled = selectedBuilding != null) {
+                            modifier = Modifier
+                                .weight(0.4f)
+                                .padding(),
+                            onClick = { showAddCostDialog = true },
+                            enabled = selectedBuilding != null
+                        ) {
                             Text(
                                 context.getString(R.string.add_new_parameter),
                                 style = MaterialTheme.typography.bodyLarge
@@ -330,7 +337,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                         Button(
                             modifier = Modifier.weight(0.25f),
                             onClick = {
-                                costItems = lastSavedCostItems.map { it.copy() } // Defensive copy to avoid mutation issues
+                                costItems = lastSavedCostItems.map { it.copy() }
                                 isEditMode = false
                             }
                         ) {
@@ -341,53 +348,64 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                         }
 
                         Button(
-                            modifier = Modifier.weight(0.35f), onClick = {
-                            isEditMode = false
-                            coroutineScope.launch {
-                                val units = sharedViewModel.getUnitsForBuilding(selectedBuilding!!.buildingId).first()
+                            modifier = Modifier.weight(0.35f),
+                            onClick = {
+                                isEditMode = false
+                                coroutineScope.launch {
+                                    val dto = buildingFull ?: return@launch
+                                    val units = unitsForSelectedBuilding
+                                    if (units.isEmpty()) return@launch
 
-                                val calculation = Calculation()
+                                    val tenantsById =
+                                        dto.tenants.associateBy { it.tenantId }
+                                    val tenantUnits = dto.tenantUnits
 
-                                // 1. Fetch tenant counts for all units asynchronously in parallel or sequentially
-                                val tenantCountsByUnitId: Map<Long, Int> = units.associate { unit ->
-                                    // call DAO or ViewModel method to get tenant count per unit
-                                    val tenantCountResult =
-                                        sharedViewModel.getNumberOfUnitsTenantForUnit(unit.unitId)
-                                    // assume tenantCountResult.numberOfTenants is String? or Int? convert to Int safely
-                                    unit.unitId to (tenantCountResult?.toIntOrNull() ?: 1)
-                                }
+                                    val tenantCountsByUnitId: Map<Long, Int> =
+                                        tenantUnits.groupBy { it.unitId }.mapValues { (_, list) ->
+                                            val sum = list.sumOf { tu ->
+                                                val t = tenantsById[tu.tenantId]
+                                                t?.numberOfTenants?.toIntOrNull() ?: 1
+                                            }
+                                            if (sum <= 0) 1 else sum
+                                        }
 
-                                // 2. Define synchronous lookup function using the pre-fetched map
-                                val getTenantCountForUnit: (Long) -> Int = { unitId ->
-                                    tenantCountsByUnitId[unitId] ?: 1
-                                }
-
-                                // 3. Prepare CostInfo map
-                                data class CostInfo(val amount: Double, val method: CalculateMethod)
-                                val costsInfoMap: Map<String, CostInfo> = costItems.associate { cost ->
-                                    cost.costName to CostInfo(cost.tempAmount, cost.calculateMethod)
-                                }
-
-                                // 4. Calculate charges for each unit using calculation method and pre-fetched tenant counts
-                                val chargeMap = units.associateWith { unit ->
-                                    costsInfoMap.entries.sumOf { (_, costInfo) ->
-                                        calculation.calculateAmountByMethod(
-                                            costAmount = costInfo.amount,
-                                            unit = unit,
-                                            allUnits = units,
-                                            calculationMethod = costInfo.method,
-                                            getTenantCountForUnit = getTenantCountForUnit
-                                        )
+                                    val getTenantCountForUnit: (Long) -> Int = { unitId ->
+                                        tenantCountsByUnitId[unitId] ?: 1
                                     }
+
+                                    data class CostInfo(
+                                        val amount: Double,
+                                        val method: CalculateMethod
+                                    )
+
+                                    val costsInfoMap: Map<String, CostInfo> =
+                                        costItems.associate { cost ->
+                                            cost.costName to CostInfo(
+                                                cost.tempAmount,
+                                                cost.calculateMethod
+                                            )
+                                        }
+
+                                    val calculation = Calculation()
+
+                                    val chargeMap = units.associateWith { unit ->
+                                        costsInfoMap.entries.sumOf { (_, costInfo) ->
+                                            calculation.calculateAmountByMethod(
+                                                costAmount = costInfo.amount,
+                                                unit = unit,
+                                                allUnits = units,
+                                                calculationMethod = costInfo.method,
+                                                getTenantCountForUnit = getTenantCountForUnit
+                                            )
+                                        }
+                                    }
+
+                                    calculatedCharges = chargeMap
+                                    showChargeResultDialog = true
                                 }
-
-                                calculatedCharges = chargeMap
-                                showChargeResultDialog = true
-                            }
-
-
-                        },
-                            enabled = isCalculateEnabled) {
+                            },
+                            enabled = isCalculateEnabled && selectedBuilding != null
+                        ) {
                             Text(
                                 context.getString(R.string.calculate),
                                 style = MaterialTheme.typography.bodyLarge
@@ -414,9 +432,8 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             CalculateMethod.EQUAL.getDisplayName(context) -> {
                 val amountInWords = transformation.numberToWords(
                     context,
-                    equalChargeAmount.toDoubleOrNull()?.toLong() ?: 0L  // Convert decimal input to long
+                    equalChargeAmount.toDoubleOrNull()?.toLong() ?: 0L
                 )
-                // Show single input for total charge amount
                 OutlinedTextField(
                     value = equalChargeAmount,
                     onValueChange = { equalChargeAmount = it },
@@ -440,14 +457,19 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Column {
                     SnackbarHost(hostState = snackBarHostState)
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Button(modifier = Modifier.fillMaxWidth().height(52.dp) , onClick = {
-                        coroutineScope.launch {
-                            sharedViewModel.getUnitsForBuilding(selectedBuilding!!.buildingId)
-                                .collect { units ->
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            onClick = {
+                                coroutineScope.launch {
+                                    val units = unitsForSelectedBuilding
+                                    val building = selectedBuilding ?: return@launch
+                                    if (units.isEmpty()) return@launch
 
                                     val map =
                                         units.associate { unit -> unit to equalChargeAmount.toDouble() }
@@ -459,7 +481,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                             cost to amount
                                         }.toMap()
                                     sharedViewModel.insertDebtForCharge(
-                                        buildingId = selectedBuilding!!.buildingId,
+                                        buildingId = building.buildingId,
                                         fiscalYear = selectedYear,
                                         chargeUnitMap = map,
                                         costsAmountMap = costsAmountMap,
@@ -468,52 +490,60 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                         },
                                         onSuccess = { costs, debts ->
                                             coroutineScope.launch {
-                                                sharedViewModel.insertCostToServer (context, costs, debts,
+                                                sharedViewModel.insertCostToServer(
+                                                    context,
+                                                    costs,
+                                                    debts,
                                                     onSuccess = {
                                                         coroutineScope.launch {
-                                                            snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                                            snackBarHostState.showSnackbar(
+                                                                context.getString(R.string.charge_calcualted_successfully)
+                                                            )
                                                         }
-                                                    }, onError = {
+                                                    },
+                                                    onError = {
                                                         coroutineScope.launch {
-                                                            snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                            snackBarHostState.showSnackbar(
+                                                                context.getString(R.string.failed)
+                                                            )
                                                         }
                                                     })
-
                                             }
                                         }
                                     )
                                 }
-                        }
 
-                    }) {
-                        Text(
-                            context.getString(R.string.calculate),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                            }) {
+                            Text(
+                                context.getString(R.string.calculate),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                     }
-                }
                 }
             }
 
             else -> {
-                // Handle other cases if needed or show empty
             }
         }
-
-
     }
 
     if (showAddCostDialog) {
-        val notChargesCost by sharedViewModel.getChargesCostsNotInBuilding(buildingId = selectedBuilding!!.buildingId)
-            .collectAsState(initial = emptyList())
+        val notChargesCost: List<Costs> =
+            buildingFull?.defaultChargeCosts
+                ?.filter { defaultCost ->
+                    costItems.none { it.costName == defaultCost.costName }
+                }
+                ?: emptyList()
+
         AddNewCostDialog(
             onDismiss = { showAddCostDialog = false },
-            onChargeConfirm  = { costNames ->
-                // Add new cost both locally and DB
+            onChargeConfirm = { costNames ->
                 coroutineScope.launch {
-                    costNames.forEach{ costName ->
+                    val building = selectedBuilding ?: return@launch
+                    costNames.forEach { costName ->
                         val newCost = Costs(
-                            buildingId = selectedBuilding!!.buildingId,
+                            buildingId = building.buildingId,
                             costName = costName,
                             chargeFlag = true,
                             fundType = FundType.OPERATIONAL,
@@ -535,17 +565,18 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
         )
     }
 
-
     if (showChargeResultDialog) {
         ChargeResultDialog(
             results = calculatedCharges,
             onSave = {
-                val costsAmountMap: Map<Costs, Double> = costItems.mapIndexed { index, cost ->
-                    val amount = amountInputs.getOrNull(index)?.toDoubleOrNull() ?: 0.0
-                    cost to amount
-                }.toMap()
+                val building = selectedBuilding ?: return@ChargeResultDialog
+                val costsAmountMap: Map<Costs, Double> =
+                    costItems.mapIndexed { index, cost ->
+                        val amount = amountInputs.getOrNull(index)?.toDoubleOrNull() ?: 0.0
+                        cost to amount
+                    }.toMap()
                 sharedViewModel.insertDebtForCharge(
-                    buildingId = selectedBuilding!!.buildingId,
+                    buildingId = building.buildingId,
                     fiscalYear = selectedYear,
                     chargeUnitMap = calculatedCharges,
                     onError = {
@@ -553,22 +584,26 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                     },
                     costsAmountMap = costsAmountMap,
                     onSuccess = { costs, debts ->
-                            sharedViewModel.insertCostToServer (context, costs, debts,
-                                onSuccess = {
-                                    coroutineScope.launch {
-                                        lastCalculatedCharges = calculatedCharges
-                                        isEditMode = false
-                                        chargeAlreadyCalculated = true
+                        sharedViewModel.insertCostToServer(
+                            context,
+                            costs,
+                            debts,
+                            onSuccess = {
+                                coroutineScope.launch {
+                                    lastCalculatedCharges = calculatedCharges
+                                    isEditMode = false
+                                    chargeAlreadyCalculated = true
 
-                                        showChargeResultDialog = false
-                                        snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
-                                    }
-                                }, onError = {
-                                    coroutineScope.launch {
-                                        showChargeResultDialog = false
-                                        snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                                    }
-                                })
+                                    showChargeResultDialog = false
+                                    snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                }
+                            },
+                            onError = {
+                                coroutineScope.launch {
+                                    showChargeResultDialog = false
+                                    snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                }
+                            })
                     }
                 )
             },
@@ -576,7 +611,6 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
         )
     }
 }
-
 
 @Composable
 fun CostInputRow(
@@ -592,15 +626,15 @@ fun CostInputRow(
     val transformation = remember { NumberCommaTransformation() }
 
     val filteredMethods = remember {
-        CalculateMethod.entries.filter { it != CalculateMethod.DANG && it != CalculateMethod.AUTOMATIC }.toMutableList()
+        CalculateMethod.entries.filter { it != CalculateMethod.DANG && it != CalculateMethod.AUTOMATIC }
+            .toMutableList()
     }.apply {
         if (calculateMethod !in this) add(calculateMethod)
     }
 
-    // Compute amountInWords directly on each recomposition according to amount param
     val amountInWords = transformation.numberToWords(
         context,
-        amount.toDoubleOrNull()?.toLong() ?: 0L  // Convert decimal input to long
+        amount.toDoubleOrNull()?.toLong() ?: 0L
     )
 
     if (isEditMode) {
@@ -616,7 +650,9 @@ fun CostInputRow(
                             onAmountChange(newValue)
                         }
                     },
-                    label = { Text(costInput.costName, style = MaterialTheme.typography.bodyLarge) },
+                    label = {
+                        Text(costInput.costName, style = MaterialTheme.typography.bodyLarge)
+                    },
                     singleLine = true,
                     enabled = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -641,16 +677,27 @@ fun CostInputRow(
             )
         }
     } else {
-        // Display mode row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(costInput.costName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.4f))
+            Text(
+                costInput.costName,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(0.4f)
+            )
             Spacer(Modifier.height(8.dp))
-            Text(formatNumberWithCommas(amount.toDouble()), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.3f))
+            Text(
+                formatNumberWithCommas(amount.toDouble()),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(0.3f)
+            )
             Spacer(Modifier.height(8.dp))
-            Text(calculateMethod.getDisplayName(context), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.3f))
+            Text(
+                calculateMethod.getDisplayName(context),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(0.3f)
+            )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     }
@@ -711,6 +758,3 @@ fun ChargeResultDialog(
         }
     )
 }
-
-
-

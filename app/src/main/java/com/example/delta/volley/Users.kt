@@ -197,4 +197,53 @@ class Users {
         return enumValues<Roles>().firstOrNull { it.getDisplayName(context) == display.trim() }
     }
 
+    fun fetchUserById(
+        context: Context,
+        userId: Long,
+        onSuccess: (User) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$BASE_URL/user/$userId"
+        val queue = Volley.newRequestQueue(context)
+
+        val req = JsonObjectRequest(
+            Request.Method.GET, url, null,
+            { o ->
+                try {
+                    val user = User(
+                        userId = o.optLong("userId"),
+                        mobileNumber = o.optString("mobileNumber", ""),
+                        password = o.optString("password", ""),
+                        roleId = o.optLong("roleId", 0L)
+                    )
+                    onSuccess(user)
+                } catch (e: Exception) { onError(e) }
+            },
+            { err -> onError(Exception(err)) }
+        )
+
+        queue.add(req)
+    }
+
+    fun updateUser(
+        context: Context,
+        userId: Long,
+        payload: JSONObject,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$BASE_URL/user/$userId"
+        val queue = Volley.newRequestQueue(context)
+
+        val req = JsonObjectRequest(
+            Request.Method.PUT,
+            url,
+            payload,
+            { _ -> onSuccess() },
+            { err -> onError(Exception(err)) }
+        )
+
+        queue.add(req)
+    }
+
 }

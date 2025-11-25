@@ -6,6 +6,7 @@ import com.android.volley.Request
 import com.android.volley.VolleyError
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
+import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.BuildingTypes
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -135,6 +136,37 @@ class BuildingType(
             onError = { e ->
                 if (cont.isActive) cont.resumeWithException(e)
             }
+        )
+    }
+
+    fun deleteBuildingType(
+        context: Context,
+        buildingTypeId: Long,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$buildingTypeId"
+
+        val request = StringRequest(
+            Request.Method.DELETE,
+            url,
+            { onSuccess() },
+            { error -> onError(formatVolleyError("BuildingType(delete)", error)) }
+        )
+
+        queue.add(request)
+    }
+
+    suspend fun deleteBuildingTypeSuspend(
+        context: Context,
+        buildingTypeId: Long
+    ): Unit = suspendCancellableCoroutine { cont ->
+        deleteBuildingType(
+            context = context,
+            buildingTypeId = buildingTypeId,
+            onSuccess = { if (cont.isActive) cont.resume(Unit) },
+            onError = { e -> if (cont.isActive) cont.resumeWithException(e) }
         )
     }
 }

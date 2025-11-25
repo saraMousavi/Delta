@@ -6,6 +6,7 @@ import com.android.volley.Request
 import com.android.volley.VolleyError
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
+import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.BuildingUsages
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -135,6 +136,37 @@ class BuildingUsage(
             onError = { e ->
                 if (cont.isActive) cont.resumeWithException(e)
             }
+        )
+    }
+
+    fun deleteBuildingUsage(
+        context: Context,
+        buildingUsageId: Long,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$buildingUsageId"
+
+        val request = StringRequest(
+            Request.Method.DELETE,
+            url,
+            { onSuccess() },
+            { error -> onError(formatVolleyError("BuildingUsage(delete)", error)) }
+        )
+
+        queue.add(request)
+    }
+
+    suspend fun deleteBuildingUsageSuspend(
+        context: Context,
+        buildingUsageId: Long
+    ): Unit = suspendCancellableCoroutine { cont ->
+        deleteBuildingUsage(
+            context = context,
+            buildingUsageId = buildingUsageId,
+            onSuccess = { if (cont.isActive) cont.resume(Unit) },
+            onError = { e -> if (cont.isActive) cont.resumeWithException(e) }
         )
     }
 }

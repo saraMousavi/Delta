@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,56 +59,140 @@ import com.example.delta.enums.Gender
 import com.example.delta.enums.Roles
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.Users
+import org.json.JSONObject
 
 class UserProfileActivity : ComponentActivity() {
-    val sharedViewModel: SharedViewModel by viewModels()
+
+    private val sharedViewModel: SharedViewModel by viewModels()
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     val context = LocalContext.current
-                    Scaffold(
-                       topBar = {
-                           CenterAlignedTopAppBar(
-                               title = {
-                                   Text(
-                                       text = getString(R.string.guest_display),
-                                       style = MaterialTheme.typography.bodyLarge
-                                   )
-                               },
-                               navigationIcon = {
-                                   IconButton(onClick = { startActivity(Intent(context, LoginPage::class.java)) }) {
-                                       Icon(
-                                           Icons.AutoMirrored.Filled.ArrowBack,
-                                           contentDescription = "Back"
-                                       )
-                                   }
-                               }
-                           )
-                       }
-                    )
-                    { innerPadding ->
-                          Column (modifier = Modifier.padding(innerPadding)){
-                              val userId = Preference().getUserId(context = context)
-                              val user by sharedViewModel.getUserById(userId).collectAsState(initial = null)
-                              user?.let {
-                                  UserProfileScreen(sharedViewModel = sharedViewModel, initialUser = user!!, onSave = {
-                                      sharedViewModel.updateUser(user!!,
-                                          onError = {
-                                              Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
-                                          })
-                                  })
-                              }
 
-                          }
-                       }
+                    val userId = remember { Preference().getUserId(context) }
+                    var user by remember { mutableStateOf<User?>(null) }
+                    var isLoading by remember { mutableStateOf(true) }
+                    var loadError by remember { mutableStateOf<Exception?>(null) }
+
+                    LaunchedEffect(userId) {
+                        Users().fetchUserById(
+                            context = context,
+                            userId = userId,
+                            onSuccess = { fetchedUser ->
+                                user = fetchedUser
+                                isLoading = false
+                                loadError = null
+                            },
+                            onError = { e ->
+                                isLoading = false
+                                loadError = e
+                            }
+                        )
+                    }
+
+                    Scaffold(
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = context.getString(R.string.user_info),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            context.startActivity(
+                                                Intent(
+                                                    context,
+                                                    HomePageActivity::class.java
+                                                )
+                                            )
+                                            // or: (context as? Activity)?.finish()
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    ) { innerPadding ->
+                        Column(
+                            modifier = Modifier
+                                .padding(innerPadding)
+                                .fillMaxSize()
+                        ) {
+                            when {
+                                isLoading -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                }
+
+                                loadError != null -> {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.failed),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+
+                                user != null -> {
+                                    UserProfileScreen(
+                                        sharedViewModel = sharedViewModel,
+                                        initialUser = user!!,
+                                        onSave = { updatedUser ->
+                                            val payload = JSONObject().apply {
+                                                put("firstName", updatedUser.firstName)
+                                                put("lastName", updatedUser.lastName)
+                                                put("email", updatedUser.email)
+                                                put("gender",  updatedUser.gender)
+                                                put("nationalCode", updatedUser.nationalCode)
+                                                put("address", updatedUser.address)
+                                            }
+
+                                            Users().updateUser(
+                                                context,
+                                                userId = userId,
+                                                payload = payload,
+                                                onSuccess = {
+                                                    Toast.makeText(
+                                                        context,
+                                                        context.getString(R.string.success_update),
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                },
+                                                onError = {
+                                                    Toast.makeText(
+                                                        context,
+                                                        context.getString(R.string.failed),
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun UserProfileScreen(

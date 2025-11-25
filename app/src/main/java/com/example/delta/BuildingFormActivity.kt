@@ -1265,6 +1265,9 @@ fun OwnerDialog(
         }
     }
 
+    val noUnits = units.isEmpty()
+    val controlsEnabled = !noUnits
+
     val allSelectedDangValid by remember(selectedUnitsList, dangSums) {
         mutableStateOf(
             selectedUnitsList.all { sel ->
@@ -1279,7 +1282,7 @@ fun OwnerDialog(
         firstName, lastName, address,
         email, mobileNumber,
         emailError, phoneError, mobileError,
-        selectedUnitsList, allSelectedDangValid
+        selectedUnitsList, allSelectedDangValid, units
     ) {
         mutableStateOf(
             firstName.isNotBlank() &&
@@ -1290,7 +1293,8 @@ fun OwnerDialog(
                     !emailError &&
                     !mobileError &&
                     selectedUnitsList.isNotEmpty() &&
-                    allSelectedDangValid
+                    allSelectedDangValid &&
+                    units.isNotEmpty()
         )
     }
 
@@ -1317,26 +1321,38 @@ fun OwnerDialog(
         },
         text = {
             Column {
+                if (noUnits) {
+                    Text(
+                        text = context.getString(R.string.first_compete_units),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 OutlinedTextField(
                     value = firstName,
-                    onValueChange = { firstName = it },
+                    onValueChange = { if (controlsEnabled) firstName = it },
                     label = { RequiredLabel(context.getString(R.string.first_name)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
                 OutlinedTextField(
                     value = lastName,
-                    onValueChange = { lastName = it },
+                    onValueChange = { if (controlsEnabled) lastName = it },
                     label = { RequiredLabel(context.getString(R.string.last_name)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
                 OutlinedTextField(
                     value = address,
-                    onValueChange = { address = it },
+                    onValueChange = { if (controlsEnabled) address = it },
                     label = { RequiredLabel(context.getString(R.string.address)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -1344,13 +1360,15 @@ fun OwnerDialog(
                 OutlinedTextField(
                     value = email,
                     onValueChange = {
+                        if (!controlsEnabled) return@OutlinedTextField
                         email = it
                         emailError = !Validation().isValidEmail(it)
                     },
                     label = { RequiredLabel(context.getString(R.string.email)) },
                     isError = emailError,
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
                 if (emailError) {
                     Text(
@@ -1364,6 +1382,7 @@ fun OwnerDialog(
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = {
+                        if (!controlsEnabled) return@OutlinedTextField
                         phoneNumber = it
                         phoneError = it.isNotBlank() && !Validation().isValidPhone(it)
                     },
@@ -1375,7 +1394,8 @@ fun OwnerDialog(
                     },
                     isError = phoneError,
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
                 if (phoneError) {
                     Text(
@@ -1391,13 +1411,15 @@ fun OwnerDialog(
                 OutlinedTextField(
                     value = mobileNumber,
                     onValueChange = {
+                        if (!controlsEnabled) return@OutlinedTextField
                         mobileNumber = it
                         mobileError = !Validation().isValidIranMobile(it)
                     },
                     label = { RequiredLabel(context.getString(R.string.mobile_number)) },
                     isError = mobileError,
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
                 )
                 if (mobileError) {
                     Text(
@@ -1414,7 +1436,8 @@ fun OwnerDialog(
                 ) {
                     Checkbox(
                         checked = isManager,
-                        onCheckedChange = { isManager = it }
+                        onCheckedChange = { if (controlsEnabled) isManager = it },
+                        enabled = controlsEnabled
                     )
                     Text(
                         text = context.getString(R.string.manager_teams),
@@ -1430,10 +1453,12 @@ fun OwnerDialog(
 
                     OutlinedButton(
                         onClick = {
+                            if (!controlsEnabled) return@OutlinedButton
                             showUnitsSheet = true
                             unitsError = false
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     ) {
                         Text(
                             text = if (selectedUnitsText.isBlank()) {
@@ -1493,7 +1518,7 @@ fun OwnerDialog(
         }
     )
 
-    if (showUnitsSheet) {
+    if (showUnitsSheet && !noUnits) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         ModalBottomSheet(
@@ -1987,6 +2012,9 @@ fun TenantDialog(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    val noOwnerUnits = units.isEmpty()
+    val controlsEnabled = !noOwnerUnits
+
     val dismissDatePicker: () -> Unit = {
         showStartDatePicker = false
         showEndDatePicker = false
@@ -1999,8 +2027,6 @@ fun TenantDialog(
                 .persianShortDate
         }
     }
-
-    val noOwnerUnits = units.isEmpty()
 
     AlertDialog(
         onDismissRequest = { },
@@ -2033,19 +2059,21 @@ fun TenantDialog(
                 item {
                     OutlinedTextField(
                         value = firstName,
-                        onValueChange = { firstName = it },
+                        onValueChange = { if (controlsEnabled) firstName = it },
                         label = { RequiredLabel(context.getString(R.string.first_name)) },
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     )
                     Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = lastName,
-                        onValueChange = { lastName = it },
+                        onValueChange = { if (controlsEnabled) lastName = it },
                         label = { RequiredLabel(context.getString(R.string.last_name)) },
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -2053,13 +2081,15 @@ fun TenantDialog(
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
+                            if (!controlsEnabled) return@OutlinedTextField
                             email = it
                             emailError = it.isNotBlank() && !Validation().isValidEmail(it)
                         },
                         label = { Text(context.getString(R.string.email)) },
                         isError = emailError,
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     )
 
                     if (emailError) {
@@ -2076,13 +2106,15 @@ fun TenantDialog(
                     OutlinedTextField(
                         value = phoneNumber,
                         onValueChange = {
+                            if (!controlsEnabled) return@OutlinedTextField
                             phoneNumber = it
                             phoneError = it.isNotBlank() && !Validation().isValidPhone(it)
                         },
                         label = { Text(context.getString(R.string.phone_number)) },
                         isError = phoneError,
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     )
                     if (phoneError) {
                         Spacer(Modifier.height(8.dp))
@@ -2098,6 +2130,7 @@ fun TenantDialog(
                     OutlinedTextField(
                         value = mobileNumber,
                         onValueChange = {
+                            if (!controlsEnabled) return@OutlinedTextField
                             mobileNumber = it
                             mobileError = !Validation().isValidIranMobile(it)
                         },
@@ -2107,12 +2140,13 @@ fun TenantDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .onFocusChanged { fs ->
-                                if (fs.isFocused) {
+                                if (controlsEnabled && fs.isFocused) {
                                     scope.launch {
                                         listState.animateScrollToItem(6)
                                     }
                                 }
-                            }
+                            },
+                        enabled = controlsEnabled
                     )
                     if (mobileError) {
                         Spacer(Modifier.height(8.dp))
@@ -2136,51 +2170,63 @@ fun TenantDialog(
                 item {
                     OutlinedTextField(
                         value = numberOfTenants,
-                        onValueChange = { numberOfTenants = it },
+                        onValueChange = { if (controlsEnabled) numberOfTenants = it },
                         label = { RequiredLabel(context.getString(R.string.number_of_tenants)) },
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = controlsEnabled
                     )
 
                     Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = startDate,
-                        onValueChange = { startDate = it },
+                        onValueChange = { if (controlsEnabled) startDate = it },
                         label = { RequiredLabel(context.getString(R.string.start_date)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { if (it.isFocused) showStartDatePicker = true },
-                        readOnly = true
+                            .onFocusChanged {
+                                if (controlsEnabled && it.isFocused) {
+                                    showStartDatePicker = true
+                                }
+                            },
+                        readOnly = true,
+                        enabled = controlsEnabled
                     )
 
                     OutlinedTextField(
                         value = endDate,
-                        onValueChange = { endDate = it },
+                        onValueChange = { if (controlsEnabled) endDate = it },
                         label = { RequiredLabel(context.getString(R.string.end_date)) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { if (it.isFocused) showEndDatePicker = true },
-                        readOnly = true
+                            .onFocusChanged {
+                                if (controlsEnabled && it.isFocused) {
+                                    showEndDatePicker = true
+                                }
+                            },
+                        readOnly = true,
+                        enabled = controlsEnabled
                     )
 
                     Spacer(Modifier.height(8.dp))
 
                     StatusDropdown(
                         selectedStatus = selectedStatus,
-                        onStatusSelected = { selectedStatus = it }
+                        onStatusSelected = { if (controlsEnabled) selectedStatus = it },
+                        enabled = controlsEnabled
                     )
                 }
 
                 item {
                     Spacer(Modifier.height(12.dp))
 
-                    if (!noOwnerUnits)  {
+                    if (!noOwnerUnits) {
                         ExposedDropdownMenuBoxExample(
                             sharedViewModel = sharedViewModel,
                             items = units,
                             selectedItem = selectedUnit,
-                            onItemSelected = { selectedUnit = it },
+                            onItemSelected = { if (controlsEnabled) selectedUnit = it },
                             label = context.getString(R.string.unit_number),
                             modifier = Modifier.fillMaxWidth(),
                             itemLabel = { it.unitNumber }
@@ -2189,7 +2235,7 @@ fun TenantDialog(
                 }
             }
 
-            if (showStartDatePicker) {
+            if (controlsEnabled && showStartDatePicker) {
                 PersianDatePickerDialogContent(
                     sharedViewModel = sharedViewModel,
                     onDateSelected = {
@@ -2201,7 +2247,7 @@ fun TenantDialog(
                 )
             }
 
-            if (showEndDatePicker) {
+            if (controlsEnabled && showEndDatePicker) {
                 PersianDatePickerDialogContent(
                     sharedViewModel = sharedViewModel,
                     onDateSelected = {
@@ -2276,9 +2322,10 @@ fun TenantDialog(
 
 
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
+fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit, enabled : Boolean = true) {
     val context = LocalContext.current
     val statuses = remember {
         listOf(
@@ -2325,6 +2372,7 @@ fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit) {
                         onStatusSelected(status)
                         expanded = false
                     }
+                    , enabled = enabled
                 )
             }
         }

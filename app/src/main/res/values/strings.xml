@@ -479,5 +479,6 @@
     <string name="max_dang_for_unit">حداکثر دانگ برای واحد</string>
     <string name="dang_limit_hint">حداقل دانگ وارد شده</string>
     <string name="no_units_with_owner">ابتدا قسمت مالکین تکمیل گردد.</string>
+    <string name="first_compete_units">ابتدا قسمت واحدها تکمیل گردد.</string>
 
 </resources>

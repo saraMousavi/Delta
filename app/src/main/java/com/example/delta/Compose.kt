@@ -830,7 +830,7 @@ fun SettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 260.dp) // adjust based on your content
+                        .heightIn(max = 130.dp) // adjust based on your content
                 ) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
