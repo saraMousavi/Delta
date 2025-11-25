@@ -44,6 +44,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.delta.data.entity.Debts
+import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.TenantWithRelation
+import com.example.delta.volley.Cost
+import com.example.delta.volley.Fund
 
 class TenantsDetailsActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
@@ -65,7 +70,6 @@ class TenantsDetailsActivity : ComponentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TenantDetailsScreen(
@@ -77,24 +81,29 @@ fun TenantDetailsScreen(
     val context = LocalContext.current
     val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    Log.d("unitId", unitId.toString())
 
-    val tabs = listOf(
-        OwnerTabItem(context.getString(R.string.overview), OwnerTabType.OVERVIEW),
-        OwnerTabItem(context.getString(R.string.transaction), OwnerTabType.FINANCIALS)
-    )
+    // --- NEW: load tenant name from server, not Room
+    var tenantName by remember { mutableStateOf<String?>(null) }
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(tenantId) {
+        com.example.delta.volley.Tenant().getTenant(
+            context = context,
+            tenantId = tenantId,
+            onSuccess = { t ->
+                tenantName = "${t.firstName} ${t.lastName}"
+            },
+            onError = {
+                tenantName = null
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    val tenant =
-                        sharedViewModel.getTenant(tenantId).collectAsState(initial = null).value
                     Text(
-                        text = tenant?.let { "${it.firstName} ${it.lastName}" }
-                            ?: context.getString(R.string.loading),
+                        text = tenantName ?: context.getString(R.string.loading),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },
@@ -108,12 +117,16 @@ fun TenantDetailsScreen(
                 }
             )
         },
-        snackbarHost = {
-            SnackbarHost(hostState = snackBarHostState)
-        },
+        snackbarHost = { SnackbarHost(hostState = snackBarHostState) },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         Column(Modifier.padding(innerPadding)) {
+            val tabs = listOf(
+                OwnerTabItem(context.getString(R.string.overview), OwnerTabType.OVERVIEW),
+                OwnerTabItem(context.getString(R.string.transaction), OwnerTabType.FINANCIALS)
+            )
+            var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
             OwnerSectionSelector(
                 tabs = tabs,
                 selectedIndex = selectedTab,
@@ -124,11 +137,11 @@ fun TenantDetailsScreen(
 
             when (tabs[selectedTab].type) {
                 OwnerTabType.OVERVIEW -> TenantOverviewTab(
-                    unitId,
-                    sharedViewModel,
+                    unitId = unitId,
+                    tenantId = tenantId,
+                    sharedViewModel = sharedViewModel,
                     modifier = Modifier.fillMaxSize()
                 )
-
                 OwnerTabType.FINANCIALS -> TenantFinancialsTab(
                     unitId,
                     sharedViewModel,
@@ -144,6 +157,7 @@ fun TenantDetailsScreen(
 @Composable
 fun TenantOverviewTab(
     unitId: Long,
+    tenantId: Long,
     sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -153,68 +167,123 @@ fun TenantOverviewTab(
 
     var isEditing by remember { mutableStateOf(false) }
 
-    val tenantWithRelation by sharedViewModel.getActiveTenantsWithRelationForUnit(unitId)
-        .collectAsState(initial = null)
+    val tenantApi = remember { com.example.delta.volley.Tenant() }
+    val costApi = remember { com.example.delta.volley.Cost() }
 
-    val tenantRentMap = sharedViewModel.tenantRentDebtMap
-    val tenantMortgageMap = sharedViewModel.tenantMortgageDebtMap
+    var tenantWithRelation by remember { mutableStateOf<TenantWithRelation?>(null) }
+    var rentDebt by remember { mutableStateOf(0.0) }
+    var mortgageDebt by remember { mutableStateOf(0.0) }
 
-    val unit by sharedViewModel.getUnit(unitId).collectAsState(initial = null)
-    val rentCost by sharedViewModel.getCostByBuildingIdAndName(unit?.buildingId ?: 0L, "اجاره")
-        .collectAsState(initial = null)
-    val mortgageCost by sharedViewModel.getCostByBuildingIdAndName(unit?.buildingId ?: 0L, "رهن")
-        .collectAsState(initial = null)
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Load tenant rent and mortgage amounts
-    LaunchedEffect(tenantWithRelation, rentCost, mortgageCost) {
-        tenantWithRelation?.let { twr ->
-            sharedViewModel.loadTenantDebtAmounts(
-                unitId = unit?.unitId ?: 0,
-                tenantId = twr.tenant.tenantId,
-                rentCostId = rentCost?.costId ?: 0,
-                mortgageCostId = mortgageCost?.costId ?: 0
-            )
-        }
-        isEditing = false
+    LaunchedEffect(unitId, tenantId) {
+        isLoading = true
+        errorMessage = null
+
+        var loadedTenant: com.example.delta.data.entity.Tenants? = null
+
+        tenantApi.getTenant(
+            context = context,
+            tenantId = tenantId,
+            onSuccess = { t ->
+                loadedTenant = t
+                tenantWithRelation = TenantWithRelation(
+                    tenant = t,
+                    crossRef = com.example.delta.data.entity.TenantsUnitsCrossRef(
+                        tenantId = t.tenantId,
+                        unitId = unitId,
+                        startDate = t.startDate,
+                        endDate = t.endDate,
+                        status = t.status
+                    )
+                )
+                isLoading = false
+            },
+            onError = { e ->
+                errorMessage = e.message ?: "Error loading tenant"
+                isLoading = false
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(errorMessage ?: "")
+                }
+            }
+        )
+
+        costApi.fetchCostsWithDebts(
+            context = context,
+            ownerId = null,
+            unitId = unitId,
+            onSuccess = { costs, debts ->
+                val rentCostIds = costs
+                    .filter { it.costName == "اجاره" }
+                    .map { it.costId }
+                    .toSet()
+
+                val mortgageCostIds = costs
+                    .filter { it.costName == "رهن" }
+                    .map { it.costId }
+                    .toSet()
+
+                rentDebt = debts
+                    .filter { it.costId in rentCostIds && it.paymentFlag == false }
+                    .sumOf { it.amount }
+
+                mortgageDebt = debts
+                    .filter { it.costId in mortgageCostIds && it.paymentFlag == false }
+                    .sumOf { it.amount }
+            },
+            onError = { e ->
+                errorMessage = e.message ?: "Error loading costs"
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(errorMessage ?: "")
+                }
+            }
+        )
     }
 
-    // If tenant data null, show info
-    if (tenantWithRelation == null) {
+    if (isLoading) {
         Box(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = context.getString(R.string.no_tenants_found), style = MaterialTheme.typography.bodyLarge)
+            CircularProgressIndicator()
         }
         return
     }
 
-    val twr = tenantWithRelation!!
+    val twr = tenantWithRelation
+    if (twr == null) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = errorMessage ?: context.getString(R.string.no_tenants_found),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+        return
+    }
 
-    // Initialize editable states from tenant fields only once per isEditing toggling
-    var firstName by remember(isEditing) { mutableStateOf(twr.tenant.firstName) }
-    var lastName by remember(isEditing) { mutableStateOf(twr.tenant.lastName) }
-    var phone by remember(isEditing) { mutableStateOf(twr.tenant.phoneNumber) }
-    var mobile by remember(isEditing) { mutableStateOf(twr.tenant.mobileNumber) }
-    var email by remember(isEditing) { mutableStateOf(twr.tenant.email) }
-    var startDate by remember(isEditing) { mutableStateOf(twr.tenant.startDate) }
-    var endDate by remember(isEditing) { mutableStateOf(twr.tenant.endDate) }
-    var numberOfTenant by remember(isEditing) { mutableStateOf(twr.tenant.numberOfTenants) }
-
-    var selectedStatus by remember(isEditing) { mutableStateOf(twr.crossRef.status) }
+    var firstName by remember(isEditing, twr) { mutableStateOf(twr.tenant.firstName) }
+    var lastName by remember(isEditing, twr) { mutableStateOf(twr.tenant.lastName) }
+    var phone by remember(isEditing, twr) { mutableStateOf(twr.tenant.phoneNumber) }
+    var mobile by remember(isEditing, twr) { mutableStateOf(twr.tenant.mobileNumber) }
+    var email by remember(isEditing, twr) { mutableStateOf(twr.tenant.email) }
+    var startDate by remember(isEditing, twr) { mutableStateOf(twr.tenant.startDate) }
+    var endDate by remember(isEditing, twr) { mutableStateOf(twr.tenant.endDate) }
+    var numberOfTenant by remember(isEditing, twr) { mutableStateOf(twr.tenant.numberOfTenants) }
+    var selectedStatus by remember(isEditing, twr) { mutableStateOf(twr.tenant.status) }
 
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
-    val dismissStartDatePicker = { showStartDatePicker = false }
-    val dismissEndDatePicker = { showEndDatePicker = false }
 
-    // Rent and mortgage as mutable text fields with local state, initialized from ViewModel maps
-    var rentText by remember(isEditing) { mutableStateOf((tenantRentMap[twr.tenant.tenantId] ?: 0.0).toString()) }
-    var mortgageText by remember(isEditing) { mutableStateOf((tenantMortgageMap[twr.tenant.tenantId] ?: 0.0).toString()) }
-    val rentDebt = rentText.toDoubleOrNull() ?: 0.0
-    val mortgageDebt = mortgageText.toDoubleOrNull() ?: 0.0
+    var rentText by remember(isEditing) { mutableStateOf(rentDebt.toString()) }
+    var mortgageText by remember(isEditing) { mutableStateOf(mortgageDebt.toString()) }
 
-    // Check if insert/save button should be enabled
+    val rentValue = rentText.toDoubleOrNull() ?: 0.0
+    val mortgageValue = mortgageText.toDoubleOrNull() ?: 0.0
+
     val isInsertEnabled = firstName.isNotBlank() &&
             lastName.isNotBlank() &&
             phone.isNotBlank() &&
@@ -242,12 +311,10 @@ fun TenantOverviewTab(
                     .fillMaxSize()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 84.dp) // Space for buttons row/fab
+                contentPadding = PaddingValues(bottom = 84.dp)
             ) {
                 item {
-                    Log.d("isEditing", isEditing.toString())
                     if (isEditing) {
-                        // Editable fields using OwnerTextField and other inputs
                         OwnerTextField(R.string.first_name, firstName) { firstName = it }
                         Spacer(Modifier.height(8.dp))
                         OwnerTextField(R.string.last_name, lastName) { lastName = it }
@@ -263,7 +330,7 @@ fun TenantOverviewTab(
 
                         OutlinedTextField(
                             value = startDate,
-                            onValueChange = { /* no-op */ },
+                            onValueChange = { },
                             label = { Text(context.getString(R.string.start_date)) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -277,9 +344,9 @@ fun TenantOverviewTab(
                                 sharedViewModel = sharedViewModel,
                                 onDateSelected = { selected ->
                                     startDate = selected
-                                    dismissStartDatePicker()
+                                    showStartDatePicker = false
                                 },
-                                onDismiss = dismissStartDatePicker,
+                                onDismiss = { showStartDatePicker = false },
                                 context = context
                             )
                         }
@@ -287,7 +354,7 @@ fun TenantOverviewTab(
 
                         OutlinedTextField(
                             value = endDate,
-                            onValueChange = { /* no-op */ },
+                            onValueChange = { },
                             label = { Text(context.getString(R.string.end_date)) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -301,9 +368,9 @@ fun TenantOverviewTab(
                                 sharedViewModel = sharedViewModel,
                                 onDateSelected = { selected ->
                                     endDate = selected
-                                    dismissEndDatePicker()
+                                    showEndDatePicker = false
                                 },
-                                onDismiss = dismissEndDatePicker,
+                                onDismiss = { showEndDatePicker = false },
                                 context = context
                             )
                         }
@@ -342,64 +409,66 @@ fun TenantOverviewTab(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     } else {
-                        val tenantId = twr.tenant.tenantId
-                        // Display mode -- use OwnerInfoRow with icons and labels
-                        OwnerInfoRow(Icons.Default.Person, "${twr.tenant.firstName} ${twr.tenant.lastName}")
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(Icons.Default.Person,
-                            "${context.getString(R.string.number_of_tenants)}:" +
-                                    " ${twr.tenant.numberOfTenants}")
+                        val t = twr.tenant
+                        OwnerInfoRow(Icons.Default.Person, "${t.firstName} ${t.lastName}")
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
-                            Icons.Default.House,
-                            "${context.getString(R.string.unit_number)}: ${unit?.unitNumber}"
+                            Icons.Default.Person,
+                            "${context.getString(R.string.number_of_tenants)}: ${t.numberOfTenants}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Phone,
-                            "${context.getString(R.string.phone_number)}: ${twr.tenant.phoneNumber}"
+                            "${context.getString(R.string.phone_number)}: ${t.phoneNumber}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.MobileFriendly,
-                            "${context.getString(R.string.mobile_number)}: ${twr.tenant.mobileNumber}"
+                            "${context.getString(R.string.mobile_number)}: ${t.mobileNumber}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Email,
-                            "${context.getString(R.string.email)}: ${twr.tenant.email}"
+                            "${context.getString(R.string.email)}: ${t.email}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.DateRange,
-                            "${context.getString(R.string.start_date)}: ${twr.tenant.startDate}"
+                            "${context.getString(R.string.start_date)}: ${t.startDate}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.DateRange,
-                            "${context.getString(R.string.end_date)}: ${twr.tenant.endDate}"
+                            "${context.getString(R.string.end_date)}: ${t.endDate}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Info,
-                            "${context.getString(R.string.status)}: ${twr.crossRef.status}"
+                            "${context.getString(R.string.status)}: ${t.status}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.AttachMoney,
-                            "${context.getString(R.string.rent)}: ${formatNumberWithCommas(sharedViewModel.tenantRentDebtMap[tenantId] ?: 0.0)} ${context.getString(R.string.toman)}"
+                            "${context.getString(R.string.rent)}: ${
+                                formatNumberWithCommas(
+                                    rentDebt
+                                )
+                            } ${context.getString(R.string.toman)}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.AccountBalanceWallet,
-                            "${context.getString(R.string.mortgage)}: ${formatNumberWithCommas(sharedViewModel.tenantMortgageDebtMap[tenantId] ?: 0.0)} ${context.getString(R.string.toman)}"
+                            "${context.getString(R.string.mortgage)}: ${
+                                formatNumberWithCommas(
+                                    mortgageDebt
+                                )
+                            } ${context.getString(R.string.toman)}"
                         )
                     }
                 }
             }
         }
 
-        // Insert and Cancel buttons row at bottom, only visible in edit mode
         if (isEditing) {
             Row(
                 modifier = Modifier
@@ -419,7 +488,7 @@ fun TenantOverviewTab(
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            try{
+                            try {
                                 isEditing = false
                                 sharedViewModel.updateTenantWithCostsAndDebts(
                                     tenantWithRelation = twr,
@@ -434,20 +503,15 @@ fun TenantOverviewTab(
                                         endDate = endDate,
                                         status = selectedStatus
                                     ),
-                                    rentAmount = rentDebt,
-                                    mortgageAmount = mortgageDebt
+                                    rentAmount = rentValue,
+                                    mortgageAmount = mortgageValue
                                 )
-                                withContext(Dispatchers.Main) {
-                                    snackBarHostState.showSnackbar(context.getString(R.string.success_update))
-                                }
-                            } catch (e: Exception){
+                                snackBarHostState.showSnackbar(context.getString(R.string.success_update))
+                            } catch (e: Exception) {
                                 isEditing = false
-                                withContext(Dispatchers.Main) {
-                                    Log.e("error", e.message.toString())
-                                    snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                                }
+                                Log.e("error", e.message.toString())
+                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
                             }
-
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -458,7 +522,6 @@ fun TenantOverviewTab(
             }
         }
 
-        // Floating Action Button toggles edit mode only when NOT editing
         if (!isEditing) {
             FloatingActionButton(
                 onClick = { isEditing = true },
@@ -470,7 +533,6 @@ fun TenantOverviewTab(
     }
 }
 
-
 @Composable
 fun TenantFinancialsTab(
     unitId: Long,
@@ -481,9 +543,37 @@ fun TenantFinancialsTab(
 ) {
     val context = LocalContext.current
 
-    val debts by sharedViewModel.getDebtsForUnitAndMonth(unitId, "null", "00")
-        .collectAsState(initial = emptyList())
-    val payments by sharedViewModel.getPaysForUnit(unitId).collectAsState(initial = emptyList())
+    var allDebts by remember { mutableStateOf<List<Debts>>(emptyList()) }
+    var allCosts by remember { mutableStateOf<List<Costs>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(unitId) {
+        isLoading = true
+        errorMessage = null
+
+        Cost().fetchCostsWithDebts(
+            context = context,
+            ownerId = null,
+            unitId = unitId,
+            onSuccess = { costs, debts ->
+                allCosts = costs
+                allDebts = debts
+                isLoading = false
+            },
+            onError = { e ->
+                errorMessage = e.message ?: "خطا در دریافت اطلاعات"
+                isLoading = false
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(errorMessage ?: "")
+                }
+            }
+        )
+    }
+
+    val debts = remember(allDebts) { allDebts.filter { it.paymentFlag == false } }
+    val payments = remember(allDebts) { allDebts.filter { it.paymentFlag == true } }
+
     val transactions = remember(debts, payments) {
         (debts.map {
             TransactionItem(it.debtId, it.amount, it.dueDate, it.description, FilterType.DEBT)
@@ -504,9 +594,7 @@ fun TenantFinancialsTab(
     val totalDebtAmount = debts.sumOf { it.amount }
     val totalPaymentAmount = payments.sumOf { it.amount }
 
-
     Column(modifier = modifier.padding(16.dp)) {
-        // Summary card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
@@ -514,29 +602,23 @@ fun TenantFinancialsTab(
         ) {
             Column(modifier = Modifier.padding(8.dp)) {
                 Row(
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = "${context.getString(R.string.debt)}: ${
-                            formatNumberWithCommas(
-                                totalDebtAmount
-                            )
+                            formatNumberWithCommas(totalDebtAmount)
                         } ${context.getString(R.string.toman)}"
                     )
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = "${context.getString(R.string.payments)}: ${
-                            formatNumberWithCommas(
-                                totalPaymentAmount
-                            )
+                            formatNumberWithCommas(totalPaymentAmount)
                         } ${context.getString(R.string.toman)}"
                     )
                 }
@@ -561,9 +643,10 @@ fun TenantFinancialsTab(
                 ) {
                     Text(
                         text = type.getDisplayName(context),
-                        color = if (filterType == type) Color(context.getColor(R.color.white)) else Color(
-                            context.getColor(R.color.grey)
-                        ),
+                        color = if (filterType == type)
+                            Color(context.getColor(R.color.white))
+                        else
+                            Color(context.getColor(R.color.grey)),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -571,36 +654,71 @@ fun TenantFinancialsTab(
         }
 
         Spacer(Modifier.height(8.dp))
-        if (filteredTransactions.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = context.getString(R.string.no_transactions_recorded),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                items(filteredTransactions) { item ->
-                    TransactionRow(item, onPayment = {
-                        coroutineScope.launch {
-                            val debt = sharedViewModel.getDebtById(item.id)
-                            debt?.let {
-                                val updatedDebt = it.copy(paymentFlag = true)
-                                sharedViewModel.updateDebt(updatedDebt)
-                                sharedViewModel.updateDebtPaymentFlag(it, true)
 
-                                val cost = sharedViewModel.getCostById(it.costId)
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            errorMessage != null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            filteredTransactions.isEmpty() -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = context.getString(R.string.no_transactions_recorded),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(filteredTransactions) { item ->
+                        TransactionRow(item, onPayment = {
+                            coroutineScope.launch {
+                                val debt = allDebts.find { it.debtId == item.id }
+                                if (debt == null) {
+                                    snackBarHostState.showSnackbar(
+                                        context.getString(R.string.failed)
+                                    )
+                                    return@launch
+                                }
+
+                                val updatedDebt = debt.copy(paymentFlag = true)
+                                sharedViewModel.updateDebtOnServer(context, updatedDebt)
+
+                                allDebts = allDebts.map {
+                                    if (it.debtId == debt.debtId) updatedDebt else it
+                                }
+
+                                val cost = allCosts.find { it.costId == debt.costId }
                                 val fundType = cost?.fundType ?: FundType.OPERATIONAL
 
-                                 sharedViewModel.increaseBalanceFund(
+                                Fund().increaseBalanceFundOnServer(
                                     context = context,
-                                    buildingId = it.buildingId,
-                                    amount = it.amount,
+                                    buildingId = debt.buildingId,
+                                    amount = debt.amount,
                                     fundType = fundType,
                                     onSuccess = {
                                         coroutineScope.launch {
@@ -623,8 +741,8 @@ fun TenantFinancialsTab(
                                     }
                                 )
                             }
-                        }
-                    })
+                        })
+                    }
                 }
             }
         }

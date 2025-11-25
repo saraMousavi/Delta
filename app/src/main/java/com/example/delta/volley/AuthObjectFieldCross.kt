@@ -4,10 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.android.volley.Request
 import com.android.volley.VolleyError
+import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.Funds
 import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
+import com.example.delta.enums.PermissionLevel
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.text.substringAfter
@@ -113,4 +115,53 @@ class AuthObjectFieldCross {
             return Exception("$klass: ${error.message ?: error.toString()}")
         }
     }
+
+    fun fetchByRole(
+        context: Context,
+        roleId: Long,
+        objectId: Long? = null,
+        onSuccess: (List<RoleAuthorizationObjectFieldCrossRef>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val sb = StringBuilder("$baseUrl?roleId=$roleId&limit=500")
+        if (objectId != null) {
+            sb.append("&objectId=$objectId")
+        }
+        val url = sb.toString()
+        Log.d("AuthObjectFieldCross", "GET $url")
+
+        val queue = Volley.newRequestQueue(context)
+        val req = JsonArrayRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { arr ->
+                try {
+                    val list = parseArray(arr)
+                    onSuccess(list)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                onError(formatVolleyError("AuthObjectFieldCross(fetchByRole)", err))
+            }
+        )
+        queue.add(req)
+    }
+
+    private fun parseArray(arr: JSONArray): List<RoleAuthorizationObjectFieldCrossRef> {
+        val out = ArrayList<RoleAuthorizationObjectFieldCrossRef>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o: JSONObject = arr.getJSONObject(i)
+//            out += RoleAuthorizationObjectFieldCrossRef(
+//                roleId = o.optLong("roleId"),
+//                objectId = o.optLong("objectId"),
+//                fieldId = o.optLong("fieldId"),
+////                permissionLevel = PermissionLevel.valueOf(o.optString("permissionLevel", "READ"))
+//            )
+        }
+        return out
+    }
+
 }

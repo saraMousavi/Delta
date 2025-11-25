@@ -108,27 +108,33 @@ fun CostDetailScreen(
     sharedViewModel: SharedViewModel
 ) {
     val costName = cost!!.costName
-    val debts by sharedViewModel.getDebtsForEachCost(costId = cost.costId)
-        .collectAsState(initial = emptyList())
+//    val debts by sharedViewModel.getDebtsForEachCost(costId = cost.costId)
+//        .collectAsState(initial = emptyList())
     var showFundDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-
+    LaunchedEffect(cost.costId) {
+        sharedViewModel.loadDebtsForCost(context, cost.costId)
+    }
+    val debts by sharedViewModel.debtsForCost.collectAsState()
     // SnackbarHostState to show messages
     val snackbarHostState = remember { SnackbarHostState() }
     val activity = LocalActivity.current
     // Listen to invoice result events to show feedback (success or error in snackbar)
     LaunchedEffect(sharedViewModel.invoiceResult) {
-        Log.d("sharedViewModel.invoiceResult", sharedViewModel.invoiceResult.toString())
         sharedViewModel.invoiceResult.collectLatest { success ->
             if (success) {
                 snackbarHostState.showSnackbar(context.getString(R.string.invoiced_succesfully))
-                showFundDialog = false // close dialog on success
+                showFundDialog = false
             } else {
-                if(cost.fundType == FundType.OPERATIONAL){
-                    snackbarHostState.showSnackbar(context.getString(R.string.insufficient_operational_fund_balance))
+                if (cost.fundType == FundType.OPERATIONAL) {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.insufficient_operational_fund_balance)
+                    )
                 } else {
-                    snackbarHostState.showSnackbar(context.getString(R.string.insufficient_fund_balance))
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.insufficient_fund_balance)
+                    )
                 }
             }
         }
@@ -140,7 +146,7 @@ fun CostDetailScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "${context.getString(R.string.cost_name)} : ${costName}",
+                        text = "${context.getString(R.string.cost_name)} : $costName",
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },

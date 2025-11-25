@@ -89,10 +89,7 @@ class OwnersActivity : ComponentActivity() {
                                     sharedViewModel.saveOwnerWithUnits(newOwner, selectedUnits, isManager, true, selectedBuilding!!.buildingId)
 
                                     showOwnerDialog = false
-                                },
-                                sharedViewModel = sharedViewModel,
-                                isOwner = true,
-                                building = null
+                                }
                             )
                         }
                     }

@@ -20,6 +20,11 @@ class Validation {
         return iranMobileRegex.matches(mobile)
     }
 
+    fun isValidPostalCode(postCode: String): Boolean {
+        val postalRegex = Regex("^\\d{10}\$")
+        return postalRegex.matches(postCode)
+    }
+
     fun validateDang(dang: Double): Boolean {
         return dang in 0.0..6.0
     }
@@ -32,6 +37,7 @@ class Validation {
                 sharedViewModel.selectedBuildingUsages?.buildingUsageId != 0L &&
                 sharedViewModel.street.isNotBlank() &&
                 sharedViewModel.postCode.isNotBlank() &&
+                isValidPostalCode(sharedViewModel.postCode) &&
                 (!sharedViewModel.sameArea ||
                         (sharedViewModel.numberOfUnits.isNotBlank() && sharedViewModel.unitArea.isNotBlank()))
     }

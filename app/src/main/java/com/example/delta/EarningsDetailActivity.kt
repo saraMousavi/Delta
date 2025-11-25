@@ -98,8 +98,13 @@ fun EarningDetailScreen(
     onBack: () -> Unit
 ) {
     Log.d("earningId", earningId.toString())
-    val earning by viewModel.getEarning(earningId).collectAsState(initial = null)
-    val credits by viewModel.getCreditFromEarning(earningId).collectAsState(initial = emptyList())
+    val earning by viewModel.earningDetail.collectAsState()
+    val credits by viewModel.earningCredits.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(earningId) {
+        viewModel.loadEarningDetail(context, earningId)
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(credits) {
@@ -119,7 +124,6 @@ fun EarningDetailScreen(
     }
     val selectedCredits by viewModel.selectedCredits.collectAsState()
     val sumSelectedAmount by viewModel.sumSelectedAmount.collectAsState()
-    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(

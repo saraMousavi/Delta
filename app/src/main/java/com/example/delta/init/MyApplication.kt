@@ -11,19 +11,12 @@ import com.example.delta.data.dao.CostDao
 import com.example.delta.data.dao.EarningsDao
 import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.dao.UsersDao
-import com.example.delta.data.entity.BuildingTypes
-import com.example.delta.data.entity.BuildingUsages
-import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.data.model.AppDatabase
-import com.example.delta.enums.CalculateMethod
-import com.example.delta.enums.FundType
-import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
-import com.example.delta.enums.Responsible
 import com.example.delta.enums.Roles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +40,7 @@ class MyApplication : Application() {
         appContext = this
 
         // Initialize DAOs
+//        deleteDatabase("app_database")
         val database = AppDatabase.getDatabase(this)
         buildingDao = database.buildingsDao()
         earningsDao = database.earningsDao()
@@ -152,128 +146,128 @@ class MyApplication : Application() {
             Log.d("allUsrs", allUsers.toString())
 
             // Insert Default Building Types
-            val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()
-            if (buildingTypes == null) {
-                val defaultBuildingTypes = listOf(
-                    BuildingTypes(buildingTypeName = getString(R.string.villa)),
-                    BuildingTypes(buildingTypeName = getString(R.string.apartment)),
-                    BuildingTypes(buildingTypeName = getString(R.string.city_complex))
-                )
-                defaultBuildingTypes.forEach {
-                    buildingDao.insertBuildingType(it)
-                }
-            }
+//            val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()
+//            if (buildingTypes == null) {
+//                val defaultBuildingTypes = listOf(
+//                    BuildingTypes(buildingTypeName = getString(R.string.villa)),
+//                    BuildingTypes(buildingTypeName = getString(R.string.apartment)),
+//                    BuildingTypes(buildingTypeName = getString(R.string.city_complex))
+//                )
+//                defaultBuildingTypes.forEach {
+//                    buildingDao.insertBuildingType(it)
+//                }
+//            }
 
             // Insert Default Building Usages
-            val buildingUsages = buildingDao.getAllBuildingUsages().firstOrNull()
-            if (buildingUsages == null) {
-                val defaultBuildingUsages = listOf(
-                    BuildingUsages(buildingUsageName = getString(R.string.residential)),
-                    BuildingUsages(buildingUsageName = getString(R.string.commercial)),
-                    BuildingUsages(buildingUsageName = getString(R.string.industrial))
-                )
-                defaultBuildingUsages.forEach {
-                    buildingDao.insertBuildingUsage(it)
-                }
-            }
+//            val buildingUsages = buildingDao.getAllBuildingUsages().firstOrNull()
+//            if (buildingUsages == null) {
+//                val defaultBuildingUsages = listOf(
+//                    BuildingUsages(buildingUsageName = getString(R.string.residential)),
+//                    BuildingUsages(buildingUsageName = getString(R.string.commercial)),
+//                    BuildingUsages(buildingUsageName = getString(R.string.industrial))
+//                )
+//                defaultBuildingUsages.forEach {
+//                    buildingDao.insertBuildingUsage(it)
+//                }
+//            }
 
             // Insert Default Costs
-            val costs = costsDao.getCosts().firstOrNull()
-            if (costs == null) {
-                val defaultCosts = listOf(
-                    Costs(
-                        costName = getString(R.string.charge),
-                        period = Period.MONTHLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.AREA,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = false,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.gas),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.AREA,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.electricity),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.AREA,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.water),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.PEOPLE,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.elevator),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.EQUAL,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.fire_protection),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.EQUAL,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.internet),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.EQUAL,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                    Costs(
-                        costName = getString(R.string.net),
-                        period = Period.YEARLY,
-                        paymentLevel = PaymentLevel.UNIT,
-                        fundType = FundType.OPERATIONAL,
-                        calculateMethod = CalculateMethod.EQUAL,
-                        responsible = Responsible.TENANT,
-                        tempAmount = 0.0,
-                        chargeFlag = true,
-                        dueDate = ""
-                    ),
-                )
-                defaultCosts.forEach {
-                    costsDao.insertCost(it)
-                }
-            }
+//            val costs = costsDao.getCosts().firstOrNull()
+//            if (costs == null) {
+//                val defaultCosts = listOf(
+//                    Costs(
+//                        costName = getString(R.string.charge),
+//                        period = Period.MONTHLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.AREA,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = false,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.gas),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.AREA,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.electricity),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.AREA,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.water),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.PEOPLE,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.elevator),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.EQUAL,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.fire_protection),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.EQUAL,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.internet),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.EQUAL,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                    Costs(
+//                        costName = getString(R.string.net),
+//                        period = Period.YEARLY,
+//                        paymentLevel = PaymentLevel.UNIT,
+//                        fundType = FundType.OPERATIONAL,
+//                        calculateMethod = CalculateMethod.EQUAL,
+//                        responsible = Responsible.TENANT,
+//                        tempAmount = 0.0,
+//                        chargeFlag = true,
+//                        dueDate = ""
+//                    ),
+//                )
+//                defaultCosts.forEach {
+//                    costsDao.insertCost(it)
+//                }
+//            }
 
             Log.d("My Application", costsDao.getCosts().toString())
 

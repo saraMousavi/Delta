@@ -10,14 +10,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -28,73 +34,55 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.example.delta.data.entity.User
-import com.example.delta.enums.Roles
-import com.example.delta.init.Preference
-import com.example.delta.viewmodel.BuildingsViewModel
-import com.example.delta.viewmodel.SharedViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.entity.AuthorizationField
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
+import com.example.delta.data.entity.User
+import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.AuthObject
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.PermissionLevel
-import com.example.delta.init.Validation
-import kotlin.collections.forEach
-
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.lazy.LazyColumn
-import com.example.delta.data.model.AppDatabase
+import com.example.delta.enums.Roles
 import com.example.delta.init.FileManagement
+import com.example.delta.init.Preference
+import com.example.delta.init.Validation
 import com.example.delta.screens.OnboardingScreenWithModalSheet
 import com.example.delta.screens.OtpScreen
+import com.example.delta.viewmodel.BuildingsViewModel
+import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.Cost
 import com.example.delta.volley.TokenUploader
 import com.google.firebase.messaging.FirebaseMessaging
-import com.example.delta.data.entity.Role
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.example.delta.LoginPage
-import com.example.delta.data.entity.UserRoleCrossRef
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-
-private lateinit var roleDao: RoleDao // Add Role DAO
+private lateinit var roleDao: RoleDao
 private lateinit var authorizationDao: AuthorizationDao
 
 class LoginPage : ComponentActivity() {
     private val viewModel: BuildingsViewModel by viewModels()
     private val sharedViewModel: SharedViewModel by viewModels()
-
     private val REQUEST_CODE_PICK_EXCEL = 1001
 
-
-    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    @Deprecated(
+        "Use Activity Result API instead."
+    )
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_PICK_EXCEL && resultCode == RESULT_OK) {
-            val uri = data?.data
-            if (uri != null) {
-                try {
-                    val inputStream = contentResolver.openInputStream(uri)
-                    if (inputStream != null) {
-                        FileManagement().handleExcelFile(inputStream, this, sharedViewModel)
-                        inputStream.close()
-                    } else {
-                        Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    runOnUiThread {
-                        Toast.makeText(this, "خطا: ${e.message}", Toast.LENGTH_LONG)
-                            .show()
-                    }
+            val uri = data?.data ?: return
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileManagement().handleExcelFile(input, this, sharedViewModel)
+                } ?: Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread {
+                    Toast.makeText(this, "خطا: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -102,102 +90,103 @@ class LoginPage : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val database = AppDatabase.getDatabase(this)
+        roleDao = database.roleDao()
+        authorizationDao = database.authorizationDao()
 
-        roleDao = database.roleDao() // Initialize Role DAO
-        authorizationDao = database.authorizationDao() // Initialize Role DAO
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    var showOnboardingModal by remember { mutableStateOf(false) }
-                    var navigateToIntent by remember { mutableStateOf<Intent?>(null) }
+                    val initialIsLoggedIn = isUserLoggedIn(this@LoginPage)
+                    val initialIsFirstLogin = isFirstLoggedIn(this@LoginPage)
 
+                    var isLoggedIn by remember { mutableStateOf(initialIsLoggedIn) }
+                    var showOnboardingModal by remember { mutableStateOf(initialIsLoggedIn && initialIsFirstLogin) }
+                    var navigateToIntent by remember { mutableStateOf<Intent?>(null) }
                     val context = LocalContext.current
 
-                    if (isUserLoggedIn(this@LoginPage)) {
+                    if (isLoggedIn) {
                         val userId = Preference().getUserId(context = this@LoginPage)
-                        val userRole by sharedViewModel.getRoleByUserId(userId).collectAsState(initial = null)
+                        val userRole = Preference().getRoleId(context = this@LoginPage)
 
-                        userRole?.let { role ->
-                            // When not signing up and userRole is available, navigate accordingly
-                            LaunchedEffect(role) {
-                                // Navigate only if not showing onboarding modal
-                                if (!showOnboardingModal) {
-                                    val intent = when (role.roleName) {
-                                        Roles.ADMIN, Roles.BUILDING_MANAGER, Roles.COMPLEX_MANAGER -> {
-                                            Intent(context, DashboardActivity::class.java)
-                                        }
-                                        else -> {
-                                            Intent(context, HomePageActivity::class.java)
-                                        }
+                        if (showOnboardingModal) {
+                            OnboardingScreenWithModalSheet(
+                                onManualEntry = {
+                                    saveFirstLoginState(this@LoginPage, false)
+                                    val intent = Intent(this@LoginPage, BuildingFormActivity::class.java).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                     }
-                                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                    navigateToIntent = intent
+                                    startActivity(intent)
+                                    finish()
+                                },
+                                onImportExcel = {
+                                    saveFirstLoginState(this@LoginPage, false)
+                                    val selectFileIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                        type = "*/*"
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                    }
+                                    startActivityForResult(selectFileIntent, REQUEST_CODE_PICK_EXCEL)
+                                },
+                                roleId = userRole,
+                                onFinish = {
+                                    saveFirstLoginState(this@LoginPage, false)
+                                    val userId = Preference().getUserId(context = this@LoginPage)
+
+                                    navigateAfterLoginWithCostsCheck(
+                                        context = this@LoginPage,
+                                        roleId = userRole,
+                                        userId = userId
+                                    )
                                 }
+                            )
+                        } else {
+                            LaunchedEffect(userRole) {
+                                val userId = Preference().getUserId(context = context)
+                                navigateAfterLoginWithCostsCheck(
+                                    context = context,
+                                    roleId = userRole,
+                                    userId = userId
+                                )
                             }
 
-                            // Show circle progress until navigation triggered
-                            if (navigateToIntent == null) {
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .wrapContentSize(Alignment.Center)
-                                ) {
-                                    CircularProgressIndicator()
-                                }
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
                             }
-                        } ?: run {
-                            // If userRole still null, show loading
-//                            Box(
-//                                Modifier
-//                                    .fillMaxSize()
-//                                    .wrapContentSize(Alignment.Center)
-//                            ) {
-//                                CircularProgressIndicator()
-//                            }
                         }
+
                     } else {
                         val selectedTab = remember { mutableIntStateOf(0) }
-
                         when (selectedTab.intValue) {
-                            0 -> LoginFormScreen(buildingsViewModel = viewModel, sharedViewModel = sharedViewModel,
-                                onTabChange = { selectedTab.intValue = it })
+                            0 -> LoginFormScreen(
+                                buildingsViewModel = viewModel,
+                                sharedViewModel = sharedViewModel,
+                                onTabChange = { selectedTab.intValue = it }
+                            )
                             1 -> SignUpScreen(
                                 sharedViewModel = sharedViewModel,
                                 onSignUpSuccess = { user ->
-                                    saveLoginState(this@LoginPage, true, user.userId, user.mobileNumber)
+                                    saveLoginState(
+                                        this@LoginPage,
+                                        true,
+                                        user.userId,
+                                        user.mobileNumber,
+                                        roleId = 1
+                                    )
                                     saveFirstLoginState(this@LoginPage, true)
+                                    isLoggedIn = true
+                                    showOnboardingModal = true
                                 },
                                 onShowBoarding = {
+                                    isLoggedIn = true
                                     showOnboardingModal = true
                                 },
                                 onTabChange = { selectedTab.intValue = it }
                             )
+
                         }
                     }
 
-                    // Show onboarding modal only if flagged
-                    if (showOnboardingModal) {
-                        OnboardingScreenWithModalSheet(
-                            onManualEntry = {
-                                saveFirstLoginState(this@LoginPage, false)
-                                val intent = Intent(this@LoginPage, BuildingFormActivity::class.java)
-                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                startActivity(intent)
-                                finish()
-                            },
-                            onImportExcel = {
-                                saveFirstLoginState(this@LoginPage, false)
-                                val selectFileIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                    type = "*/*"
-                                    addCategory(Intent.CATEGORY_OPENABLE)
-                                }
-                                startActivityForResult(selectFileIntent, REQUEST_CODE_PICK_EXCEL)
-                            }
-                        )
-                    }
-
-                    // Trigger navigation after login if intent set
                     navigateToIntent?.let { intent ->
                         LaunchedEffect(intent) {
                             context.startActivity(intent)
@@ -205,41 +194,12 @@ class LoginPage : ComponentActivity() {
                             navigateToIntent = null
                         }
                     }
-                }
             }
         }
-
     }
 }
-//
-//fun handleServerLogin(
-//    context: Context,
-//    mobile: String,
-//    password: String,
-//    onSuccess: (User) -> Unit,
-//    onInvalid: () -> Unit,
-//    onError: (Throwable) -> Unit,
-//    onFinally: () -> Unit
-//) {
-//    val api = com.example.delta.volley.Users()
-//    api.login(
-//        context = context,
-//        mobileNumber = mobile,
-//        password = password,
-//        onSuccess = { user ->
-//            onSuccess(user)
-//            onFinally()
-//        },
-//        onInvalid = {
-//            onInvalid()
-//            onFinally()
-//        },
-//        onError = { err ->
-//            onError(err)
-//            onFinally()
-//        }
-//    )
-//}
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginFormScreen(
@@ -260,9 +220,10 @@ fun LoginFormScreen(
 
     var serverRoles by remember { mutableStateOf<List<Role>>(emptyList()) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
     ) {
 
         TabRow(selectedTabIndex = selectedTab) {
@@ -309,7 +270,22 @@ fun LoginFormScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge
             )
+
+            Spacer(Modifier.height(4.dp))
+
+            TextButton(
+                onClick = {
+                    selectedTab = 1
+                    onTabChange(1)
+                }
+            ) {
+                Text(
+                    text = context.getString(R.string.go_to_sign_up),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
+
 
         Spacer(modifier = Modifier.height(30.dp))
 
@@ -330,13 +306,14 @@ fun LoginFormScreen(
                     },
                     onInvalid = {
                         isLoading = false
-                        errorText = context.getString(R.string.invalid_username)
+                        errorText = context.getString(R.string.login_user_not_found)
                     },
                     onError = { t ->
                         isLoading = false
-                        errorText = t.message ?: context.getString(R.string.invalid_username)
+                        errorText = t.message ?: context.getString(R.string.login_user_not_found)
                     }
                 )
+
             },
             enabled = !isLoading,
             modifier = Modifier
@@ -348,8 +325,7 @@ fun LoginFormScreen(
                 CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
                 Text(
-                    text = if (selectedTab == 0) context.getString(R.string.login)
-                    else context.getString(R.string.sign_up),
+                    text = if (selectedTab == 0) context.getString(R.string.login) else context.getString(R.string.sign_up),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
@@ -364,21 +340,38 @@ fun LoginFormScreen(
             onDismiss = { roleDialogVisible = false },
             onConfirm = { chosen ->
                 roleDialogVisible = false
-                saveLoginState(context, true, sharedViewModel.userId, password)
-                saveFirstLoginState(context, true)
-                val intent = Intent(context, DashboardActivity::class.java).apply {
-                    putExtra("user_id", sharedViewModel.userId)
-                    putExtra("role_id", chosen.roleId)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                }
-                context.startActivity(intent)
-                if (context is Activity) context.finish()
+                sharedViewModel.insertUser(context = context,
+                    user = User(mobileNumber = username, password = password, roleId = chosen.roleId),
+                    onSuccess = { userID ->
+                        saveLoginState(context, true, userID, mobile = username, roleId = chosen.roleId)
+                        saveFirstLoginState(context, true)
+                        insertDefaultAuthorizationData()
+
+                        saveLoginState(
+                            context,
+                            true,
+                            userID,
+                            mobile = username,
+                            roleId = chosen.roleId
+                        )
+                        saveFirstLoginState(context, true)
+                        insertDefaultAuthorizationData()
+
+                        navigateAfterLoginWithCostsCheck(
+                            context = context,
+                            roleId = chosen.roleId,
+                            userId = userID
+                        )
+
+                    },
+                    onError = {
+                        Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                    })
+
             }
         )
     }
 }
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -397,6 +390,7 @@ fun SignUpScreen(
     var passwordError by remember { mutableStateOf(false) }
     var showOtp by remember { mutableStateOf(false) }
     var pendingUser by remember { mutableStateOf<User?>(null) }
+
 
     if (showOtp) {
         OtpScreen(
@@ -420,14 +414,19 @@ fun SignUpScreen(
                                         onError = {}
                                     )
                                 }
-                            saveLoginState(context, true, user.userId, user.mobileNumber)
+                            saveLoginState(context, true, user.userId, user.mobileNumber, roleId = 1)
                             saveFirstLoginState(context, true)
-                            onSignUpSuccess(user)
-                            showOtp = false
-                            onShowBoarding()
+
+                            scope.launch(Dispatchers.Main) {
+                                onSignUpSuccess(user)
+                                showOtp = false
+                                onShowBoarding()
+                            }
                         },
                         onError = {
-                            Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                            scope.launch(Dispatchers.Main) {
+                                Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                 }
@@ -567,11 +566,8 @@ fun SignUpScreen(
     }
 }
 
-
-
 @Composable
 fun LoginFooter(onGuestClick: () -> Unit) {
-
     val annotatedText = buildAnnotatedString {
         val guestTag = "guest_entrance"
         pushStringAnnotation(tag = guestTag, annotation = "guest_entrance")
@@ -593,72 +589,20 @@ fun LoginFooter(onGuestClick: () -> Unit) {
     )
 }
 
-
-
-
-fun handleLogin(
-    context: Context,
-    users: List<User>,
-    username: String,
-    password: String,
-    buildingsViewModel: BuildingsViewModel
-) {
-    val user = login(users, username, password)
-    if (user != null) {
-        saveLoginState(context, true, user.userId, user.mobileNumber)
-
-        val buildings = buildingsViewModel.getAllBuildingsList()
-        val intent = if (buildings.isEmpty()) {
-            Intent(context, BuildingFormActivity::class.java).apply {
-                putExtra("user_id", user.userId)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            }
-        } else {
-            Intent(context, DashboardActivity::class.java).apply {
-                putExtra("user_id", user.userId)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            }
-        }
-        context.startActivity(intent)
-
-        if (context is Activity) context.finish()
-    } else {
-        Log.i("LoginDebug", "Invalid login attempt: username=$username")
-        CoroutineScope(Dispatchers.Main).launch {
-            Toast.makeText(
-                context,
-                context.getString(R.string.invalid_username),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-}
-
-// Utility login function unchanged
-fun login(users: List<User>, username: String, password: String): User? {
-    Log.d("users", users.toString())
-    Log.d("username", username)
-    Log.d("password", password)
-    return users.find { it.mobileNumber == username && it.password == password }
-}
-
-// --- Shared Preferences State ---
-
-fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile: String) {
+fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile: String, roleId: Long) {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
     prefs.edit {
         putBoolean("is_logged_in", isLoggedIn)
         putLong("user_id", userId)
+        putLong("role_id", roleId)
         putString("user_mobile", mobile)
-        putBoolean("first_login", true)
     }
 }
 
+
 fun saveFirstLoginState(context: Context, isFirstLoggedIn: Boolean) {
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-    prefs.edit {
-        putBoolean("first_login", isFirstLoggedIn)
-    }
+    prefs.edit { putBoolean("first_login", isFirstLoggedIn) }
 }
 
 fun isUserLoggedIn(context: Context): Boolean {
@@ -671,13 +615,21 @@ fun isFirstLoggedIn(context: Context): Boolean {
     return prefs.getBoolean("first_login", false)
 }
 
-
 private fun insertDefaultAuthorizationData() {
     CoroutineScope(Dispatchers.IO).launch {
+        val existingCount = authorizationDao.getAuthorizationCrossRefCount()
+        if (existingCount > 0) {
+            return@launch
+        }
         val rolesList = roleDao.getRoles()
         val roleMap = rolesList.associateBy { it.roleName }
 
-        suspend fun insertCrossRefs(roleId: Long, objectId: Long, fields: List<AuthorizationField>, permission: PermissionLevel) {
+        suspend fun insertCrossRefs(
+            roleId: Long,
+            objectId: Long,
+            fields: List<AuthorizationField>,
+            permission: PermissionLevel
+        ) {
             fields.forEach { field ->
                 authorizationDao.insertRoleAuthorizationFieldCrossRef(
                     RoleAuthorizationObjectFieldCrossRef(
@@ -690,7 +642,6 @@ private fun insertDefaultAuthorizationData() {
             }
         }
 
-        // Admin and Manager: all auth objects and all fields with FULL permission
         val adminManagerRoles = listOf(Roles.ADMIN, Roles.BUILDING_MANAGER)
         adminManagerRoles.forEach { roleName ->
             val role = roleMap[roleName] ?: return@forEach
@@ -700,7 +651,6 @@ private fun insertDefaultAuthorizationData() {
             }
         }
 
-        // Tenant role: get fields from Room for objectId = 3 (BuildingProfile)
         roleMap[Roles.PROPERTY_TENANT]?.let { tenantRole ->
             val tenantFieldNames = listOf(
                 BuildingProfileFields.UNITS_TAB.fieldNameRes,
@@ -713,7 +663,6 @@ private fun insertDefaultAuthorizationData() {
             insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
         }
 
-        // Owner role: similar to tenant plus owners tab fields
         roleMap[Roles.PROPERTY_OWNER]?.let { ownerRole ->
             val ownerFieldNames = listOf(
                 BuildingProfileFields.UNITS_TAB.fieldNameRes,
@@ -730,38 +679,6 @@ private fun insertDefaultAuthorizationData() {
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AnimatedTabRow(
-    selectedTabIndex: Int,
-    tabTitles: List<String>,
-    onTabSelected: (Int) -> Unit
-) {
-    TabRow(
-        selectedTabIndex = selectedTabIndex,
-        indicator = { tabPositions ->
-            // Animate the indicator's offset horizontally
-            val currentTabPosition = tabPositions[selectedTabIndex]
-            val indicatorOffset by animateDpAsState(targetValue = currentTabPosition.left)
-
-            TabRowDefaults.Indicator(
-                Modifier
-                    .offset(x = indicatorOffset)
-                    .width(currentTabPosition.width)
-                    .height(3.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    ) {
-        tabTitles.forEachIndexed { index, title ->
-            Tab(
-                selected = index == selectedTabIndex,
-                onClick = { onTabSelected(index) },
-                text = { Text(title, style = MaterialTheme.typography.bodyLarge) }
-            )
-        }
-    }
-}
 @Composable
 fun RolePickerDialog(
     context: Context,
@@ -776,54 +693,45 @@ fun RolePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = { selected?.let(onConfirm) }, enabled = selected != null) {
-                Text(
-                    context.getString(R.string.continue_to),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(context.getString(R.string.continue_to), style = MaterialTheme.typography.bodyLarge)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(
-                    context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
             }
         },
-        title = {
-            Text(
-                context.getString(R.string.choose_role),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        },
+        title = { Text(context.getString(R.string.choose_role), style = MaterialTheme.typography.bodyLarge) },
         text = {
             if (uniqueRoles.isEmpty()) {
-                Text(
-                    context.getString(R.string.no_role_found),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(context.getString(R.string.no_role_found), style = MaterialTheme.typography.bodyLarge)
             } else {
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+                LazyColumn(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                ) {
                     items(
                         items = uniqueRoles,
                         key = { "${it.roleId}-${it.roleName.name}" }
                     ) { role ->
+                        val isSelected = selected?.roleId == role.roleId && selected?.roleName == role.roleName
                         Row(
-                            Modifier
+                            modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                        ) {
-                            RadioButton(
-                                selected = selected?.roleId == role.roleId && selected?.roleName == role.roleName,
-                                onClick = { selected = role }
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    role.roleName.getDisplayName(context),
-                                    style = MaterialTheme.typography.bodyLarge
+                                .clickable { selected = role }
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    else Color.Transparent
                                 )
-                            }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = role.roleName.getDisplayName(context),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
@@ -832,8 +740,60 @@ fun RolePickerDialog(
     )
 }
 
+fun navigateAfterLoginWithCostsCheck(
+    context: Context,
+    roleId: Long,
+    userId: Long
+) {
+    // برای نقش‌های غیر 1 و 3 همیشه به HomePage می‌رویم
+    if (roleId != 1L && roleId != 3L) {
+        val intent = Intent(context, HomePageActivity::class.java).apply {
+            putExtra("user_id", userId)
+            putExtra("role_id", roleId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        context.startActivity(intent)
+        if (context is Activity) context.finish()
+        return
+    }
 
+    // برای نقش‌های 1 و 3، قبل از رفتن به Dashboard هزینه‌ها را چک می‌کنیم
+    Cost().fetchBuildingsWithCosts(
+        context = context,
+        onSuccess = { list ->
+            Log.d("costlist", list.toString())
+            // list: List<BuildingWithCosts>
 
+            val noCosts = list.isNotEmpty() && list[0].costs.isEmpty()
 
+            val targetActivity =
+                if (noCosts) HomePageActivity::class.java
+                else DashboardActivity::class.java
 
+            val intent = Intent(context, targetActivity).apply {
+                putExtra("user_id", userId)
+                putExtra("role_id", roleId)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
 
+            context.startActivity(intent)
+            if (context is Activity) context.finish()
+
+        },
+        onError = { e ->
+            Toast.makeText(
+                context,
+                e.message ?: context.getString(R.string.failed),
+                Toast.LENGTH_SHORT
+            ).show()
+
+            val intent = Intent(context, HomePageActivity::class.java).apply {
+                putExtra("user_id", userId)
+                putExtra("role_id", roleId)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            context.startActivity(intent)
+            if (context is Activity) context.finish()
+        }
+    )
+}

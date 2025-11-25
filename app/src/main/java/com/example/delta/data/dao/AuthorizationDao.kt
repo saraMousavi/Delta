@@ -129,6 +129,10 @@ WHERE urc.userId = :userId
         val objectName: Int
     )
 
+    @Query("SELECT COUNT(*) FROM role_authorization_object_field_cross_ref")
+    suspend fun getAuthorizationCrossRefCount(): Int
+
+
 
 }
 

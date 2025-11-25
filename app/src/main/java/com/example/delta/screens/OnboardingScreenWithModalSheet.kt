@@ -1,5 +1,6 @@
 package com.example.delta.screens
 
+import android.util.Log
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -25,13 +26,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.example.delta.init.FileManagement
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreenWithModalSheet(
     onManualEntry: () -> Unit,
-    onImportExcel: () -> Unit
+    onImportExcel: () -> Unit,
+    roleId: Long?,
+    onFinish: () -> Unit
 ) {
+    Log.d("roleId", roleId.toString())
     val context = LocalContext.current
     val pages = listOf(
         OnboardingPage(
@@ -79,14 +82,12 @@ fun OnboardingScreenWithModalSheet(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable {
                         val fileManager = FileManagement()
-
                         fileManager.openTemplateExcel(
                             activity = thisActivity,
                             rawResourceId = R.raw.export_delta_template,
                             fileName = "export_delta_template.xlsx",
                             authority = "${thisActivity.packageName}.fileprovider"
                         )
-
                     },
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -103,7 +104,10 @@ fun OnboardingScreenWithModalSheet(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text(text = context.getString(R.string.import_from_excel), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = context.getString(R.string.import_from_excel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -118,9 +122,11 @@ fun OnboardingScreenWithModalSheet(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text(text = context.getString(R.string.enter_data_manually), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = context.getString(R.string.enter_data_manually),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
-
             }
         }
     }
@@ -146,11 +152,29 @@ fun OnboardingScreenWithModalSheet(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (pagerState.currentPage == pages.size - 1) {
-            Button(
-                onClick = { showSheet = true },
-                modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-            ) {
-                Text(text = context.getString(R.string.start), style = MaterialTheme.typography.bodyLarge)
+            when (roleId) {
+                1L, 3L -> {
+                    Button(
+                        onClick = { showSheet = true },
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = context.getString(R.string.start),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+                else -> {
+                    Button(
+                        onClick = onFinish,
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = context.getString(R.string.finish),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             }
         }
     }

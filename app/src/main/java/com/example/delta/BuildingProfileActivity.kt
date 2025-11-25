@@ -10,7 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,18 +35,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,15 +75,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -98,19 +93,18 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.BuildingTabItem
 import com.example.delta.data.entity.BuildingTabType
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.CityComplex
+import com.example.delta.data.entity.CityComplexes
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.PhonebookEntry
+import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.CalculateMethod
@@ -128,12 +122,16 @@ import com.example.delta.viewmodel.BuildingTypeViewModel
 import com.example.delta.viewmodel.BuildingUsageViewModel
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
-import com.example.delta.volley.Building
+import com.example.delta.volley.Building.BuildingFullDto
+import com.example.delta.volley.Cost
+import com.example.delta.volley.Fund
+import com.example.delta.volley.Owner
+import com.example.delta.volley.Tenant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
+import org.json.JSONObject
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -146,54 +144,88 @@ class BuildingProfileActivity : ComponentActivity() {
     }
 
     val sharedViewModel: SharedViewModel by viewModels()
-    private val buildingTypeViewModel: BuildingTypeViewModel by viewModels()
-    private val buildingUsageViewModel: BuildingUsageViewModel by viewModels()
     var buildingTypeName: String = ""
     var buildingUsageName: String = ""
 
-    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         enableEdgeToEdge()
+
         val buildingId = intent.getLongExtra("BUILDING_DATA", 0L)
-        Log.d("buildingId", buildingId.toString())
         if (buildingId == 0L) {
             Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
-        buildingTypeName = intent.getStringExtra("BUILDING_TYPE_NAME") ?: "Unknown"
-        buildingUsageName = intent.getStringExtra("BUILDING_USAGE_NAME") ?: "Unknown"
+
+        val buildingTypeName = intent.getStringExtra("BUILDING_TYPE_NAME") ?: "Unknown"
+        val buildingUsageName = intent.getStringExtra("BUILDING_USAGE_NAME") ?: "Unknown"
+        Log.d("buildingTypeName", buildingTypeName)
+        Log.d("buildingUsageName", buildingUsageName)
+
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+
+                    val context = LocalContext.current
+
+                    val building by sharedViewModel.currentBuilding.collectAsState()
+                    val isLoading by sharedViewModel.loadingBuilding.collectAsState()
+                    val error by sharedViewModel.buildingError.collectAsState()
+
                     LaunchedEffect(buildingId) {
-                        try {
-                            sharedViewModel.ensureBuildingCachedFromServer(
-                                context = this@BuildingProfileActivity,
-                                buildingId = buildingId
-                            )
-                        } catch (e: Exception) {
-                        }
+                        sharedViewModel.loadBuildingFromServer(
+                            context = context,
+                            buildingId = buildingId,
+                            fiscalYear = null
+                        )
                     }
 
-                    val building by sharedViewModel
-                        .getBuilding(buildingId)
-                        .collectAsStateWithLifecycle(initialValue = null)
+                    when {
+                        isLoading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
 
-                    building?.let { nonNullBuilding ->
-                        BuildingProfileScreen(nonNullBuilding)
-                    } ?: run {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                        error != null -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = error ?: getString(R.string.failed),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        building != null -> {
+                            BuildingProfileScreen(
+                                building = building!!
+                            )
+                        }
+
+                        else -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = getString(R.string.failed),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-
     }
+
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -213,7 +245,7 @@ class BuildingProfileActivity : ComponentActivity() {
         val permissionLevelOwnerTab = AuthUtils.checkFieldPermission(
             userId, BuildingProfileFields.OWNERS_TAB.fieldNameRes, sharedViewModel
         )
-
+        Log.d("permissionLevelOwnerTab", permissionLevelOwnerTab.toString())
         val permissionLevelUnitsTab = AuthUtils.checkFieldPermission(
             userId, BuildingProfileFields.UNITS_TAB.fieldNameRes, sharedViewModel
         )
@@ -235,38 +267,38 @@ class BuildingProfileActivity : ComponentActivity() {
 
         val tabs = listOfNotNull(
             BuildingTabItem(context.getString(R.string.overview), BuildingTabType.OVERVIEW),
-            if (permissionLevelOwnerTab == PermissionLevel.FULL || permissionLevelOwnerTab == PermissionLevel.WRITE
-                || permissionLevelOwnerTab == PermissionLevel.READ
-            ) {
-                BuildingTabItem(context.getString(R.string.owners), BuildingTabType.OWNERS)
-            } else null,
-            if (permissionLevelUnitsTab == PermissionLevel.FULL || permissionLevelUnitsTab == PermissionLevel.WRITE
-                || permissionLevelUnitsTab == PermissionLevel.READ
-            ) {
-                BuildingTabItem(context.getString(R.string.units), BuildingTabType.UNITS)
-            } else null,
-            if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
-                || permissionLevelTenantsTab == PermissionLevel.READ
-            ) {
-                BuildingTabItem(context.getString(R.string.tenants), BuildingTabType.TENANTS)
-            } else null,
-            if (permissionLevelFundTab == PermissionLevel.FULL || permissionLevelFundTab == PermissionLevel.WRITE
-                || permissionLevelFundTab == PermissionLevel.READ
-            ) {
-                BuildingTabItem(context.getString(R.string.funds), BuildingTabType.FUNDS)
-            }
-            else null,
-            if (permissionLevelTransactionTab == PermissionLevel.FULL || permissionLevelTransactionTab == PermissionLevel.WRITE
-                || permissionLevelTransactionTab == PermissionLevel.READ
-            ) {
-                BuildingTabItem(context.getString(R.string.transaction), BuildingTabType.TRANSACTIONS)
-            } else null,
-            if (permissionLevelPhonebookTab == PermissionLevel.FULL || permissionLevelPhonebookTab == PermissionLevel.WRITE
-                || permissionLevelPhonebookTab == PermissionLevel.READ
-            ) {
+//            if (permissionLevelOwnerTab == PermissionLevel.FULL || permissionLevelOwnerTab == PermissionLevel.WRITE
+//                || permissionLevelOwnerTab == PermissionLevel.READ
+//            ) {
+                BuildingTabItem(context.getString(R.string.owners), BuildingTabType.OWNERS),
+//            } else null,
+//            if (permissionLevelUnitsTab == PermissionLevel.FULL || permissionLevelUnitsTab == PermissionLevel.WRITE
+//                || permissionLevelUnitsTab == PermissionLevel.READ
+//            ) {
+                BuildingTabItem(context.getString(R.string.units), BuildingTabType.UNITS),
+//            } else null,
+//            if (permissionLevelTenantsTab == PermissionLevel.FULL || permissionLevelTenantsTab == PermissionLevel.WRITE
+//                || permissionLevelTenantsTab == PermissionLevel.READ
+//            ) {
+                BuildingTabItem(context.getString(R.string.tenants), BuildingTabType.TENANTS),
+//            } else null,
+//            if (permissionLevelFundTab == PermissionLevel.FULL || permissionLevelFundTab == PermissionLevel.WRITE
+//                || permissionLevelFundTab == PermissionLevel.READ
+//            ) {
+                BuildingTabItem(context.getString(R.string.funds), BuildingTabType.FUNDS),
+//            }
+//            else null,
+//            if (permissionLevelTransactionTab == PermissionLevel.FULL || permissionLevelTransactionTab == PermissionLevel.WRITE
+//                || permissionLevelTransactionTab == PermissionLevel.READ
+//            ) {
+                BuildingTabItem(context.getString(R.string.transaction), BuildingTabType.TRANSACTIONS),
+//            } else null,
+//            if (permissionLevelPhonebookTab == PermissionLevel.FULL || permissionLevelPhonebookTab == PermissionLevel.WRITE
+//                || permissionLevelPhonebookTab == PermissionLevel.READ
+//            ) {
                 BuildingTabItem(context.getString(R.string.phone_number), BuildingTabType.PHONEBOOK_TAB)
-            }
-            else null
+//            }
+//            else null
         )
 
         var selectedTab by remember { mutableIntStateOf(0) }
@@ -297,7 +329,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
-
+                Log.d("tabs",tabs.toString())
                 when (tabs.getOrNull(selectedTab)?.type) {
                     BuildingTabType.OVERVIEW -> {
                         OverviewTab(
@@ -321,21 +353,21 @@ class BuildingProfileActivity : ComponentActivity() {
                         )
                     }
                     BuildingTabType.OWNERS -> OwnersTab(building, sharedViewModel)
-                    BuildingTabType.UNITS -> UnitsTab(building, sharedViewModel)
+                    BuildingTabType.UNITS -> UnitsTab(building)
                     BuildingTabType.TENANTS -> TenantsTab(building, sharedViewModel)
                     BuildingTabType.FUNDS -> FundsTab(
                         building = building, sharedViewModel = sharedViewModel,
-                        onOpenCostDetail = { costId, fundType ->
+                        onOpenCostDetail = { cost, fundType ->
 
                             coroutineScope.launch {
-                                sharedViewModel.getCost(costId).collect { cost ->
+//                                sharedViewModel.getCost(costId).collect { cost ->
                                     val intent =
                                         Intent(context, CostDetailActivity::class.java).apply {
                                             putExtra("COST_DATA", cost as Parcelable)
                                             putExtra("FUND_TYPE", fundType.ordinal)
                                         }
                                     context.startActivity(intent)
-                                }
+//                                }
                             }
 
 
@@ -350,7 +382,6 @@ class BuildingProfileActivity : ComponentActivity() {
         }
     }
 
-
     @Composable
     fun OverviewTab(
         sharedViewModel: SharedViewModel,
@@ -361,18 +392,33 @@ class BuildingProfileActivity : ComponentActivity() {
         val context = LocalContext.current
 
         var isEditing by remember { mutableStateOf(false) }
-        // Initialize editableBuilding from building param on building change:
         var editableBuilding by remember(building) { mutableStateOf(building) }
 
-        val userId = Preference().getUserId(context)
+        val userId = remember { Preference().getUserId(context) }
 
-        val buildingTypes by buildingTypeViewModel.getAllBuildingType()
-            .collectAsState(initial = emptyList())
-        val buildingUsages by buildingUsageViewModel.getAllBuildingUsage()
-            .collectAsState(initial = emptyList())
+        // Global reference data
+        val buildingTypes by sharedViewModel.buildingTypes.collectAsState()
+        val buildingUsages by sharedViewModel.buildingUsages.collectAsState()
+        val cityComplexes by sharedViewModel.cityComplexes.collectAsState()
 
-        val cityComplexes by sharedViewModel.getAllCityComplex().collectAsState(initial = emptyList())
-        // Maintain local selected items for dropdowns
+        // Costs
+        val allCosts by sharedViewModel.costsList.collectAsState()
+        val chargesCost by sharedViewModel.chargesCost.collectAsState()
+
+        val costApi = remember { Cost() }
+        val addNewLabel = context.getString(R.string.addNew)
+
+        // Pre-selected costs for this building (only ones that are chargeFlag==true)
+        var selectedCostNames by remember(chargesCost) {
+            mutableStateOf(
+                chargesCost
+                    .filter { it.chargeFlag == true }
+                    .map { it.costName }
+            )
+        }
+
+        var showChargeCostDialog by remember { mutableStateOf(false) }
+
         val selectedBuildingType = remember(buildingTypes, editableBuilding.buildingTypeId) {
             buildingTypes.find { it.buildingTypeId == editableBuilding.buildingTypeId }
         }
@@ -385,11 +431,12 @@ class BuildingProfileActivity : ComponentActivity() {
             cityComplexes.find { it.complexId == editableBuilding.complexId }
         }
 
+        val buildingTypeNameTrigger = context.getString(R.string.city_complex)
 
-        val buildingTypeName = context.getString(R.string.city_complex)
         var showAddCityComplexDialog by remember { mutableStateOf(false) }
         var showBuildingTypeDialog by remember { mutableStateOf(false) }
         var showBuildingUsageDialog by remember { mutableStateOf(false) }
+
         val permissionLevelBuildingName = AuthUtils.checkFieldPermission(
             userId,
             BuildingProfileFields.BUILDING_NAME.fieldNameRes,
@@ -401,13 +448,6 @@ class BuildingProfileActivity : ComponentActivity() {
             sharedViewModel
         )
 
-
-        val chargesCost by sharedViewModel.getRawChargesCostsWithBuildingId(buildingId = building.buildingId)
-            .collectAsState(initial = emptyList())
-        Log.d("chargesCost", chargesCost.toString())
-        val fileList by sharedViewModel.getBuildingFiles(building.buildingId)
-            .collectAsState(initial = emptyList())
-
         Box(modifier = Modifier.fillMaxSize()) {
             Column {
                 LazyColumn(
@@ -415,9 +455,10 @@ class BuildingProfileActivity : ComponentActivity() {
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(16.dp),
-                    contentPadding = PaddingValues(bottom = 72.dp) // Padding for bottom buttons
+                    contentPadding = PaddingValues(bottom = 72.dp)
                 ) {
-                    // Group 1: Building Name & Address
+                    // 1) Name & address (بدون تغییر نسبت به قبل)
+
                     item {
                         Card(
                             modifier = Modifier
@@ -429,7 +470,9 @@ class BuildingProfileActivity : ComponentActivity() {
                             elevation = CardDefaults.cardElevation(0.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                if (permissionLevelBuildingName == PermissionLevel.FULL || permissionLevelBuildingName == PermissionLevel.WRITE) {
+                                if (permissionLevelBuildingName == PermissionLevel.FULL ||
+                                    permissionLevelBuildingName == PermissionLevel.WRITE
+                                ) {
                                     if (isEditing) {
                                         OutlinedTextField(
                                             value = editableBuilding.name,
@@ -492,7 +535,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         }
                     }
 
-                    // Group 2: Province & State
+                    // 2) Province & state (بدون تغییر، همون کدی که خودت داشتی)
                     item {
                         Card(
                             modifier = Modifier
@@ -505,11 +548,11 @@ class BuildingProfileActivity : ComponentActivity() {
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 if (isEditing) {
-                                    // Get the list of all provinces
                                     val provinces = IranianLocations.provinces.keys.toList()
                                     val availableStates =
                                         IranianLocations.provinces[editableBuilding.province]
                                             ?: emptyList()
+
                                     ExposedDropdownMenuBoxExample(
                                         sharedViewModel = sharedViewModel,
                                         items = provinces,
@@ -525,7 +568,6 @@ class BuildingProfileActivity : ComponentActivity() {
 
                                     Spacer(modifier = Modifier.height(16.dp))
 
-                                    // State Selector
                                     ExposedDropdownMenuBoxExample(
                                         sharedViewModel = sharedViewModel,
                                         items = availableStates,
@@ -553,7 +595,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         }
                     }
 
-                    // Group 3: Building Type & Usage
+                    // 3) Building type, usage, cityComplex (تقریباً همون قبله؛ فقط دست نزنیم)
                     item {
                         Card(
                             modifier = Modifier
@@ -568,13 +610,19 @@ class BuildingProfileActivity : ComponentActivity() {
                                 if (isEditing) {
                                     ExposedDropdownMenuBoxExample(
                                         sharedViewModel = sharedViewModel,
-                                        items = buildingTypes + BuildingTypes(0, context.getString(R.string.addNew)),
+                                        items = buildingTypes + BuildingTypes(
+                                            buildingTypeId = 0,
+                                            buildingTypeName = addNewLabel
+                                        ),
                                         selectedItem = selectedBuildingType,
-                                        onItemSelected = {
-                                            if (it.buildingTypeName == context.getString(R.string.addNew)) {
+                                        onItemSelected = { selected ->
+                                            if (selected.buildingTypeId == 0L &&
+                                                selected.buildingTypeName == addNewLabel
+                                            ) {
                                                 showBuildingTypeDialog = true
                                             } else {
-                                                editableBuilding = editableBuilding.copy(buildingTypeId = it.buildingTypeId)
+                                                editableBuilding =
+                                                    editableBuilding.copy(buildingTypeId = selected.buildingTypeId)
                                             }
                                         },
                                         label = context.getString(R.string.building_type),
@@ -582,49 +630,53 @@ class BuildingProfileActivity : ComponentActivity() {
                                         itemLabel = { it.buildingTypeName }
                                     )
 
-                                    if (selectedBuildingType?.buildingTypeName == buildingTypeName) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            ExposedDropdownMenuBoxExample(
-                                                sharedViewModel = sharedViewModel,
-                                                items = cityComplexes + CityComplex(
-                                                    complexId = 0L,
-                                                    name = context.getString(R.string.addNew),
-                                                    address = null
-                                                ),
-                                                selectedItem = selectedCityComplex,
-                                                onItemSelected = {
-                                                    if (it.name == context.getString(R.string.addNew)) {
-                                                        showAddCityComplexDialog = true
-                                                    } else {
-                                                        editableBuilding =
-                                                            editableBuilding.copy(complexId = it.complexId)
-                                                    }
-                                                },
-                                                label = context.getString(R.string.city_complex),
-                                                modifier = Modifier.fillMaxWidth(),
-                                                itemLabel = { it.name }
-                                            )
+                                    if (selectedBuildingType?.buildingTypeName == buildingTypeNameTrigger) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        ExposedDropdownMenuBoxExample(
+                                            sharedViewModel = sharedViewModel,
+                                            items = cityComplexes + CityComplexes(
+                                                complexId = 0L,
+                                                name = addNewLabel,
+                                                address = null
+                                            ),
+                                            selectedItem = selectedCityComplex,
+                                            onItemSelected = { selected ->
+                                                if (selected.complexId == 0L &&
+                                                    selected.name == addNewLabel
+                                                ) {
+                                                    showAddCityComplexDialog = true
+                                                } else {
+                                                    editableBuilding =
+                                                        editableBuilding.copy(complexId = selected.complexId)
+                                                }
+                                            },
+                                            label = context.getString(R.string.city_complex),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            itemLabel = { it.name }
+                                        )
                                     }
+
                                     Spacer(Modifier.height(8.dp))
+
                                     ExposedDropdownMenuBoxExample(
                                         sharedViewModel = sharedViewModel,
                                         items = buildingUsages + BuildingUsages(
-                                            0,
-                                            context.getString(R.string.addNew)
-                                        ), // Add "Add New" option
+                                            buildingUsageId = 0,
+                                            buildingUsageName = addNewLabel
+                                        ),
                                         selectedItem = selectedBuildingUsage,
-                                        onItemSelected = {
-                                            if (it.buildingUsageName == context.getString(R.string.addNew)) {
-                                                // Open dialog to add new building usage
+                                        onItemSelected = { selected ->
+                                            if (selected.buildingUsageId == 0L &&
+                                                selected.buildingUsageName == addNewLabel
+                                            ) {
                                                 showBuildingUsageDialog = true
                                             } else {
                                                 editableBuilding =
-                                                    editableBuilding.copy(buildingUsageId = it.buildingUsageId)
+                                                    editableBuilding.copy(buildingUsageId = selected.buildingUsageId)
                                             }
                                         },
                                         label = context.getString(R.string.building_usage),
-                                        modifier = Modifier
-                                            .fillMaxWidth(1f),
+                                        modifier = Modifier.fillMaxWidth(),
                                         itemLabel = { it.buildingUsageName }
                                     )
                                 } else {
@@ -632,9 +684,8 @@ class BuildingProfileActivity : ComponentActivity() {
                                         text = "${context.getString(R.string.building_type)}: ${selectedBuildingType?.buildingTypeName ?: "-"}",
                                         style = MaterialTheme.typography.bodyLarge
                                     )
-                                    if (selectedBuildingType?.buildingTypeName == buildingTypeName) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-
+                                    if (selectedBuildingType?.buildingTypeName == buildingTypeNameTrigger) {
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Text(
                                             text = "${context.getString(R.string.city_complex_name)}: ${selectedCityComplex?.name ?: "-"}",
                                             style = MaterialTheme.typography.bodyLarge
@@ -650,7 +701,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         }
                     }
 
-                    // Group 4: Charges Parameter
+                    // 4) Charges (new UI)
                     item {
                         Card(
                             modifier = Modifier
@@ -667,22 +718,56 @@ class BuildingProfileActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
-                                chargesCost.forEachIndexed { index, cost ->
-                                    Text(
-                                        text = cost.costName,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.padding(vertical = 4.dp)
+
+                                if (isEditing) {
+                                    val chipItems = allCosts + Costs(
+                                        costName = addNewLabel,
+                                        chargeFlag = true,
+                                        fundType = FundType.OPERATIONAL,
+                                        responsible = Responsible.TENANT,
+                                        paymentLevel = PaymentLevel.UNIT,
+                                        calculateMethod = CalculateMethod.EQUAL,
+                                        period = Period.YEARLY,
+                                        dueDate = "",
+                                        tempAmount = 0.0
                                     )
-                                    if (index != chargesCost.lastIndex) {
-                                        Spacer(Modifier.height(8.dp))
+
+                                    ChipGroupShared(
+                                        selectedItems = selectedCostNames,
+                                        onSelectionChange = { newSelectionStrings ->
+                                            if (newSelectionStrings.contains(addNewLabel)) {
+                                                showChargeCostDialog = true
+                                                selectedCostNames =
+                                                    newSelectionStrings.filter { it != addNewLabel }
+                                            } else {
+                                                selectedCostNames = newSelectionStrings
+                                            }
+                                        },
+                                        items = chipItems.map { it.costName },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = context.getString(R.string.charges_parameter),
+                                        singleSelection = false
+                                    )
+                                } else {
+                                    chargesCost.forEachIndexed { index, cost ->
+                                        Text(
+                                            text = cost.costName,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        )
+                                        if (index != chargesCost.lastIndex) {
+                                            Spacer(Modifier.height(4.dp))
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Group 5: Documents
-                    if (fileList.isNotEmpty() && (permissionLevelDoc == PermissionLevel.FULL || permissionLevelDoc == PermissionLevel.WRITE)) {
+                    // 5) Documents + upload button
+                    if (permissionLevelDoc == PermissionLevel.FULL ||
+                        permissionLevelDoc == PermissionLevel.WRITE
+                    ) {
                         item {
                             Card(
                                 modifier = Modifier
@@ -693,46 +778,28 @@ class BuildingProfileActivity : ComponentActivity() {
                                 shape = RoundedCornerShape(8.dp),
                                 elevation = CardDefaults.cardElevation(0.dp)
                             ) {
-                                Row(modifier = Modifier.padding(16.dp)) {
-                                    fileList.forEach { file ->
-                                        val fileObj = File(file.fileUrl)
-                                        val extension = fileObj.extension.lowercase()
-                                        val painter = when (extension) {
-                                            "jpg", "jpeg", "png", "gif", "bmp", "webp" ->
-                                                rememberAsyncImagePainter(fileObj)
-
-                                            else -> null
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable { openFile(context, file.fileUrl) },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (painter != null) {
-                                                Image(
-                                                    painter = painter,
-                                                    contentDescription = "Image file",
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                val icon = when (extension) {
-                                                    "pdf" -> Icons.Default.PictureAsPdf
-                                                    "xls", "xlsx" -> Icons.Default.TableChart
-                                                    "doc", "docx" -> Icons.Default.Description
-                                                    else -> Icons.Default.InsertDriveFile
-                                                }
-                                                Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = "File icon",
-                                                    tint = Color.Gray,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
-                                            }
-                                        }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = context.getString(R.string.documents),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            // hook your existing document upload flow here
+                                        },
+                                        modifier = Modifier.align(Alignment.Start)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CloudUpload,
+                                            contentDescription = null
+                                        )
                                         Spacer(Modifier.width(8.dp))
+                                        Text(text = context.getString(R.string.documents))
                                     }
                                 }
                             }
@@ -740,7 +807,6 @@ class BuildingProfileActivity : ComponentActivity() {
                     }
                 }
 
-                // Editing action buttons at bottom
                 if (isEditing) {
                     Row(
                         modifier = Modifier
@@ -751,7 +817,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         OutlinedButton(
                             onClick = {
                                 isEditing = false
-                                editableBuilding = building // revert changes
+                                editableBuilding = building
                             },
                             modifier = Modifier.weight(1f)
                         ) {
@@ -764,6 +830,7 @@ class BuildingProfileActivity : ComponentActivity() {
                         Button(
                             onClick = {
                                 isEditing = false
+                                // you can also persist selectedCostNames here if needed
                                 onUpdateBuilding(editableBuilding)
                             },
                             modifier = Modifier.weight(1f)
@@ -778,7 +845,6 @@ class BuildingProfileActivity : ComponentActivity() {
                 }
             }
 
-            // Floating Action Button to toggle editing
             if (!isEditing) {
                 FloatingActionButton(
                     onClick = { isEditing = true },
@@ -790,16 +856,19 @@ class BuildingProfileActivity : ComponentActivity() {
                 }
             }
         }
+
         if (showAddCityComplexDialog) {
             AddCityComplexDialog(
                 onDismiss = { showAddCityComplexDialog = false },
                 onInsert = { newName, newAddress ->
-                    val newComplex = CityComplex(name = newName, address = newAddress)
-                    sharedViewModel.insertCityComplex(newComplex) { id ->
-//                        val insertedComplex = cityComplexes.find { it.complexId == id }
-//                        if (insertedComplex != null) {
-//                            selectedCityComplex = insertedComplex
-//                        }
+                    sharedViewModel.insertCityComplexRemote(
+                        context = context,
+                        name = newName,
+                        address = newAddress
+                    ) { inserted ->
+                        if (inserted != null) {
+                            editableBuilding = editableBuilding.copy(complexId = inserted.complexId)
+                        }
                     }
                     showAddCityComplexDialog = false
                 }
@@ -811,8 +880,15 @@ class BuildingProfileActivity : ComponentActivity() {
                 sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingTypeDialog = false },
                 onInsert = { newItem ->
-                    val newType = BuildingTypes(buildingTypeName = newItem)
-                    buildingTypeViewModel.insertBuildingType(newType) // Add the new item to the list
+                    sharedViewModel.insertBuildingTypeRemote(
+                        context = context,
+                        name = newItem
+                    ) { inserted ->
+                        if (inserted != null) {
+                            editableBuilding =
+                                editableBuilding.copy(buildingTypeId = inserted.buildingTypeId)
+                        }
+                    }
                 }
             )
         }
@@ -822,44 +898,92 @@ class BuildingProfileActivity : ComponentActivity() {
                 sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingUsageDialog = false },
                 onInsert = { name ->
-                    val newUsage = BuildingUsages(buildingUsageName = name)
-                    buildingUsageViewModel.insertBuildingUsage(newUsage)
+                    sharedViewModel.insertBuildingUsageRemote(
+                        context = context,
+                        name = name
+                    ) { inserted ->
+                        if (inserted != null) {
+                            editableBuilding =
+                                editableBuilding.copy(buildingUsageId = inserted.buildingUsageId)
+                        }
+                    }
                 }
             )
         }
 
+        if (showChargeCostDialog) {
+            AddNewCostDialog(
+                onDismiss = { showChargeCostDialog = false },
+                onConfirm = { newCostName ->
+                    val newCost = Costs(
+                        costName = newCostName,
+                        chargeFlag = true,
+                        fundType = FundType.OPERATIONAL,
+                        responsible = Responsible.TENANT,
+                        paymentLevel = PaymentLevel.UNIT,
+                        calculateMethod = CalculateMethod.EQUAL,
+                        period = Period.YEARLY,
+                        tempAmount = 0.0,
+                        dueDate = ""
+                    )
+                    costApi.createGlobalCost(
+                        context = context,
+                        cost = newCost,
+                        onSuccess = { created ->
+                            sharedViewModel.appendGlobalCost(created)
+                            selectedCostNames = selectedCostNames + created.costName
+                            showChargeCostDialog = false
+                        },
+                        onError = {
+                            showChargeCostDialog = false
+                        }
+                    )
+                }
+            )
+        }
     }
+
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     @Composable
     fun FundsTab(
         building: Buildings,
         sharedViewModel: SharedViewModel,
-        onOpenCostDetail: (costId: Long, fundType: FundType) -> Unit
+        onOpenCostDetail: (cost: Costs, fundType: FundType) -> Unit
     ) {
         val context = LocalContext.current
 
         val snackBarHostState = remember { SnackbarHostState() }
         val coroutineScope = rememberCoroutineScope()
-        val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
-            buildingId = building.buildingId,
-            fundType = FundType.OPERATIONAL
-        ).collectAsState(initial = 0.0)
 
-        val capitalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
-            buildingId = building.buildingId,
-            fundType = FundType.CAPITAL
-        ).collectAsState(initial = 0.0)
+        // Funds come from server
+        val funds by sharedViewModel.fundsForBuilding.collectAsState()
 
-        val operationalCosts by sharedViewModel.getPendingCostsByFundType(
-            building.buildingId,
-            FundType.OPERATIONAL
-        ).collectAsState(initial = emptyList())
+        // Pending costs come from server
+        val pendingCosts by sharedViewModel.pendingCostsForBuilding.collectAsState()
 
-        val capitalCosts by sharedViewModel.getPendingCostsByFundType(
-            building.buildingId,
-            FundType.CAPITAL
-        ).collectAsState(initial = emptyList())
+        // Load both funds and pending costs once per building
+        LaunchedEffect(building.buildingId) {
+            sharedViewModel.loadFundsForBuilding(context, building.buildingId)
+        }
+
+        // Extract operational / capital fund from funds list
+        val operationalFund = remember(funds) {
+            funds.firstOrNull { it.fundType == FundType.OPERATIONAL }?.balance ?: 0.0
+        }
+
+        val capitalFund = remember(funds) {
+            funds.firstOrNull { it.fundType == FundType.CAPITAL }?.balance ?: 0.0
+        }
+
+        // Split pending costs by fundType (the server already returns "pending" items)
+        val operationalCosts = remember(pendingCosts) {
+            pendingCosts.filter { it.fundType == FundType.OPERATIONAL }
+        }
+
+        val capitalCosts = remember(pendingCosts) {
+            pendingCosts.filter { it.fundType == FundType.CAPITAL }
+        }
 
         var selectedTab by remember { mutableIntStateOf(0) }
         val tabTitles = listOf(
@@ -956,7 +1080,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                 ) {
                                     items(capitalCosts) { cost ->
                                         CostListItemWithDetailText(cost = cost) {
-                                            onOpenCostDetail(cost.costId, FundType.CAPITAL)
+                                            onOpenCostDetail(cost, FundType.CAPITAL)
                                         }
                                     }
                                 }
@@ -977,7 +1101,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                 ) {
                                     items(operationalCosts) { cost ->
                                         CostListItemWithDetailText(cost = cost) {
-                                            onOpenCostDetail(cost.costId, FundType.OPERATIONAL)
+                                            onOpenCostDetail(cost, FundType.OPERATIONAL)
                                         }
                                     }
                                 }
@@ -1027,10 +1151,10 @@ class BuildingProfileActivity : ComponentActivity() {
         // Show dialogs if needed (unchanged)
 
             if (buildingViewModel.showCapitalCostDialog.value) {
-                val capitalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
-                    buildingId = building.buildingId,
-                    fundType = FundType.CAPITAL
-                ).collectAsState(initial = 0)
+//                val capitalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
+//                    buildingId = building.buildingId,
+//                    fundType = FundType.CAPITAL
+//                ).collectAsState(initial = 0)
                 var success by remember { mutableStateOf(false) }
                 AddCapitalCostDialog(
                 buildingId = building.buildingId,
@@ -1038,6 +1162,8 @@ class BuildingProfileActivity : ComponentActivity() {
                 onDismiss = { buildingViewModel.showCapitalCostDialog.value = false },
                 onSave = { selectedCost, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, message ->
                     coroutineScope.launch {
+                        Log.d("amount", amount.toString())
+                        Log.d("capitalFund", capitalFund.toString())
                         if (amount.toDouble() <= (capitalFund.toDouble())) {
                             val cost = Costs(
                                 buildingId = building.buildingId,
@@ -1051,38 +1177,51 @@ class BuildingProfileActivity : ComponentActivity() {
                                 dueDate = dueDate,
                                 invoiceFlag = true
                             )
-                            sharedViewModel.insertNewCost(
-                                cost,
-                                onSuccess = {
-                                    sharedViewModel.insertCostToServer (context, listOf(cost),               // ⬅️ تبدیل به لیست یک‌عضوی
-                                        emptyList<Debts>(),
-                                        onSuccess = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
-                                            }
-                                        }, onError = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                                            }
-                                        })
-                                }
-                            )
-                            success = sharedViewModel.decreaseOperationalFund(
-                                building.buildingId,
+//                            sharedViewModel.insertNewCost(
+//                                cost,
+//                                onSuccess = {
+//                                    sharedViewModel.insertCostToServer (context, listOf(cost),               // ⬅️ تبدیل به لیست یک‌عضوی
+//                                        emptyList<Debts>(),
+//                                        onSuccess = {
+//                                            coroutineScope.launch {
+//                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+//                                            }
+//                                        }, onError = {
+//                                            coroutineScope.launch {
+//                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
+//                                            }
+//                                        })
+//                                }
+//                            )
+                            Fund().decreaseOperationalFundOnServer(
+                                context = context,
+                                buildingId = building.buildingId,
                                 amount.toDouble(),
                                 FundType.CAPITAL,
-                                onSuccess = {},
-                                onError = {}
+                                onSuccess = { ok ->
+                                    coroutineScope.launch {
+                                        snackBarHostState.showSnackbar(context.getString(R.string.fund_decreased_successfully))
+                                    }
+                                },
+                                onError = { e->
+                                    coroutineScope.launch {
+                                        snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                    }
+                                }
                             )
+//                            success = sharedViewModel.decreaseOperationalFund(
+//                                building.buildingId,
+//                                amount.toDouble(),
+//                                FundType.CAPITAL,
+//                                onSuccess = {},
+//                                onError = {}
+//                            )
                         } else {
-                            success = false
+                            coroutineScope.launch {
+                                snackBarHostState.showSnackbar(context.getString(R.string.insufficient_fund))
+                            }
                         }
                         buildingViewModel.showCapitalCostDialog.value = false
-                        if(success){
-                            snackBarHostState.showSnackbar(context.getString(R.string.fund_decreased_successfully))
-                        } else {
-                            snackBarHostState.showSnackbar(context.getString(R.string.insufficient_fund))
-                        }
 
                     }
                 }
@@ -1120,7 +1259,7 @@ class BuildingProfileActivity : ComponentActivity() {
                                 startDate = earning.startDate,
                                 endDate = earning.endDate
                             )
-                            sharedViewModel.insertEarningsWithCredits(earningsToInsert)
+                            sharedViewModel.insertEarningsWithCredits(context, earningsToInsert)
                             snackBarHostState.showSnackbar(context.getString(R.string.earning_inserted_successfully))
                         } catch (e: IllegalStateException) {
                             Log.e("error", e.message.toString())
@@ -1201,48 +1340,122 @@ class BuildingProfileActivity : ComponentActivity() {
         }
 
     }
-
     @Composable
-    fun TenantsTab(building: Buildings, sharedViewModel: SharedViewModel) {
-        var showTenantDialog by remember { mutableStateOf(false) }
+    fun TenantsTab(
+        building: Buildings,
+        sharedViewModel: SharedViewModel
+    ) {
         val context = LocalContext.current
-        val tenants by sharedViewModel.getTenantsForBuilding(building.buildingId)
-            .collectAsState(initial = emptyList())
+        val tenantApi = remember { com.example.delta.volley.Tenant() }
+        val unitsApi = remember { com.example.delta.volley.Units() }
+
+        var tenantsWithUnit by remember { mutableStateOf<List<Tenant.TenantWithUnitDto>>(emptyList()) }
+        var loading by remember { mutableStateOf(false) }
+        var showTenantDialog by remember { mutableStateOf(false) }
+
+        var units by remember { mutableStateOf<List<Units>>(emptyList()) }
+        var unitsLoading by remember { mutableStateOf(false) }
+
+        fun loadTenants() {
+            loading = true
+            tenantApi.fetchTenantsWithUnitsByBuilding(
+                context = context,
+                buildingId = building.buildingId,
+                onSuccess = { list ->
+                    tenantsWithUnit = list
+                    loading = false
+                },
+                onError = { e ->
+                    loading = false
+                    Toast.makeText(
+                        context,
+                        e.message ?: context.getString(R.string.failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+
+        LaunchedEffect(building.buildingId) {
+            loadTenants()
+        }
+
+        LaunchedEffect(building.buildingId) {
+            unitsLoading = true
+            unitsApi.fetchUnitsWithOwnerForBuilding (
+                context = context,
+                buildingId = building.buildingId,
+                onSuccess = { list ->
+                    Log.d("list", list.toString())
+                    units = list
+                    unitsLoading = false
+                },
+                onError = { e ->
+                    unitsLoading = false
+                    Toast.makeText(
+                        context,
+                        e.message ?: context.getString(R.string.failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+
         Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                items(tenants) { tenant ->
-                    val unit = sharedViewModel.getUnitForTenant(tenant.tenantId).collectAsState(initial = null)
-                    TenantItem(
-                        tenants = tenant,
-                        sharedViewModel = sharedViewModel,
-                        onDelete = {
-                            sharedViewModel.deleteTenant(
-                                tenant = tenant,
-                                onSuccess = {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.success_delete),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                onError = { error ->
-                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT)
-                                        .show()
+            if (loading && tenantsWithUnit.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    items(tenantsWithUnit) { dto ->
+                        val tenant = dto.tenant
+                        val unit = dto.unit
+
+                        TenantItem(
+                            tenants = tenant,
+                            sharedViewModel = sharedViewModel,
+                            onDelete = {
+                                tenantApi.deleteTenant(
+                                    context = context,
+                                    tenantId = tenant.tenantId,
+                                    onSuccess = {
+                                        tenantsWithUnit = tenantsWithUnit.filterNot {
+                                            it.tenant.tenantId == tenant.tenantId
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.success_delete),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(
+                                            context,
+                                            err.message ?: context.getString(R.string.failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            },
+                            activity = context.findActivity(),
+                            onClick = {
+                                if (unit != null) {
+                                    val intent = Intent(context, TenantsDetailsActivity::class.java)
+                                    intent.putExtra("UNIT_DATA", unit.unitId)
+                                    intent.putExtra("TENANT_DATA", tenant.tenantId)
+                                    context.startActivity(intent)
                                 }
-                            )
-                        },
-                        activity = context.findActivity(),
-                        onClick = {
-                            val intent = Intent(context, TenantsDetailsActivity::class.java)
-                            intent.putExtra("UNIT_DATA", unit.value!!.unitId)
-                            intent.putExtra("TENANT_DATA", tenant.tenantId)
-                            context.startActivity(intent)
-                        }
-                    )
+                            }
+                        )
+                    }
                 }
             }
 
@@ -1250,28 +1463,96 @@ class BuildingProfileActivity : ComponentActivity() {
                 onClick = { showTenantDialog = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-//                containerColor = Color(context.getColor(R.color.secondary_color)),
-//                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    .padding(16.dp)
             ) {
                 Icon(Icons.Filled.Add, "Add")
             }
 
-            if (showTenantDialog) {
-                val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
-                    .collectAsState(initial = emptyList())
+            if (showTenantDialog && !unitsLoading) {
                 TenantDialog(
                     sharedViewModel = sharedViewModel,
                     units = units,
                     onDismiss = { showTenantDialog = false },
                     onAddTenant = { newTenant, selectedUnit ->
-                        sharedViewModel.saveTenantWithUnit(newTenant, selectedUnit)
-                        showTenantDialog = false
+                        tenantApi.insertTenantWithUnit(
+                            context = context,
+                            buildingId = building.buildingId,
+                            tenant = newTenant,
+                            unitId = selectedUnit.unitId,
+                            onSuccess = { createdDto ->
+                                tenantsWithUnit = tenantsWithUnit + createdDto
+                                showTenantDialog = false
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.insert_tenant_successfully),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            onError = { e ->
+                                Toast.makeText(
+                                    context,
+                                    e.message ?: context.getString(R.string.failed),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
                     }
                 )
             }
         }
     }
+
+
+    @Composable
+    private fun TenantItemWithServerUnit(
+        tenant: Tenants,
+        tenantUnitApi: com.example.delta.volley.TenantUnit,
+        sharedViewModel: SharedViewModel,
+        building: Buildings,
+        onDelete: () -> Unit
+    ) {
+        val context = LocalContext.current
+        var unit by remember { mutableStateOf<Units?>(null) }
+        var loadingUnit by remember { mutableStateOf(false) }
+
+        LaunchedEffect(tenant.tenantId) {
+            loadingUnit = true
+            tenantUnitApi.fetchTenantUnitsByTenant(
+                context = context,
+                tenantId = tenant.tenantId,
+                onSuccess = { units ->
+                    unit = units.firstOrNull()
+                    loadingUnit = false
+                },
+                onError = {
+                    loadingUnit = false
+                }
+            )
+        }
+
+        TenantItem(
+            tenants = tenant,
+            sharedViewModel = sharedViewModel,
+            onDelete = { onDelete() },
+            activity = context.findActivity(),
+            onClick = {
+                val selectedUnit = unit
+                if (selectedUnit != null) {
+                    val intent = Intent(context, TenantsDetailsActivity::class.java)
+                    intent.putExtra("UNIT_DATA", selectedUnit.unitId)
+                    intent.putExtra("TENANT_DATA", tenant.tenantId)
+                    context.startActivity(intent)
+                } else {
+//                    Toast.makeText(
+//                        context,
+//                        context.getString(R.string.unit_not_loaded),
+//                        Toast.LENGTH_SHORT
+//                    ).show()
+                }
+            }
+        )
+    }
+
 
     @Composable
     fun EarningsSection(
@@ -1280,9 +1561,10 @@ class BuildingProfileActivity : ComponentActivity() {
         onInvoiceClicked: (Earnings) -> Unit,
         modifier: Modifier = Modifier
     ) {
-        val earnings by sharedViewModel.getNotInvoicedEarnings(buildingId)
-            .collectAsState(initial = emptyList())
         val context = LocalContext.current
+        val earnings by sharedViewModel.getNotInvoicedEarnings(context = context,  buildingId)
+            .collectAsState(initial = emptyList())
+
 
         Column(modifier = modifier.padding(16.dp)) {
             if (earnings.isEmpty()) {
@@ -1355,36 +1637,184 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         }
     }
-
     @Composable
     fun UnitsTab(
-        building: Buildings,
-        sharedViewModel: SharedViewModel
+        building: Buildings
     ) {
-        val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
-            .collectAsState(initial = emptyList())
+        val context = LocalContext.current
+        val unitsApi = remember { com.example.delta.volley.Units() }
 
-        LazyColumn {
-            items(units) { unit ->
-                UnitItem(unit = unit) {
+        var units by remember { mutableStateOf<List<Units>>(emptyList()) }
+        var loading by remember { mutableStateOf(false) }
+        var showUnitDialog by remember { mutableStateOf(false) }
 
+        LaunchedEffect(building.buildingId) {
+            loading = true
+            unitsApi.fetchUnitsForBuilding(
+                context = context,
+                buildingId = building.buildingId,
+                onSuccess = { list ->
+                    units = list
+                    loading = false
+                },
+                onError = { e ->
+                    loading = false
+                    Toast.makeText(
+                        context,
+                        e.message ?: context.getString(R.string.failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (loading && units.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn {
+                    items(units) { unit ->
+                        UnitItem(
+                            unit = unit,
+                            onUpdateUnit = { updatedUnit ->
+                                unitsApi.updateUnit(
+                                    context = context,
+                                    buildingId = building.buildingId,
+                                    unit = updatedUnit,
+                                    onSuccess = { serverUnit ->
+                                        units = units.map {
+                                            if (it.unitId == serverUnit.unitId) serverUnit else it
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.success_update),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    onError = { e ->
+                                        Toast.makeText(
+                                            context,
+                                            e.message ?: context.getString(R.string.failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            }
+                        )
+                    }
                 }
             }
+
+            FloatingActionButton(
+                onClick = { showUnitDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(Icons.Filled.Add, "Add")
+            }
+
+            if (showUnitDialog) {
+                UnitDialog(
+                    onDismiss = { showUnitDialog = false },
+                    onAddUnit = { newUnit ->
+                        unitsApi.insertUnitForBuilding(
+                            context = context,
+                            buildingId = building.buildingId,
+                            unit = newUnit,
+                            onSuccess = { createdUnit ->
+                                units = units + createdUnit
+                                showUnitDialog = false
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.insert_unit_successfully),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            onError = { e ->
+                                try {
+                                    val json = JSONObject(e.message ?: "")
+                                    val translated = translateServerError(
+                                        json.optString("message"),
+                                        json.optJSONObject("errors")
+                                    )
+
+                                    Toast.makeText(context, translated, Toast.LENGTH_LONG).show()
+
+                                } catch (_: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.failed),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+
+                        )
+                    }
+                )
+            }
         }
+    }
+
+    fun translateServerError(message: String?, errors: JSONObject?): String {
+        val main = when (message) {
+            "duplicate-key" -> "داده تکراری است."
+            "validation-error" -> "اطلاعات وارد شده معتبر نیست."
+            "missing-fields" -> "بعضی از فیلدهای لازم وارد نشده است."
+            "not-found" -> "موردی با این مشخصات پیدا نشد."
+            "db-error" -> "خطا در پایگاه داده."
+            else -> "خطای نامشخص."
+        }
+
+        val details = if (errors != null) {
+            errors.keys().asSequence().joinToString("\n") { key ->
+                val value = errors.optString(key)
+
+                val translatedField = when (key) {
+                    "unitId" -> "شناسه واحد"
+                    "unitNumber" -> "شماره واحد"
+                    "buildingId" -> "شناسه ساختمان"
+                    "area" -> "متراژ"
+                    "numberOfRooms" -> "تعداد اتاق"
+                    "numberOfParking" -> "تعداد پارکینگ"
+                    "numberOfWarehouse" -> "تعداد انباری"
+                    "postCode" -> "کدپستی"
+                    else -> key
+                }
+
+                val translatedValue = when (value) {
+                    "duplicate" -> "تکراری است"
+                    "required" -> "باید وارد شود"
+                    "invalid" -> "نامعتبر است"
+                    else -> value
+                }
+
+                "$translatedField: $translatedValue"
+            }
+        } else ""
+
+        return if (details.isBlank()) main else "$main\n$details"
     }
 
     @Composable
     fun UnitItem(
         unit: Units,
-        onClick: () -> Unit
+        onUpdateUnit: (Units) -> Unit
     ) {
         val context = LocalContext.current
-
+        var showEditDialog by remember { mutableStateOf(false) }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(8.dp)
+                .clickable(onClick = { showEditDialog = true }),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
@@ -1445,26 +1875,50 @@ class BuildingProfileActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-
             }
         }
+
+        if (showEditDialog) {
+            EditUnitDialog(
+                unit = unit,
+                onDismiss = { showEditDialog = false },
+                onUpdateUnit = { updatedUnit ->
+                    onUpdateUnit(updatedUnit)
+                    showEditDialog = false
+                }
+            )
+        }
     }
+
 
     @Composable
     fun TransactionHistoryTab(building: Buildings, sharedViewModel: SharedViewModel) {
         val context = LocalContext.current
         val buildingId = building.buildingId
+        LaunchedEffect(buildingId) {
+            sharedViewModel.loadInvoicedCostsForBuilding(context, buildingId)
+        }
 
+        val invoicedCosts by sharedViewModel.invoicedCostsForBuilding.collectAsState()
+
+
+        val capitalInvoicedCosts = remember(invoicedCosts) {
+            invoicedCosts.filter { it.fundType == FundType.CAPITAL }
+        }
+
+        val operationalInvoicedCosts = remember(invoicedCosts) {
+            invoicedCosts.filter { it.fundType == FundType.OPERATIONAL }
+        }
         // Collect the lists of invoiced costs separately for capital and operational funds
-        val capitalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
-            buildingId,
-            FundType.CAPITAL
-        ).collectAsState(initial = emptyList())
-
-        val operationalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
-            buildingId,
-            FundType.OPERATIONAL
-        ).collectAsState(initial = emptyList())
+//        val capitalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
+//            buildingId,
+//            FundType.CAPITAL
+//        ).collectAsState(initial = emptyList())
+//
+//        val operationalInvoicedCosts by sharedViewModel.getInvoicedCostsByFundType(
+//            buildingId,
+//            FundType.OPERATIONAL
+//        ).collectAsState(initial = emptyList())
 
         var selectedTab by remember { mutableStateOf(0) }
         val tabTitles = listOf(
@@ -1608,22 +2062,29 @@ class BuildingProfileActivity : ComponentActivity() {
         val context = LocalContext.current
         val buildingId = building.buildingId
 
-        // Two tabs: Emergency and Residents(Tenants)
         var selectedTab by remember { mutableStateOf(0) }
         val tabTitles = listOf(
             context.getString(R.string.emergency_calls).uppercase(),
             context.getString(R.string.tenants).uppercase()
         )
 
-        // Load residents and emergency numbers separately
-        val residents by sharedViewModel.getResidents(buildingId).collectAsState(emptyList())
-        val emergencyNumbers by sharedViewModel.getEmergencyNumbers(buildingId).collectAsState(emptyList())
+        LaunchedEffect(buildingId) {
+            sharedViewModel.loadPhonebookForBuilding(context, buildingId)
+        }
+
+        val entries by sharedViewModel.phonebookEntriesForBuilding.collectAsState()
+
+        val residents = remember(entries, buildingId) {
+            entries.filter { it.buildingId == buildingId && it.type == "resident" }
+        }
+        val emergencyNumbers = remember(entries, buildingId) {
+            entries.filter { it.buildingId == buildingId && it.type == "emergency" }
+        }
+
         var showAddDialog by remember { mutableStateOf(false) }
-
         val coroutineScope = rememberCoroutineScope()
-
-        // SnackbarHostState to show messages
         val snackbarHostState = remember { SnackbarHostState() }
+
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -1737,7 +2198,7 @@ class BuildingProfileActivity : ComponentActivity() {
                 onDismiss = { showAddDialog = false },
                 onConfirm = { entry ->
                     coroutineScope.launch {
-                        sharedViewModel.addPhonebookEntry(entry)
+                        sharedViewModel.addPhonebookEntry(context, entry)
                         showAddDialog = false
                         if(entry.type == "emergency") {
                             snackbarHostState.showSnackbar(context.getString(R.string.insert_emergency_phone_book_successfully))
@@ -1754,7 +2215,7 @@ class BuildingProfileActivity : ComponentActivity() {
     fun PhonebookEntryItem(entry: PhonebookEntry, permissionLevel: PermissionLevel) {
         val context = LocalContext.current
         var showDeleteDialog by remember { mutableStateOf(false) }
-
+        val coroutineScope = rememberCoroutineScope()
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1807,8 +2268,10 @@ class BuildingProfileActivity : ComponentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         // Your SharedViewModel's delete function here:
-                         sharedViewModel.deletePhonebookEntry(entry)
+                        coroutineScope.launch {
+                         sharedViewModel.deletePhonebookEntry(context, entry)
                         showDeleteDialog = false
+                            }
                     }) {
                         Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge)
                     }
@@ -1903,49 +2366,117 @@ class BuildingProfileActivity : ComponentActivity() {
         )
     }
 
-
-
     @Composable
     fun OwnersTab(building: Buildings, sharedViewModel: SharedViewModel) {
-        var showOwnerDialog by remember { mutableStateOf(false) }
         val context = LocalContext.current
-        val owners by sharedViewModel.getOwnersForBuilding(building.buildingId)
-            .collectAsState(initial = emptyList())
-        val ownerUnitsState =
-            sharedViewModel.getDangSumsForAllUnits().collectAsState(initial = emptyList())
-        val ownerUnits = ownerUnitsState.value
-// Convert to map for fast lookup
-        val dangSumsMap: Map<Long, Double> = ownerUnits.associate { it.unitId to it.totalDang }
+        val ownerApi = remember { Owner() }
+        val unitsApi = remember { com.example.delta.volley.Units() }
+
+        var showOwnerDialog by remember { mutableStateOf(false) }
+        var owners by remember { mutableStateOf<List<Owners>>(emptyList()) }
+        var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
+        var loading by remember { mutableStateOf(false) }
+
+        var units by remember { mutableStateOf<List<Units>>(emptyList()) }
+        var unitsLoading by remember { mutableStateOf(false) }
+
+        val dangSumsMap = remember(ownersWithUnits) {
+            ownersWithUnits
+                .flatMap { it.units }
+                .groupBy { it.unit.unitId }
+                .mapValues { (_, list) -> list.sumOf { it.dang } }
+        }
+
+        fun loadOwners() {
+            loading = true
+            ownerApi.getOwnersWithUnitsByBuilding(
+                context = context,
+                buildingId = building.buildingId,
+                onSuccess = { list ->
+                    ownersWithUnits = list
+                    owners = list.map { it.owner }
+                    loading = false
+                },
+                onError = {
+                    loading = false
+                    Toast.makeText(
+                        context,
+                        it.message ?: context.getString(R.string.failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+
+        LaunchedEffect(building.buildingId) {
+            loadOwners()
+        }
+
+        LaunchedEffect(building.buildingId) {
+            unitsLoading = true
+            unitsApi.fetchUnitsForBuilding(
+                context = context,
+                buildingId = building.buildingId,
+                onSuccess = { list ->
+                    Log.d("list", list.toString())
+                    units = list
+                    unitsLoading = false
+                },
+                onError = { e ->
+                    unitsLoading = false
+                    Toast.makeText(
+                        context,
+                        e.message ?: context.getString(R.string.failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-            ) {
-                items(owners) { owner ->
-
-                    OwnerItem(
-                        owner = owner,
-                        sharedViewModel = sharedViewModel,
-                        onDelete = {
-                            sharedViewModel.deleteOwner(
-                                owner = owner,
-                                onSuccess = {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.success_delete),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                onError = { error ->
-                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                            )
-                        },
-                        activity = context.findActivity(),
-                        buildingId = building.buildingId
-                    )
+            if (loading && owners.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(ownersWithUnits) { ownerDto ->
+                        OwnerItem(
+                            owner = ownerDto,
+                            sharedViewModel = sharedViewModel,
+                            onDelete = {
+                                ownerApi.deleteOwner(
+                                    context = context,
+                                    ownerId = ownerDto.owner.ownerId,
+                                    onSuccess = {
+                                        owners = owners.filterNot { it.ownerId == ownerDto.owner.ownerId }
+                                        ownersWithUnits = ownersWithUnits.filterNot {
+                                            it.owner.ownerId == ownerDto.owner.ownerId
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.success_delete),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    onError = { e ->
+                                        Toast.makeText(
+                                            context,
+                                            e.message ?: context.getString(R.string.failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            },
+                            activity = context.findActivity(),
+                            buildingId = building.buildingId
+                        )
+                    }
                 }
             }
 
@@ -1953,38 +2484,49 @@ class BuildingProfileActivity : ComponentActivity() {
                 onClick = { showOwnerDialog = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-//                containerColor = Color(context.getColor(R.color.secondary_color)),
-//                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    .padding(16.dp)
             ) {
                 Icon(Icons.Filled.Add, "Add")
             }
 
             if (showOwnerDialog) {
-                val units by sharedViewModel.getUnitsForBuilding(building.buildingId)
-                    .collectAsState(initial = emptyList())
                 OwnerDialog(
                     units = units,
-                    onDismiss = { showOwnerDialog = false },
                     dangSums = dangSumsMap,
+                    onDismiss = { showOwnerDialog = false },
                     onAddOwner = { newOwner, selectedUnits, isManager, selectedBuilding ->
-                        Log.d("newOwner", newOwner.toString())
-                        Log.d("selectedUnits", selectedUnits.toString())
-                        sharedViewModel.saveOwnerWithUnits(
-                            newOwner,
-                            selectedUnits,
-                            isManager,
-                            true,
-                            building.buildingId
+                        ownerApi.insertOwnerWithUnits(
+                            context = context,
+                            owner = newOwner,
+                            units = selectedUnits,
+                            isManager = isManager,
+                            buildingId = building.buildingId,
+                            onSuccess = { _ ->
+                                showOwnerDialog = false
+
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.insert_owner_successfully),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                // Reload full owners + units from server
+                                loadOwners()
+                            },
+                            onError = { e ->
+                                Toast.makeText(
+                                    context,
+                                    e.message ?: context.getString(R.string.failed),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         )
-                        showOwnerDialog = false
-                    },
-                    sharedViewModel = sharedViewModel,
-                    building = building
+                    }
                 )
             }
         }
     }
+
 
 
     @Composable
@@ -2581,26 +3123,53 @@ fun AddOperationalCostDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+//    val bulk = Building().fetchBuildingById(context, buildingId, onSuccess = {}, onError = {})
+//    // Load necessary data (active units, owners, costs) same as before but filtered for capital if you want
+//    val activeUnits by sharedViewModel.getUnitsForBuilding(buildingId)
+//        .collectAsState(initial = emptyList())
+//    val owners by sharedViewModel.getOwnersForBuilding(buildingId)
+//        .collectAsState(initial = emptyList())
+//    val defaultChargedCosts by sharedViewModel.getChargesCostsWithNullBuildingId()
+//        .collectAsState(emptyList())
+//    var dueDate by remember { mutableStateOf("") }
+//    var success by remember { mutableStateOf(false) }
+//    val chargeableCosts by sharedViewModel.getCostsForBuildingWithChargeFlagAndFiscalYear(
+//        buildingId,
+//        dueDate.split("/")[0]
+//    )
+//        .collectAsState(emptyList())
+//    Log.d("chargeableCosts", chargeableCosts.toString())
+//    val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
+//        buildingId = buildingId,
+//        fundType = FundType.OPERATIONAL
+//    ).collectAsState(initial = 0)
+    val funds by sharedViewModel.fundsForBuilding.collectAsState()
 
-    // Load necessary data (active units, owners, costs) same as before but filtered for capital if you want
-    val activeUnits by sharedViewModel.getUnitsForBuilding(buildingId)
-        .collectAsState(initial = emptyList())
-    val owners by sharedViewModel.getOwnersForBuilding(buildingId)
-        .collectAsState(initial = emptyList())
-    val defaultChargedCosts by sharedViewModel.getChargesCostsWithNullBuildingId()
-        .collectAsState(emptyList())
+    LaunchedEffect(buildingId) {
+        sharedViewModel.loadFundsForBuilding(context, buildingId)
+    }
+
+    val operationalFund = remember(funds) {
+        funds.firstOrNull { it.fundType == FundType.OPERATIONAL }?.balance ?: 0.0
+    }
     var dueDate by remember { mutableStateOf("") }
-    var success by remember { mutableStateOf(false) }
-    val chargeableCosts by sharedViewModel.getCostsForBuildingWithChargeFlagAndFiscalYear(
-        buildingId,
-        dueDate.split("/")[0]
-    )
-        .collectAsState(emptyList())
-    Log.d("chargeableCosts", chargeableCosts.toString())
-    val operationalFund by sharedViewModel.getOperationalOrCapitalFundBalance(
-        buildingId = buildingId,
-        fundType = FundType.OPERATIONAL
-    ).collectAsState(initial = 0)
+
+    val fiscalYear = remember(dueDate) {
+        dueDate.takeIf { it.contains("/") }?.split("/")?.getOrNull(0)
+    }
+
+    val overviewState by produceState<BuildingFullDto?>(initialValue = null, key1 = buildingId, key2 = fiscalYear) {
+        value = sharedViewModel.loadBuildingOverview(
+            context = context,
+            buildingId = buildingId,
+            fiscalYear = fiscalYear
+        )
+    }
+
+    val activeUnits        = overviewState?.units ?: emptyList()
+    val owners             = overviewState?.owners ?: emptyList()
+    val defaultChargedCosts= overviewState?.defaultChargeCosts ?: emptyList()
+    val chargeableCosts    = overviewState?.chargeCostsForYear ?: emptyList()
     val costsWithAddNew = defaultChargedCosts + listOf(
         Costs(
             costId = -1,
@@ -2900,18 +3469,31 @@ fun AddOperationalCostDialog(
                                         })
                                     }
                                 )
-                                success = sharedViewModel.decreaseOperationalFund(
-                                    buildingId,
+                                Fund().decreaseOperationalFundOnServer(
+                                    context = context,
+                                    buildingId = buildingId,
                                     amountDouble,
                                     FundType.OPERATIONAL,
-                                    onSuccess = {},
-                                    onError = {}
+                                    onSuccess = {
+                                        onSave(context.getString(R.string.fund_decreased_successfully))
+//                                        success = true
+                                    },
+                                    onError = {
+//                                        success = false
+                                    }
                                 )
+//                                success = sharedViewModel.decreaseOperationalFund(
+//                                    buildingId,
+//                                    amountDouble,
+//                                    FundType.OPERATIONAL,
+//                                    onSuccess = {},
+//                                    onError = {}
+//                                )
 
-                                onSave(context.getString(R.string.fund_decreased_successfully))
+
                             } else {
-                                success = false
-                                onSave(context.getString(R.string.insufficient_fund))
+//                                success = false
+
                             }
                         }
                     } else {

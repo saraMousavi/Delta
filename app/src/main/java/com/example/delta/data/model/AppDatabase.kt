@@ -31,7 +31,7 @@ import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.Buildings
-import com.example.delta.data.entity.CityComplex
+import com.example.delta.data.entity.CityComplexes
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Credits
 import com.example.delta.data.entity.Debts
@@ -68,7 +68,7 @@ import com.example.delta.init.Converter
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
         PhonebookEntry::class, EmergencyNumber::class,
         Notification::class, UsersNotificationCrossRef::class,
-        CityComplex::class,
+        CityComplexes::class,
         Funds::class,
         Credits::class,
         UsersBuildingsCrossRef::class],

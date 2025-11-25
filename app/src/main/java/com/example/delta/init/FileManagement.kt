@@ -92,8 +92,6 @@ class FileManagement {
 
             val building = Buildings(
                 name = name,
-                phone = phone,
-                email = email,
                 postCode = postcode,
                 street = street,
                 province = "Tehran",
@@ -121,6 +119,7 @@ class FileManagement {
             val numberOfParking = getCellStringValue(row.getCell(3))
             val numberOfWarehouse = getCellStringValue(row.getCell(4))
             val buildingName = getCellStringValue(row.getCell(5))
+            val postCode = getCellStringValue(row.getCell(6))
 
             val units = Units(
                 unitNumber = unitNumber,
@@ -128,7 +127,8 @@ class FileManagement {
                 numberOfRooms = numberOfRoom,
                 numberOfParking = numberOfParking,
                 numberOfWarehouse = numberOfWarehouse,
-                excelBuildingName = buildingName
+                excelBuildingName = buildingName,
+                postCode = postCode
             )
             list.add(units)
         }

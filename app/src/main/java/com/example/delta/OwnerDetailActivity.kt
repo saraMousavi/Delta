@@ -56,7 +56,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,17 +72,19 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.OwnerTabItem
 import com.example.delta.data.entity.OwnerTabType
+import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.UnitWithDang
 import com.example.delta.enums.FilterType
 import com.example.delta.enums.FundType
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.Cost
+import com.example.delta.volley.Fund
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class OwnerDetailsActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -92,12 +93,13 @@ class OwnerDetailsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val ownerId = intent.getLongExtra("ownerId", -1L)
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     OwnerDetailsScreen(
                         ownerId = ownerId,
                         sharedViewModel = sharedViewModel,
-                        onBack = { finish() })
+                        onBack = { finish() }
+                    )
                 }
             }
         }
@@ -124,10 +126,18 @@ fun OwnerDetailsScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(context.getString(R.string.owner_details), style = MaterialTheme.typography.bodyLarge) },
+                title = {
+                    Text(
+                        context.getString(R.string.owner_details),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = context.getString(R.string.back)
+                        )
                     }
                 }
             )
@@ -151,8 +161,8 @@ fun OwnerDetailsScreen(
             when (tabs[selectedTab].type) {
                 OwnerTabType.OVERVIEW -> OwnerOverviewTab(ownerId, sharedViewModel)
                 OwnerTabType.FINANCIALS -> OwnerFinancialsTab(
-                    ownerId,
-                    sharedViewModel,
+                    ownerId = ownerId,
+                    sharedViewModel = sharedViewModel,
                     snackBarHostState = snackbarHostState,
                     coroutineScope = coroutineScope
                 )
@@ -168,30 +178,57 @@ fun OwnerOverviewTab(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val owner by sharedViewModel.getOwner(ownerId).collectAsState(initial = null)
+    val ownerApi = remember { com.example.delta.volley.Owner() }
+
+    var owner by remember { mutableStateOf<Owners?>(null) }
+    var unitsForOwner by remember { mutableStateOf<List<UnitWithDang>>(emptyList()) }
     var isEditing by remember { mutableStateOf(false) }
     val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    val unitsForOwner by sharedViewModel.getUnitsForOwners(ownerId = owner?.ownerId ?: 0)
-        .collectAsState(initial = emptyList())
-    LaunchedEffect(owner) {
-        owner?.let {
-            firstName = it.firstName
-            lastName = it.lastName
-            email = it.email
-            phone = it.phoneNumber
-            mobile = it.mobileNumber
-            address = it.address
-        }
+
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(ownerId) {
+        isLoading = true
+        errorMessage = null
+
+        ownerApi.getOwnerWithUnits(
+            context = context,
+            ownerId = ownerId,
+            onSuccess = { dto ->
+                owner = dto.owner
+                unitsForOwner = dto.units
+                firstName = dto.owner.firstName
+                lastName = dto.owner.lastName
+                email = dto.owner.email
+                phone = dto.owner.phoneNumber
+                mobile = dto.owner.mobileNumber
+                address = dto.owner.address
+                isLoading = false
+            },
+            onError = { e ->
+                errorMessage = e.message ?: "Error loading owner"
+                isLoading = false
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(errorMessage ?: "")
+                }
+            }
+        )
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(8.dp)) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(8.dp)
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -202,22 +239,28 @@ fun OwnerOverviewTab(
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
             LazyColumn(modifier = Modifier.padding(16.dp)) {
-                if (owner == null) {
+                if (owner == null && isLoading) {
                     item {
                         CircularProgressIndicator(
                             modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
                                 .padding(vertical = 24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             text = context.getString(R.string.loading),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
+                } else if (owner == null && errorMessage != null) {
+                    item {
+                        Text(
+                            text = errorMessage ?: "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else if (owner != null) {
                     if (isEditing) {
                         item {
                             OwnerTextField(R.string.first_name, firstName) { firstName = it }
@@ -245,79 +288,107 @@ fun OwnerOverviewTab(
                         item { Spacer(Modifier.height(16.dp)) }
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = {
-                                    sharedViewModel.updateOwner(
-                                        owner!!.copy(
-                                            firstName = firstName,
-                                            lastName = lastName,
-                                            email = email,
-                                            phoneNumber = phone,
-                                            mobileNumber = mobile,
-                                            address = address
-                                        ),
-                                        onError = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.operation_problem))
+                                Button(
+                                    onClick = {
+                                        sharedViewModel.updateOwner(
+                                            owner!!.copy(
+                                                firstName = firstName,
+                                                lastName = lastName,
+                                                email = email,
+                                                phoneNumber = phone,
+                                                mobileNumber = mobile,
+                                                address = address
+                                            ),
+                                            onError = {
+                                                coroutineScope.launch {
+                                                    snackBarHostState.showSnackbar(
+                                                        context.getString(
+                                                            R.string.operation_problem
+                                                        )
+                                                    )
+                                                }
                                             }
-                                        }
+                                        )
+                                        isEditing = false
+                                    }
+                                ) {
+                                    Text(
+                                        context.getString(R.string.insert),
+                                        style = MaterialTheme.typography.bodyLarge
                                     )
-                                    isEditing = false
-                                }) {
-                                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
                                 }
                                 OutlinedButton(onClick = { isEditing = false }) {
-                                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        context.getString(R.string.cancel),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
                                 }
                             }
                         }
                     } else {
                         item {
-                            OwnerInfoRow(Icons.Default.Person, "${owner!!.firstName} ${owner!!.lastName}")
+                            OwnerInfoRow(
+                                Icons.Default.Person,
+                                "${owner!!.firstName} ${owner!!.lastName}"
+                            )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
 
                         item {
-                            OwnerInfoRow(Icons.Default.Email, owner!!.email.ifBlank { context.getString(R.string.no_email) })
+                            OwnerInfoRow(
+                                Icons.Default.Email,
+                                owner!!.email.ifBlank { context.getString(R.string.no_email) }
+                            )
                         }
                         item { Spacer(Modifier.height(12.dp)) }
                         item {
-                            OwnerInfoRow(Icons.Default.Phone, owner!!.phoneNumber.ifBlank { context.getString(R.string.no_phone) })
+                            OwnerInfoRow(
+                                Icons.Default.Phone,
+                                owner!!.phoneNumber.ifBlank { context.getString(R.string.no_phone) }
+                            )
                         }
                         item { Spacer(Modifier.height(12.dp)) }
                         item {
-                            OwnerInfoRow(Icons.Default.MobileFriendly, owner!!.mobileNumber.ifBlank { context.getString(R.string.no) })
+                            OwnerInfoRow(
+                                Icons.Default.MobileFriendly,
+                                owner!!.mobileNumber.ifBlank { context.getString(R.string.no) }
+                            )
                         }
                         item { Spacer(Modifier.height(12.dp)) }
                         item {
-                            OwnerInfoRow(Icons.Default.HomeWork, owner!!.address.ifBlank { context.getString(R.string.no) })
+                            OwnerInfoRow(
+                                Icons.Default.HomeWork,
+                                owner!!.address.ifBlank { context.getString(R.string.no) }
+                            )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
                         item {
                             if (unitsForOwner.isNotEmpty()) {
-                                Text(
-                                    text = context.getString(R.string.units),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(bottom = 4.dp)
-                                )
-                                unitsForOwner.forEach { unit ->
-                                    Row {
-                                        Text(
-                                            text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
-                                                    "${context.getString(R.string.area)}: ${unit.unit.area}",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(16.dp))
-                                        Text(
-                                            text = "${context.getString(R.string.dang)}: ${unit.dang}",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                Column {
+                                    Text(
+                                        text = context.getString(R.string.units),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                    )
+                                    unitsForOwner.forEach { unit ->
+                                        Row {
+                                            Text(
+                                                text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
+                                                        "${context.getString(R.string.area)}: ${unit.unit.area}",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(16.dp))
+                                            Text(
+                                                text = "${context.getString(R.string.dang)}: ${unit.dang}",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-
                     }
                 }
             }
@@ -326,7 +397,9 @@ fun OwnerOverviewTab(
         if (!isEditing && owner != null) {
             FloatingActionButton(
                 onClick = { isEditing = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
             ) {
                 Icon(Icons.Default.Edit, contentDescription = "Edit owner details")
             }
@@ -336,10 +409,22 @@ fun OwnerOverviewTab(
 
 @Composable
 fun OwnerInfoRow(icon: ImageVector, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp)
+        )
         Spacer(Modifier.width(12.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -364,12 +449,48 @@ fun OwnerFinancialsTab(
 ) {
     val context = LocalContext.current
 
-    val debts by sharedViewModel.getDebtsForOwner(ownerId, null, "00").collectAsState(initial = emptyList())
-    val chargeDebts by sharedViewModel.getChargeDebtsForOwners(ownerId).collectAsState(initial = emptyList())
-    val payments by sharedViewModel.getPaysForOwner(ownerId).collectAsState(initial = emptyList())
+    var allDebts by remember { mutableStateOf<List<Debts>>(emptyList()) }
+    var allCosts by remember { mutableStateOf<List<Costs>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val transactions = remember(debts, payments) {
-        (debts.map {
+    LaunchedEffect(ownerId) {
+        isLoading = true
+        errorMessage = null
+
+        Cost().fetchCostsWithDebts(
+            context = context,
+            ownerId = ownerId,
+            unitId = null,
+            onSuccess = { costs, debts ->
+                allCosts = costs
+                allDebts = debts
+                isLoading = false
+            },
+            onError = { e ->
+                errorMessage = e.message ?: "خطا در دریافت اطلاعات"
+                isLoading = false
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(errorMessage ?: "")
+                }
+            }
+        )
+    }
+
+    val unpaidDebts = remember(allDebts) {
+        allDebts.filter { it.paymentFlag == false }
+    }
+
+    val payments = remember(allDebts) {
+        allDebts.filter { it.paymentFlag == true }
+    }
+
+    val chargeDebts = remember(allDebts) {
+        allDebts.filter { it.paymentFlag == false && it.description == "شارژ" }
+    }
+
+    val transactions = remember(allDebts, payments) {
+        (allDebts.map {
             TransactionItem(it.debtId, it.amount, it.dueDate, it.description, FilterType.DEBT)
         } + payments.map {
             TransactionItem(it.debtId, it.amount, it.dueDate, it.description, FilterType.PAYMENT)
@@ -385,20 +506,23 @@ fun OwnerFinancialsTab(
         }
     }
 
-    val totalDebtAmount = debts.sumOf { it.amount }
+    val totalDebtAmount = allDebts.sumOf { it.amount }
     val totalPaymentAmount = payments.sumOf { it.amount }
     var showTransferDialog by remember { mutableStateOf(false) }
-//    val balance = totalDebtAmount - totalPaymentAmount
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = modifier.fillMaxSize()) {
             Card(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Row(
-                        modifier = Modifier
-                            .padding(horizontal = 20.dp),
+                        modifier = Modifier.padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
@@ -411,8 +535,7 @@ fun OwnerFinancialsTab(
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(
-                        modifier = Modifier
-                            .padding(horizontal = 20.dp),
+                        modifier = Modifier.padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
@@ -423,12 +546,13 @@ fun OwnerFinancialsTab(
                             } ${context.getString(R.string.toman)}"
                         )
                     }
-//                Text(text = "${context.getString(R.string.balance)}: ${formatNumberWithCommas(balance)} ${context.getString(R.string.toman)}")
                 }
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 FilterType.entries.forEach { type ->
@@ -441,9 +565,10 @@ fun OwnerFinancialsTab(
                     ) {
                         Text(
                             text = type.getDisplayName(context),
-                            color = if (filterType == type) Color(context.getColor(R.color.white)) else Color(
-                                context.getColor(R.color.grey)
-                            ),
+                            color = if (filterType == type)
+                                Color(context.getColor(R.color.white))
+                            else
+                                Color(context.getColor(R.color.grey)),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -452,87 +577,119 @@ fun OwnerFinancialsTab(
 
             Spacer(Modifier.height(8.dp))
 
-            if (filteredTransactions.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = context.getString(R.string.no_transactions_recorded),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredTransactions) { item ->
-                        TransactionRow(item, onPayment = {
-                            coroutineScope.launch {
-                                val debt = sharedViewModel.getDebtById(item.id)
-                                debt?.let {
-                                    val updatedDebt = it.copy(paymentFlag = true)
-                                    sharedViewModel.updateDebt(updatedDebt)
-                                    sharedViewModel.updateDebtPaymentFlag(it, true)
 
-                                    val cost = sharedViewModel.getCostById(it.costId)
-                                    val fundType = cost?.fundType ?: FundType.OPERATIONAL
+                errorMessage != null -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = errorMessage ?: "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
 
-                                    val success = sharedViewModel.increaseBalanceFund(
-                                        context = context,
-                                        buildingId = it.buildingId,
-                                        amount = it.amount,
-                                        fundType = fundType,
-                                        onSuccess = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(
-                                                    context.getString(
-                                                        if (fundType == FundType.OPERATIONAL)
-                                                            R.string.success_pay_tooperational_fund
-                                                        else
-                                                            R.string.success_pay_tocapital_fund
-                                                    )
-                                                )
-                                            }
-                                        },
-                                        onError = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(
-                                                    context.getString(R.string.failed)
-                                                )
-                                            }
+                filteredTransactions.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = context.getString(R.string.no_transactions_recorded),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredTransactions) { item ->
+                            TransactionRow(
+                                transaction = item,
+                                onPayment = {
+                                    coroutineScope.launch {
+                                        val debt = allDebts.find { it.debtId == item.id }
+                                        if (debt == null) {
+                                            snackBarHostState.showSnackbar(
+                                                context.getString(R.string.failed)
+                                            )
+                                            return@launch
                                         }
-                                    )
+
+                                        val updatedDebt = debt.copy(paymentFlag = true)
+
+                                        sharedViewModel.updateDebtOnServer(context, updatedDebt)
+
+                                        allDebts = allDebts.map {
+                                            if (it.debtId == debt.debtId) updatedDebt else it
+                                        }
+
+                                        val cost = allCosts.find { it.costId == debt.costId }
+                                        val fundType = cost?.fundType ?: FundType.OPERATIONAL
+
+                                        Fund().increaseBalanceFundOnServer(
+                                            context = context,
+                                            buildingId = debt.buildingId,
+                                            amount = debt.amount,
+                                            fundType = fundType,
+                                            onSuccess = {
+                                                coroutineScope.launch {
+                                                    snackBarHostState.showSnackbar(
+                                                        context.getString(
+                                                            if (fundType == FundType.OPERATIONAL)
+                                                                R.string.success_pay_tooperational_fund
+                                                            else
+                                                                R.string.success_pay_tocapital_fund
+                                                        )
+                                                    )
+                                                }
+                                            },
+                                            onError = {
+                                                coroutineScope.launch {
+                                                    snackBarHostState.showSnackbar(
+                                                        context.getString(R.string.failed)
+                                                    )
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
-                            }
-                        })
+                            )
+                        }
                     }
                 }
             }
         }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .background(Color(context.getColor(R.color.white)))
                 .padding(16.dp)
-                .fillMaxWidth(),  // make the column fill max width so button can too
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        val ownerUnits = sharedViewModel.getUnitsForOwners(ownerId).first()  // collect once
-                        var hasTenant = false
-                        for (unitWithDang in ownerUnits) {
-                            val tenantCount = sharedViewModel.getNumberOfUnitsTenantForUnit(unitWithDang.unit.unitId)
-                            if ((tenantCount?.toIntOrNull() ?: 0) > 0) {
-                                hasTenant = true
-                                break
-                            }
-                        }
-                        if (!hasTenant) {
-                            snackBarHostState.showSnackbar(context.getString(R.string.no_tenants))
+                        if (chargeDebts.isEmpty()) {
+                            snackBarHostState.showSnackbar(
+                                context.getString(R.string.no_transactions_recorded)
+                            )
                         } else {
                             showTransferDialog = true
                         }
@@ -540,8 +697,8 @@ fun OwnerFinancialsTab(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp), // typical FAB height
-                shape = RoundedCornerShape(28.dp), // makes pill-shaped button like extended FAB
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -553,9 +710,9 @@ fun OwnerFinancialsTab(
                 )
             }
         }
-
     }
-    if(showTransferDialog){
+
+    if (showTransferDialog) {
         Log.d("chargeDebts", chargeDebts.toString())
         TransferDebtsDialog(
             debts = chargeDebts,
@@ -579,27 +736,61 @@ fun TransferDebtsDialog(
     var selectedDebts by remember { mutableStateOf(debts.toSet()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(context.getString(R.string.transfer_debt_to_tenant), style = MaterialTheme.typography.bodyLarge) },
+        title = {
+            Text(
+                context.getString(R.string.transfer_debt_to_tenant),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
         text = {
             LazyColumn {
                 items(debts) { debt ->
-                    // Checkbox and debt info here, update selectedDebts accordingly
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedDebts = if (selectedDebts.contains(debt)) {
+                                    selectedDebts - debt
+                                } else {
+                                    selectedDebts + debt
+                                }
+                            }
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = debt.description,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = formatNumberWithCommas(debt.amount),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(selectedDebts.toList()) }, enabled = selectedDebts.isNotEmpty()) {
-                Text(context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+            Button(
+                onClick = { onConfirm(selectedDebts.toList()) },
+                enabled = selectedDebts.isNotEmpty()
+            ) {
+                Text(
+                    context.getString(R.string.confirm),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
     )
 }
-
 
 @Composable
 fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
@@ -614,7 +805,9 @@ fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
     ) {
         Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -662,7 +855,6 @@ fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
     }
 }
 
-// Data class for unified transactions
 data class TransactionItem(
     val id: Long,
     val amount: Double,
@@ -685,19 +877,24 @@ fun OwnerSectionSelector(
         itemsIndexed(tabs) { index, tab ->
             val isSelected = index == selectedIndex
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 modifier = Modifier
                     .width(90.dp)
                     .clickable { onTabSelected(index) }
                     .border(
                         width = if (isSelected) 2.dp else 0.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surface,
                         shape = MaterialTheme.shapes.medium
                     ),
                 elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -707,14 +904,16 @@ fun OwnerSectionSelector(
                             OwnerTabType.FINANCIALS -> Icons.Default.Money
                         },
                         contentDescription = tab.title,
-                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(32.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = tab.title,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                         maxLines = 1
@@ -724,4 +923,3 @@ fun OwnerSectionSelector(
         }
     }
 }
-

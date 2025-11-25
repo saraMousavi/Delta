@@ -365,7 +365,7 @@
     <string name="calculate">محاسبه</string>
     <string name="central_antenna">آنتن مرکزی</string>
     <string name="protection_system">سیستم های نظارتی/حفاظتی</string>
-    <string name="net">هزینه های تگهداری</string>
+    <string name="net">هزینه های نگهداری</string>
     <string name="charges_calculation">محاسبه شارژ</string>
     <string name="no_data">اطلاعاتی برای نمایش وجود ندارد.</string>
     <string name="charge_method">روش محاسبه شارژ</string>
@@ -456,4 +456,28 @@
     <string name="confirmed">تایید شد</string>
     <string name="returned">بازگشت</string>
     <string name="no_role_found">نقشی ثبت نشده است.</string>
+    <string name="capital_calcualted_successfully">محاسبه بودجه عمرانی باموفقیت انجام شد و در کارتابل مالکین قرار گرفت.</string>
+    <string name="otp_no_request">برای این شماره کدی درخواست نشده است.</string>
+    <string name="otp_expired">کد منقضی شده، لطفا دوباره درخواست دهید.</string>
+    <string name="otp_too_many">تعداد تلاش ها زیاد شده، بعدا دوباره امتحان کنید.</string>
+    <string name="otp_invalid">کد وارد شده اشتباه است.</string>
+    <string name="error_unknown">خطای شبکه</string>
+    <string name="login_user_not_found">حسابی با این شماره پیدا نشد. لطفاً ثبت‌نام کنید.</string>
+    <string name="go_to_sign_up"> ثبت نام</string>
+    <string name="finish">پایان</string>
+    <string name="invalid_post_code">کد پستی نامعتبر</string>
+    <string name="invalid_number_of_units">تعداداتاق ها نامعتبر</string>
+    <string name="fill_required_fields">موارد الزامی پر شود.</string>
+    <string name="insert_owner_successfully">ثبت مالک با موفقیت انجام شد.</string>
+    <string name="insert_unit_successfully">ثبت واحد با موفقیت انجام شد.</string>
+    <string name="insert_tenant_successfully">ثبت ساکن با موفقیت انجام شد.</string>
+    <string name="selected_units_count">تعداد واحد</string>
+    <string name="select_at_least_one_unit">انتخاب حداقل یک واحد الزامی است.</string>
+    <string name="dang_required_for_selected_units">انتخاب دانگ برای واحد انتخاب شده الزامی است.</string>
+    <string name="select_units_and_dang">انتخاب واحد و دانگ</string>
+    <string name="no_units_available">واحدی برای این ساختمان ثبت نشده است.</string>
+    <string name="max_dang_for_unit">حداکثر دانگ برای واحد</string>
+    <string name="dang_limit_hint">حداقل دانگ وارد شده</string>
+    <string name="no_units_with_owner">ابتدا قسمت مالکین تکمیل گردد.</string>
+
 </resources>

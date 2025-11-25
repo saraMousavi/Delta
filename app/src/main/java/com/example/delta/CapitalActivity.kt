@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -32,10 +33,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Buildings
@@ -58,6 +62,8 @@ import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.BuildingWithCosts
+import com.example.delta.volley.Cost
 import kotlinx.coroutines.launch
 
 class CapitalActivity : ComponentActivity() {
@@ -98,7 +104,6 @@ class CapitalActivity : ComponentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CapitalInfoList(
@@ -108,72 +113,132 @@ fun CapitalInfoList(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+    var buildingsWithCosts by remember { mutableStateOf<List<BuildingWithCosts>>(emptyList()) }
     var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
+    var costItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
+
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     var showDialog by remember { mutableStateOf(false) }
-    val costItems by sharedViewModel.getCapitalCostsForBuilding(
-        selectedBuilding?.buildingId ?: 0L
-    ).collectAsState(initial = emptyList())
 
-    var amountInputs by remember { mutableStateOf<List<String>>(emptyList()) }
-
-    val buildings by sharedViewModel.getAllBuildings().collectAsState(initial = emptyList())
     val snackBarHostState = remember { SnackbarHostState() }
+
+    // 1) load buildings + costs from server once
+    LaunchedEffect(Unit) {
+        Cost().fetchBuildingsWithCosts(
+            context = context,
+            onSuccess = { list ->
+                buildingsWithCosts = list
+                isLoading = false
+
+                if (list.isNotEmpty()) {
+                    selectedBuilding = list.first().building
+                    costItems = list.first().costs
+                }
+            },
+            onError = { e ->
+                errorMessage = e.message
+                isLoading = false
+            }
+        )
+    }
+
+    // 2) whenever selectedBuilding changes, update costItems from buildingsWithCosts
+    LaunchedEffect(selectedBuilding, buildingsWithCosts) {
+        selectedBuilding?.let { b ->
+            val match = buildingsWithCosts.find { it.building.buildingId == b.buildingId }
+            costItems = match?.costs ?: emptyList()
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .padding(top = 75.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ExposedDropdownMenuBoxExample(
-                        sharedViewModel = sharedViewModel,
-                        items = buildings,
-                        selectedItem = selectedBuilding,
-                        onItemSelected = { selectedBuilding = it },
-                        label = context.getString(R.string.building),
-                        itemLabel = { it.name },
-                        modifier = Modifier.weight(1f)
-                    )
+        when {
+            isLoading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(context.getString(R.string.fiscal_year),
-                        style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.5f))
-                    Text(
-                        text = context.getString(R.string.amount),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(0.5f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.End
-                    )
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            }
-            val costList = costItems
-            Log.d("costList",costList.toString())
-            items(costList.size) { index ->
-                CapitalCostRow(
-                    costInput = costList[index]
+
+            errorMessage != null -> {
+                Text(
+                    text = errorMessage ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.align(Alignment.Center)
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+
+            else -> {
+                val buildings = buildingsWithCosts.map { it.building }
+
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ExposedDropdownMenuBoxExample(
+                                sharedViewModel = sharedViewModel,
+                                items = buildings,
+                                selectedItem = selectedBuilding,
+                                onItemSelected = { building ->
+                                    selectedBuilding = building
+                                },
+                                label = context.getString(R.string.building),
+                                itemLabel = { it.name },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                context.getString(R.string.fiscal_year),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.5f)
+                            )
+                            Text(
+                                text = context.getString(R.string.amount),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.5f),
+                                textAlign = TextAlign.End
+                            )
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
+
+                    items(costItems.size) { index ->
+                        CapitalCostRow(
+                            costInput = costItems[index]
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+
+                FloatingActionButton(
+                    onClick = { showDialog = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(24.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add capital cost")
+                }
             }
         }
-        FloatingActionButton(
-            onClick = { showDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Add capital cost")
-        }
+
+        SnackbarHost(
+            hostState = snackBarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     if (showDialog) {
@@ -196,27 +261,56 @@ fun CapitalInfoList(
                             tempAmount = amount.toDouble(),
                             dueDate = "$fiscalYear/01/01"
                         )
-                        sharedViewModel.insertDebtForCapitalCost(building.buildingId,
-                            newCost, amount.toDouble(),
-                            "$fiscalYear/01/01", description = context.getString(R.string.capital_info),
+
+                        sharedViewModel.insertDebtForCapitalCost(
+                            building.buildingId,
+                            newCost,
+                            amount.toDouble(),
+                            "$fiscalYear/01/01",
+                            description = context.getString(R.string.capital_info),
                             onSuccess = { costs, debts ->
                                 coroutineScope.launch {
-                                    sharedViewModel.insertCostToServer (context, costs, debts,
+                                    sharedViewModel.insertCostToServer(
+                                        context,
+                                        costs,
+                                        debts,
                                         onSuccess = {
                                             coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.capital_calcualted_successfully)
+                                                )
                                             }
-                                        }, onError = {
+                                            // Optional: refresh from server again after insert
+                                            Cost().fetchBuildingsWithCosts(
+                                                context = context,
+                                                onSuccess = { list ->
+                                                    buildingsWithCosts = list
+                                                    selectedBuilding?.let { sb ->
+                                                        val match = list.find { it.building.buildingId == sb.buildingId }
+                                                        costItems = match?.costs ?: emptyList()
+                                                    }
+                                                },
+                                                onError = { /* ignore for now */ }
+                                            )
+                                        },
+                                        onError = {
                                             coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.failed)
+                                                )
                                             }
-                                        })
-
+                                        }
+                                    )
                                 }
                             },
                             onError = {
-
-                            })
+                                coroutineScope.launch {
+                                    snackBarHostState.showSnackbar(
+                                        context.getString(R.string.failed)
+                                    )
+                                }
+                            }
+                        )
                         showDialog = false
                     }
                 }
@@ -224,6 +318,7 @@ fun CapitalInfoList(
         )
     }
 }
+
 
 @Composable
 fun CapitalCostRow(

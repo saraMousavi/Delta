@@ -189,13 +189,14 @@ fun BuildingList(
     val userId = Preference().getUserId(context)
 
     var showGuestDialog by remember { mutableStateOf(false) }
-    var user by remember { mutableStateOf<User?>(null) }
+//    var user by remember { mutableStateOf<User?>(null) }
 
     // load user once
+    Log.d("userId", userId.toString())
     LaunchedEffect(userId) {
-        val fetched = sharedViewModel.getUserById(userId).first()
-        user = fetched
-        if (fetched != null && fetched.roleId >= 6) showGuestDialog = true
+//        val fetched = sharedViewModel.getUserById(userId).first()
+//        user = fetched
+//        if (fetched != null && fetched.roleId >= 6) showGuestDialog = true
     }
 
     if (showGuestDialog) {
@@ -221,7 +222,7 @@ fun BuildingList(
     var loadError by remember { mutableStateOf<String?>(null) }
 
     // run only when we actually have a non-blank mobile
-    val mobile = user?.mobileNumber?.takeIf { it.isNotBlank() }
+    val mobile = Preference().getUserMobile(context)
     LaunchedEffect(mobile, roleId) {
         if (mobile == null) return@LaunchedEffect  // prevent first bogus call
         Building().fetchBuildingsForUser(

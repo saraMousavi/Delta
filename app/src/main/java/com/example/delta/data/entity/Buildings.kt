@@ -29,7 +29,7 @@ import kotlinx.parcelize.Parcelize
             onDelete = ForeignKey.SET_NULL
         ),
         ForeignKey(
-            entity = CityComplex::class,
+            entity = CityComplexes::class,
             parentColumns = ["complexId"],
             childColumns = ["complexId"],
             onDelete = ForeignKey.SET_NULL
@@ -45,11 +45,9 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class Buildings(
-    @PrimaryKey(autoGenerate = true) val buildingId: Long = 0,
+    @PrimaryKey(autoGenerate = false) val buildingId: Long = 0,
     val complexId: Long? = null,
     val name: String,
-    val phone: String,
-    val email: String,
     val postCode: String,
     val street: String,
     val province: String = "Tehran",  // Default province

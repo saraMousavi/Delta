@@ -8,7 +8,6 @@ import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleCrossRef
 import com.example.delta.enums.Roles
 import org.json.JSONArray
 import org.json.JSONObject
@@ -47,17 +46,35 @@ class Users {
     }
 
     /** Insert user on server (if needed elsewhere) */
-    fun insertUser(context: Context, userJson: JSONObject, onSuccess: () -> Unit = {}, onError: (Throwable) -> Unit = {}) {
+    fun insertUser(
+        context: Context,
+        userJson: JSONObject,
+        onSuccess: (Long) -> Unit = {},
+        onError: (Throwable) -> Unit = {}
+    ) {
         val url = "$BASE_URL/user"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
-            Request.Method.POST, url, userJson,
-            { onSuccess() },
-            { error -> onError(error) }
+            Request.Method.POST,
+            url,
+            userJson,
+            { resp ->
+                try {
+                    val userId = resp.getLong("userId")
+                    onSuccess(userId)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { error ->
+                onError(error)
+            }
         )
+
         queue.add(req)
     }
+
 
     /**
      * Login against server.

@@ -53,18 +53,45 @@ class OTPApi {
             put("phone", phone)
             put("code", code)
         }
-
-        val req = JsonObjectRequest(
-            Request.Method.POST, url, body,
-            { resp ->
-                val ok = resp.optBoolean("ok", false)
-                if (ok) onSuccess() else onError(resp.optString("error", context.getString(R.string.wrong_expired_code)))
+        val request = object : JsonObjectRequest(
+            Method.POST,
+            url,
+            body,
+            { response ->
+                val ok = response.optBoolean("ok", false)
+                if (ok) {
+                    onSuccess()
+                } else {
+                    val errorCode = response.optString("errorCode", "UNKNOWN")
+                    onError(mapOtpErrorMessage(context, errorCode))
+                }
             },
-            { err -> onError(err.message ?: context.getString(R.string.network_error)) }
-        ).apply {
+            { error ->
+                val errorCode = try {
+                    val data = String(error.networkResponse?.data ?: ByteArray(0))
+                    val json = JSONObject(data)
+                    json.optString("errorCode", "UNKNOWN")
+                } catch (e: Exception) {
+                    "UNKNOWN"
+                }
+                onError(mapOtpErrorMessage(context, errorCode))
+            }
+        ){}
+        request.apply {
             retryPolicy = DefaultRetryPolicy(10_000, 0, 1f)
         }
 
-        VolleySingleton.getInstance(context).addToRequestQueue(req)
+        VolleySingleton.getInstance(context).addToRequestQueue(request)
+    }
+}
+
+
+private fun mapOtpErrorMessage(context: Context, code: String): String {
+    return when (code) {
+        "NO_OTP_REQUEST"   -> context.getString(R.string.otp_no_request)
+        "EXPIRED"          -> context.getString(R.string.otp_expired)
+        "TOO_MANY_ATTEMPTS"-> context.getString(R.string.otp_too_many)
+        "INVALID_CODE"     -> context.getString(R.string.otp_invalid)
+        else               -> context.getString(R.string.error_unknown)
     }
 }

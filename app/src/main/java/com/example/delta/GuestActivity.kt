@@ -55,7 +55,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-private lateinit var roleDao: RoleDao // Initialize these DAOs as needed
+private lateinit var roleDao: RoleDao
 private lateinit var authorizationDao: AuthorizationDao
 
 class GuestActivity : ComponentActivity() {
@@ -66,10 +66,11 @@ class GuestActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val database = AppDatabase.getDatabase(this)
 
-        roleDao = database.roleDao() // Initialize Role DAO
-        authorizationDao = database.authorizationDao() // Initialize Role DAO
+        roleDao = database.roleDao()
+        authorizationDao = database.authorizationDao()
+
         setContent {
-            AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+            AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     val context = LocalContext.current
                     Scaffold(
@@ -82,7 +83,14 @@ class GuestActivity : ComponentActivity() {
                                     )
                                 },
                                 navigationIcon = {
-                                    IconButton(onClick = { startActivity(Intent(context, LoginPage::class.java)) }) {
+                                    IconButton(onClick = {
+                                        startActivity(
+                                            Intent(
+                                                context,
+                                                LoginPage::class.java
+                                            )
+                                        )
+                                    }) {
                                         Icon(
                                             Icons.AutoMirrored.Filled.ArrowBack,
                                             contentDescription = "Back"
@@ -92,7 +100,10 @@ class GuestActivity : ComponentActivity() {
                             )
                         }
                     ) { innerPadding ->
-                        GuestScreen(modifier = Modifier.padding(innerPadding), sharedViewModel)
+                        GuestScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            sharedViewModel = sharedViewModel
+                        )
                     }
                 }
             }
@@ -121,13 +132,20 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
 
     LaunchedEffect(confirmedRole) {
         confirmedRole?.let { role ->
-
             try {
                 isLoading = true
-                insertUserBasedOnRole(confirmedRole, context)
+                insertUserBasedOnRole(role, context)
                 insertingSampleBuilding(context, sharedViewModel)
+
+                val activity = context as? Activity
+                activity?.let { act ->
+                    val intent = Intent(act, LoginPage::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                    act.startActivity(intent)
+                    act.finish()
+                }
             } catch (e: Exception) {
-//                Toast.makeText(context, context.getString(R.string.failed_opening), Toast.LENGTH_SHORT).show()
                 Log.e("GuestScreen", "Error inserting sample building: $e")
             } finally {
                 isLoading = false
@@ -216,7 +234,6 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
                 modifier = Modifier.fillMaxWidth(0.7f),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-
                 if (isLoading) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Dialog(onDismissRequest = {}) {
@@ -255,42 +272,36 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
                 onDismissRequest = { showRoleDialog = false },
                 onConfirm = { confirmedRoleSelected ->
                     confirmedRole = confirmedRoleSelected
+                    selectedRole = confirmedRoleSelected
                     showRoleDialog = false
                 }
             )
         }
-
     }
 }
 
-private fun insertUserBasedOnRole(role: Roles?, context: Context) {
+private fun insertUserBasedOnRole(role: Roles, context: Context) {
     when (role) {
         Roles.GUEST_BUILDING_MANAGER -> {
-            // Save login state etc.
-            saveLoginState(context, true, userId = 1, mobile = "01111111111")
-            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+            saveLoginState(context, true, userId = 1, mobile = "01111111111", roleId = 6)
+            saveFirstLoginState(context, true)
         }
-
         Roles.GUEST_PROPERTY_OWNER -> {
-            saveLoginState(context, true, userId = 2, mobile = "0222222222")
-            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+            saveLoginState(context, true, userId = 2, mobile = "0222222222", roleId = 7)
+            saveFirstLoginState(context, true)
         }
-
         Roles.GUEST_PROPERTY_TENANT -> {
-            saveLoginState(context, true, userId = 3, mobile = "03333333333")
-            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+            saveLoginState(context, true, userId = 3, mobile = "03333333333", roleId = 8)
+            saveFirstLoginState(context, true)
         }
-
         Roles.GUEST_INDEPENDENT_USER -> {
-            saveLoginState(context, true, userId = 4, mobile = "04444444444")
-            saveFirstLoginState(context = context, isFirstLoggedIn = true)
+            saveLoginState(context, true, userId = 4, mobile = "04444444444", roleId = 9)
+            saveFirstLoginState(context, true)
         }
-
-        else -> {
-            // No action or error handling
-        }
+        else -> Unit
     }
 }
+
 
 @Composable
 fun FeatureItem(icon: ImageVector, text: String, onClick: () -> Unit) {
@@ -350,7 +361,10 @@ fun RoleSelectionBottomSheet(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = context.getString(R.string.select_role_for_different_feature), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = context.getString(R.string.select_role_for_different_feature),
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(Modifier.height(8.dp))
             ExposedDropdownMenuBoxExample(
                 sharedViewModel = sharedViewModel,
@@ -360,13 +374,11 @@ fun RoleSelectionBottomSheet(
                     selectedRole = it
                 },
                 label = context.getString(R.string.select_role),
-                modifier = Modifier
-                    .fillMaxWidth(1f),
+                modifier = Modifier.fillMaxWidth(1f),
                 itemLabel = { it.getDisplayName(context) }
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Buttons row: Cancel and Confirm
             Row(
                 horizontalArrangement = Arrangement.End,
                 modifier = Modifier.fillMaxWidth()
@@ -377,7 +389,10 @@ fun RoleSelectionBottomSheet(
                         onDismissRequest()
                     }
                 }) {
-                    Text(text = context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -393,13 +408,15 @@ fun RoleSelectionBottomSheet(
                     },
                     enabled = selectedRole != null
                 ) {
-                    Text(text = context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = context.getString(R.string.confirm),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         }
     }
 }
-
 
 suspend fun insertingSampleBuilding(context: Context, sharedViewModel: SharedViewModel) {
     val prefs = context.getSharedPreferences("guest_prefs", Context.MODE_PRIVATE)
@@ -425,7 +442,6 @@ suspend fun insertingSampleBuilding(context: Context, sharedViewModel: SharedVie
 
             context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 withContext(Dispatchers.IO) {
-
                     FileManagement().handleExcelFile(
                         inputStream,
                         context as Activity,
@@ -514,4 +530,3 @@ private suspend fun insertDefaultAuthorizationData() {
         }
     }
 }
-

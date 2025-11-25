@@ -104,7 +104,7 @@ fun DetailDrawer(
             .collectAsState(initial = emptyList())
 
         val isDarkModeEnabled = sharedViewModel.isDarkModeEnabled
-        val unreadCount = notificationsWithRead.count { !it.isRead }
+        val unreadCount = notificationsWithRead.count { !it.crossRef.isRead }
         var showSheet by remember { mutableStateOf(false) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -369,11 +369,6 @@ fun DetailDrawer(
     }
 }
 
-
-/**
- * Drawer content showing notifications separated by type,
- * and expandable cards marking notifications as read on expansion.
- */
 @Composable
 fun NotificationsDrawerContent(
     sharedViewModel: SharedViewModel,
@@ -383,24 +378,34 @@ fun NotificationsDrawerContent(
     val managerNotifications by sharedViewModel.managerNotifications.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    // "Create Notification" Button
+    val userId = Preference().getUserId(context)
+
+    LaunchedEffect(userId) {
+        if (userId != 0L) {
+            sharedViewModel.refreshNotificationsForUser(userId)
+        }
+    }
+
+    val onRead: (Long) -> Unit = { notificationId ->
+        if (userId != 0L) {
+            sharedViewModel.markNotificationReadForUser(userId, notificationId)
+        }
+    }
 
     if (showDialog) {
-        // When calling NotificationCreationDialog, change this to:
-
         NotificationCreationDialog(
             onDismiss = { showDialog = false },
             onCreate = { notification, selectedOwnerIds, selectedTenantIds ->
-                // Merge owners and tenants user IDs
                 val targetUserIds = selectedOwnerIds + selectedTenantIds
-                Log.d("targetUserIds", targetUserIds.toString())
-                sharedViewModel.insertNotification(notification, listOf("5".toLong()))
-//                sharedViewModel.insertNotification(notification, targetUserIds)
+                sharedViewModel.sendNotificationToUsers(
+                    notification = notification,
+                    targetUserIds = targetUserIds,
+                    buildingId = null
+                )
                 showDialog = false
             },
             sharedViewModel = sharedViewModel
         )
-
     }
 
     Column(
@@ -426,7 +431,7 @@ fun NotificationsDrawerContent(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Column (modifier = Modifier.padding(12.dp)){
+        Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 context.getString(R.string.manager_notification),
                 style = MaterialTheme.typography.bodyLarge
@@ -440,12 +445,12 @@ fun NotificationsDrawerContent(
                     color = Color.Gray
                 )
             } else {
-                managerNotifications.forEach { notificationRead ->
+                managerNotifications.forEach { item ->
                     NotificationCard(
-                        notification = notificationRead.notification,
-                        onNotificationRead = onNotificationRead,
-                        sharedViewModel = sharedViewModel,
-                        isRead = notificationRead.isRead
+                        notification = item.notification,
+                        onNotificationRead = onRead,
+                        isRead = item.crossRef.isRead,
+                        sharedViewModel = sharedViewModel
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -466,12 +471,12 @@ fun NotificationsDrawerContent(
                     color = Color.Gray
                 )
             } else {
-                systemNotifications.forEach { notificationRead ->
+                systemNotifications.forEach { item ->
                     NotificationCard(
-                        notification = notificationRead.notification,
-                        onNotificationRead = onNotificationRead,
-                        sharedViewModel = sharedViewModel,
-                        isRead = notificationRead.isRead
+                        notification = item.notification,
+                        onNotificationRead = onRead,
+                        isRead = item.crossRef.isRead,
+                        sharedViewModel = sharedViewModel
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -479,8 +484,6 @@ fun NotificationsDrawerContent(
         }
     }
 }
-
-
 
 @Composable
 fun NotificationCard(
@@ -492,119 +495,97 @@ fun NotificationCard(
     val context = LocalContext.current
     val userId = Preference().getUserId(context = context)
     var expanded by remember { mutableStateOf(false) }
-    var menuExpanded by remember { mutableStateOf(false) } // For dropdown menu
-
+    var menuExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    // Side effect: when expanded and notification is unread, mark as read
+
     LaunchedEffect(expanded) {
         if (expanded && !isRead) {
             onNotificationRead(notification.notificationId)
         }
     }
 
-    val notif by sharedViewModel
-        .getUsersNotificationsByNotification(notificationId = notification.notificationId, userId = userId)
-        .collectAsState(initial = null)
-
-    LaunchedEffect(expanded, notif) {
-        if (expanded && notif != null && !notif!!.isRead) {
-            onNotificationRead(notification.notificationId)
-        }
-    }
-
-    notif?.let { userNotif ->
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = if (userNotif.isRead)
-                CardDefaults.cardElevation(defaultElevation = 0.dp)
-            else
-                CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (userNotif.isRead) Color.LightGray else MaterialTheme.colorScheme.surface
-            )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = if (isRead)
+            CardDefaults.cardElevation(defaultElevation = 0.dp)
+        else
+            CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRead) Color.LightGray else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .clickable { expanded = !expanded }
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .clickable { expanded = !expanded }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = notification.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
+                Text(
+                    text = notification.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
 
-                    if (!userNotif.isRead) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(Color.Red, shape = CircleShape)
-                        )
-                    }
-
-                    // Three-dot icon for menu
-                    IconButton(
-                        onClick = {
-                            menuExpanded = true
-                        },
-                        // Prevent click from expanding/collapsing the card
+                if (!isRead) {
+                    Box(
                         modifier = Modifier
-                            .padding(start = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options"
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(context.getString(R.string.delete_notification), style = MaterialTheme.typography.bodyLarge) },
-                            onClick = {
-                                menuExpanded = false
-                                // Call ViewModel function to delete the notification for this user
-                                // Launch in coroutine scope to call suspend function
-                                scope.launch {
-                                    sharedViewModel.deleteUserNotificationCrossRef(
-                                        userId = userId,
-                                        notificationId = notification.notificationId
-                                    )
-                                }
-                            }
-                        )
-                    }
+                            .size(10.dp)
+                            .background(Color.Red, shape = CircleShape)
+                    )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More options"
+                    )
+                }
 
-                Text(
-                    text = if (expanded) notification.message else notification.message.take(100) + if (notification.message.length > 100) "..." else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2
-                )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                context.getString(R.string.delete_notification),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            scope.launch {
+                                sharedViewModel.deleteUserNotificationCrossRef(
+                                    userId = userId,
+                                    notificationId = notification.notificationId
+                                )
+                            }
+                        }
+                    )
+                }
             }
-        }
 
-    } ?: run {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = "...", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = if (expanded) {
+                    notification.message
+                } else {
+                    notification.message.take(100) +
+                            if (notification.message.length > 100) "..." else ""
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = if (expanded) Int.MAX_VALUE else 2
+            )
         }
     }
 }
-
 @Composable
 fun NotificationCreationDialog(
     onDismiss: () -> Unit,
@@ -612,22 +593,36 @@ fun NotificationCreationDialog(
     sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
-    val userId = Preference().getUserId(context = context)
+    val userId = Preference().getUserId(context)
+    val mobileNumber = Preference().getUserMobile(context)
+
+    LaunchedEffect(mobileNumber) {
+        if (!mobileNumber.isNullOrBlank()) {
+            sharedViewModel.refreshBuildingsForUserFromServer(mobileNumber)
+        }
+    }
+
+    val buildings by sharedViewModel
+        .getBuildingsForUser(userId)
+        .collectAsState(initial = emptyList())
+
+    var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(selectedBuildingId) {
+        selectedBuildingId?.let { bId ->
+            sharedViewModel.loadBuildingFullForNotifications(bId)
+        }
+    }
+
+    val owners by sharedViewModel.ownersForNotification
+        .collectAsState(initial = emptyList())
+
+    val tenants by sharedViewModel.tenantsForNotification
+        .collectAsState(initial = emptyList())
 
     var title by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(NotificationType.MANAGER) }
-
-    val buildings by sharedViewModel.getBuildingsForUser(userId).collectAsState(initial = emptyList())
-    var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
-
-    // Owners and tenants separately
-    val owners by selectedBuildingId?.let { sharedViewModel.getActiveOwnersForBuilding(it).collectAsState(initial = emptyList()) }
-        ?: remember { mutableStateOf(emptyList()) }
-
-    val tenants by produceState(initialValue = emptyList<UserWithUnit>(), key1 = selectedBuildingId) {
-        selectedBuildingId?.let { it1 -> sharedViewModel.getActiveTenantsForBuilding(it1).collect { value = it } }
-    }
 
     var selectedOwnerIds by remember { mutableStateOf(setOf<Long>()) }
     var selectedTenantIds by remember { mutableStateOf(setOf<Long>()) }
@@ -762,9 +757,14 @@ fun NotificationCreationDialog(
                 Spacer(Modifier.height(16.dp))
 
                 // Owners section
+                // Owners section
                 if (selectedBuildingId != null) {
-                    Text(text = context.getString(R.string.owners), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = context.getString(R.string.owners),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Spacer(Modifier.height(8.dp))
+
                     if (owners.isEmpty()) {
                         Text(
                             text = context.getString(R.string.no_owner_recorded),
@@ -772,6 +772,38 @@ fun NotificationCreationDialog(
                             color = Color.Gray
                         )
                     } else {
+                        val allOwnersSelected = selectedOwnerIds.size == owners.size && owners.isNotEmpty()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .clickable {
+                                    selectedOwnerIds = if (allOwnersSelected) {
+                                        emptySet()
+                                    } else {
+                                        owners.map { it.id }.toSet()
+                                    }
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = allOwnersSelected,
+                                onCheckedChange = { checked ->
+                                    selectedOwnerIds = if (checked) {
+                                        owners.map { it.id }.toSet()
+                                    } else {
+                                        emptySet()
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = context.getString(R.string.all_owners),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
                         owners.forEach { owner ->
                             Row(
                                 modifier = Modifier
@@ -789,22 +821,35 @@ fun NotificationCreationDialog(
                                 Checkbox(
                                     checked = selectedOwnerIds.contains(owner.id),
                                     onCheckedChange = { checked ->
-                                        selectedOwnerIds = if (checked) selectedOwnerIds + owner.id else selectedOwnerIds - owner.id
+                                        selectedOwnerIds = if (checked) {
+                                            selectedOwnerIds + owner.id
+                                        } else {
+                                            selectedOwnerIds - owner.id
+                                        }
                                     }
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(text = "${owner.firstName} ${owner.lastName} - ${context.getString(R.string.unit)} ${owner.unitNumber ?: "-"}", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = "${owner.firstName} ${owner.lastName} - ${context.getString(R.string.unit)} ${owner.unitNumber ?: "-"}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
                             }
                         }
                     }
                 }
 
+
                 Spacer(Modifier.height(8.dp))
 
                 // Tenants section
+                // Tenants section
                 if (selectedBuildingId != null) {
-                    Text(text = context.getString(R.string.tenants), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = context.getString(R.string.tenants),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Spacer(Modifier.height(8.dp))
+
                     if (tenants.isEmpty()) {
                         Text(
                             text = context.getString(R.string.no_tenant_recorded),
@@ -812,6 +857,38 @@ fun NotificationCreationDialog(
                             color = Color.Gray
                         )
                     } else {
+                        val allTenantsSelected = selectedTenantIds.size == tenants.size && tenants.isNotEmpty()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .clickable {
+                                    selectedTenantIds = if (allTenantsSelected) {
+                                        emptySet()
+                                    } else {
+                                        tenants.map { it.id }.toSet()
+                                    }
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = allTenantsSelected,
+                                onCheckedChange = { checked ->
+                                    selectedTenantIds = if (checked) {
+                                        tenants.map { it.id }.toSet()
+                                    } else {
+                                        emptySet()
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = context.getString(R.string.all_tenants),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
                         tenants.forEach { tenant ->
                             Row(
                                 modifier = Modifier
@@ -829,15 +906,23 @@ fun NotificationCreationDialog(
                                 Checkbox(
                                     checked = selectedTenantIds.contains(tenant.id),
                                     onCheckedChange = { checked ->
-                                        selectedTenantIds = if (checked) selectedTenantIds + tenant.id else selectedTenantIds - tenant.id
+                                        selectedTenantIds = if (checked) {
+                                            selectedTenantIds + tenant.id
+                                        } else {
+                                            selectedTenantIds - tenant.id
+                                        }
                                     }
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(text = "${tenant.firstName} ${tenant.lastName} - ${context.getString(R.string.unit)} ${tenant.unitNumber ?: "-"}", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = "${tenant.firstName} ${tenant.lastName} - ${context.getString(R.string.unit)} ${tenant.unitNumber ?: "-"}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
                             }
                         }
                     }
                 }
+
             }
         }
     )

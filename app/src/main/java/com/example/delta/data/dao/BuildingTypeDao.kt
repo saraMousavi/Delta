@@ -22,4 +22,13 @@ interface BuildingTypeDao {
 
     @Query("SELECT building_type_name FROM building_types WHERE buildingTypeId = :buildingTypeId")
     suspend fun getBuildingTypeName(buildingTypeId: Long?): String?
+
+    @Query("SELECT buildingTypeId FROM building_types WHERE building_type_name = :buildingTypeName")
+    suspend fun getBuildingTypeIdByName(buildingTypeName: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertALL(list: List<BuildingTypes>)
+
+    @Query("DELETE FROM building_types")
+    suspend fun deleteALL()
 }

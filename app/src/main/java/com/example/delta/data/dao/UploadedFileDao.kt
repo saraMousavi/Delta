@@ -5,7 +5,9 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.UploadedFileEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UploadedFileDao {
@@ -26,4 +28,10 @@ interface UploadedFileDao {
     """
     )
     suspend fun getFileUrlsForBuilding(buildingId: Long): List<UploadedFileEntity>
+
+    @Query("SELECT * FROM uploaded_files")
+    fun getAllUploadedFile(): List<UploadedFileEntity>
+
+    @Query("DELETE FROM uploaded_files")
+    suspend fun clearAll()
 }

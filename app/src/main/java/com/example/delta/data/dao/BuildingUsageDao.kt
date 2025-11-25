@@ -21,4 +21,13 @@ interface BuildingUsageDao {
 
     @Query("SELECT building_usage_name FROM building_usages WHERE buildingUsageId = :buildingUsageId")
     suspend fun getBuildingUsageName(buildingUsageId: Long?): String?
+
+    @Query("SELECT buildingUsageId FROM building_usages WHERE building_usage_name = :buildingUsageName")
+    suspend fun getBuildingUsageByName(buildingUsageName: String?): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertALL(list: List<BuildingUsages>)
+
+    @Query("DELETE FROM building_usages")
+    suspend fun deleteALL()
 }

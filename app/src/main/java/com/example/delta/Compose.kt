@@ -11,6 +11,7 @@ import androidx.core.content.FileProvider
 import android.webkit.MimeTypeMap
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateOffsetAsState
@@ -109,15 +110,21 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.enums.HomePageFields
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.AuthUtils
 import com.example.delta.init.Preference
+import com.example.delta.volley.BuildingFile
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 
@@ -325,38 +332,67 @@ fun SwipeToDeleteItem(
     )
 }
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemDialog(
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
     onInsert: (String) -> Unit
 ) {
-    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
-        Dialog(onDismissRequest = onDismiss) {
+    AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+        Dialog(onDismissRequest = {}) {
+            BackHandler(onBack = onDismiss)
+
             Surface(
                 modifier = Modifier
                     .width(300.dp)
                     .padding(16.dp),
                 shape = RoundedCornerShape(8.dp)
             ) {
+                var itemName by remember { mutableStateOf("") }
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    val itemName by remember { mutableStateOf("") }
-                    InputAndButton(
-                        sharedViewModel = sharedViewModel,
-                        insertItem = onInsert,
-                        itemNameState = itemName,
-                        onDismiss = onDismiss
+                    OutlinedTextField(
+                        value = itemName,
+                        onValueChange = { itemName = it },
+                        label = { Text(stringResource(id = R.string.name)) },
+                        modifier = Modifier.fillMaxWidth()
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text(stringResource(id = R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        TextButton(
+                            onClick = {
+                                if (itemName.isNotBlank()) {
+                                    onInsert(itemName.trim())
+                                }
+                            }
+                        ) {
+                            Text(stringResource(id = R.string.insert),
+                                style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
                 }
             }
         }
     }
 }
+
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -955,8 +991,6 @@ fun ClickableSettingItem(
         }
     }
 }
-
-
 @Composable
 fun CurvedBottomNavigation(
     navController: NavHostController,
@@ -969,6 +1003,7 @@ fun CurvedBottomNavigation(
     val context = LocalContext.current
     val density = LocalDensity.current
     val userId = Preference().getUserId(context = context)
+
     val permissionLevelSetting = AuthUtils.checkFieldPermission(
         userId,
         HomePageFields.SETTING.fieldNameRes,
@@ -982,7 +1017,6 @@ fun CurvedBottomNavigation(
     )
 
     Box(modifier = modifier.fillMaxWidth()) {
-        // Wave indicator
         if (currentRoute != null) {
             val selectedIndex = items.indexOfFirst { it.route == currentRoute }
 
@@ -1025,11 +1059,10 @@ fun CurvedBottomNavigation(
             }
         }
 
-        // Navigation surface
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp),
+                .height(88.dp),
             shape = CurvedBottomNavShape(),
             color = MaterialTheme.colorScheme.surfaceContainerLowest,
             shadowElevation = 8.dp
@@ -1037,37 +1070,35 @@ fun CurvedBottomNavigation(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.SpaceAround
+                    .padding(top = 8.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // In your Row items.forEach
                 items.forEach { screen ->
                     CurvedBottomNavItem(
                         icon = screen.icon,
-                        label = "",//screen.title
+                        label = screen.title,
                         selected = currentRoute == screen.route,
-                        isAddButton = screen == Screen.Add, // Identify Add button
+                        isAddButton = screen == Screen.Add,
                         onClick = {
                             if (screen == Screen.Add) {
-                                if(permissionLevelAddBuilding == PermissionLevel.FULL || permissionLevelAddBuilding == PermissionLevel.WRITE){
-                                    context.startActivity(
-                                        Intent(
-                                            context,
-                                            BuildingFormActivity::class.java
-                                        )
+//                                if (permissionLevelAddBuilding == PermissionLevel.FULL || permissionLevelAddBuilding == PermissionLevel.WRITE) {
+                                context.startActivity(
+                                    Intent(
+                                        context,
+                                        BuildingFormActivity::class.java
                                     )
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
-                                }
-
-                            } else if (screen == Screen.Settings){
-                                if(permissionLevelSetting == PermissionLevel.FULL || permissionLevelSetting == PermissionLevel.WRITE){
-                                    navController.navigate(screen.route)
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
-                                }
-                            }
-                            else {
+                                )
+//                                } else {
+//                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+//                                }
+                            } else if (screen == Screen.Settings) {
+//                                if (permissionLevelSetting == PermissionLevel.FULL || permissionLevelSetting == PermissionLevel.WRITE) {
+                                navController.navigate(screen.route)
+//                                } else {
+//                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
+//                                }
+                            } else {
                                 navController.navigate(screen.route)
                             }
                         }
@@ -1084,49 +1115,57 @@ fun CurvedBottomNavItem(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    isAddButton: Boolean = false // New parameter
+    isAddButton: Boolean = false
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .padding(8.dp)
-                .then(if (isAddButton) Modifier.offset(y = (-16).dp) else Modifier)
+                .padding(4.dp)
+                .then(if (isAddButton) Modifier.offset(y = (-10).dp) else Modifier)
                 .background(
                     color = when {
-                        isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         else -> Color.Transparent
                     },
-                    shape = if (isAddButton) RoundedCornerShape(6.dp) else CircleShape
+                    shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
                 )
                 .border(
                     width = if (isAddButton) 1.dp else 0.dp,
                     color = if (isAddButton) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    shape = if (isAddButton) RoundedCornerShape(6.dp) else CircleShape
+                    shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
                 )
                 .clickable(onClick = onClick)
-                .padding(12.dp)
+                .padding(10.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isAddButton) MaterialTheme.colorScheme.primary
-                else if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = when {
+                    isAddButton -> MaterialTheme.colorScheme.primary
+                    selected -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
 
-        if (selected) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = when {
+                isAddButton -> MaterialTheme.colorScheme.primary
+                selected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+   }
 }
+
+
 
 fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): String? {
     return try {
@@ -1146,35 +1185,59 @@ fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): Stri
 fun UploadFile(
     sharedViewModel: SharedViewModel,
     context: Context,
-    maxFileSizeBytes: Long = 5 * 1024 * 1024, // for example 5MB max size limit
+    maxFileSizeBytes: Long = 5 * 1024 * 1024,
     modifier: Modifier = Modifier,
-    onFileSaved: (String) -> Unit
+    onFileSaved: (UploadedFileEntity) -> Unit
 ) {
+    val fileApi = remember { BuildingFile() }
+
     var isSaving by remember { mutableStateOf(false) }
     val savedFilePaths = sharedViewModel.savedFilePaths
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val coroutineScope = rememberCoroutineScope()
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            // Before saving, check size
             val fileSize = getFileSize(context, it)
             if (fileSize != null && fileSize > maxFileSizeBytes) {
-                errorMessage = "${context.getString(R.string.file_exeed)}: ${maxFileSizeBytes / (1024 * 1024)} MB"
+                errorMessage =
+                    "${context.getString(R.string.file_exeed)}: ${maxFileSizeBytes / (1024 * 1024)} MB"
                 return@let
             }
             isSaving = true
-            val filename = queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
+            val filename =
+                queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
             val savedPath = copyUriToInternalStorage(context, it, filename)
             if (savedPath != null) {
-                savedFilePaths.add(savedPath)
-                errorMessage = null
-                onFileSaved(savedPath)
+                coroutineScope.launch {
+                    try {
+                        fileApi.createFile(
+                            context = context,
+                            fileUrl = savedPath,
+                            buildingId = null,
+                            onSuccess = { uploaded ->
+                                savedFilePaths.add(uploaded.fileUrl)
+                                errorMessage = null
+                                onFileSaved(uploaded)
+                                isSaving = false
+                            },
+                            onError = { e ->
+                                errorMessage = e.message ?: context.getString(R.string.failed)
+                                isSaving = false
+                            }
+                        )
+                    } catch (e: Exception) {
+                        errorMessage = e.message ?: context.getString(R.string.failed)
+                        isSaving = false
+                    }
+                }
             } else {
                 errorMessage = context.getString(R.string.failed)
+                isSaving = false
             }
-            isSaving = false
         }
     }
 
@@ -1185,9 +1248,9 @@ fun UploadFile(
             modifier = Modifier.fillMaxWidth()
         ) {
             Box {
-                Row (horizontalArrangement = Arrangement.SpaceBetween){
+                Row(horizontalArrangement = Arrangement.SpaceBetween) {
                     Button(
-                        onClick = { filePicker.launch("*/*") }, // Allow all file types
+                        onClick = { filePicker.launch("*/*") },
                         enabled = !isSaving
                     ) {
                         if (isSaving) {
@@ -1232,6 +1295,7 @@ fun UploadFile(
         }
     }
 }
+
 
 // Helper function to get file size from Uri
 fun getFileSize(context: Context, uri: Uri): Long? {

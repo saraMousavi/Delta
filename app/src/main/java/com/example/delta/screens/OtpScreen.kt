@@ -1,5 +1,7 @@
 package com.example.delta.screens
 
+import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -29,8 +31,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDirection
-
-
 @Composable
 fun OtpScreen(
     phone: String,
@@ -51,10 +51,32 @@ fun OtpScreen(
             onSuccess = {
                 sending = false
                 secondsLeft = 60
+                code = ""
                 Toast.makeText(ctx, ctx.getString(R.string.code_sent), Toast.LENGTH_SHORT).show()
             },
             onError = {
                 sending = false
+                Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    fun verifyNow(codeToUse: String) {
+        if (codeToUse.length != 6 || verifying) return
+        verifying = true
+        Log.d("code", codeToUse)
+
+        OTPApi().verifyOtp(
+            context = ctx,
+            phone = phone,
+            code = codeToUse,
+            onSuccess = {
+                verifying = false
+                Toast.makeText(ctx, ctx.getString(R.string.confirmed), Toast.LENGTH_SHORT).show()
+                onVerified()
+            },
+            onError = {
+                verifying = false
                 Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show()
             }
         )
@@ -70,7 +92,9 @@ fun OtpScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(112.dp))
@@ -84,52 +108,64 @@ fun OtpScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
         OtpFields(
             value = code,
             length = 6,
             onValueChange = { code = it },
-            onComplete = { code = it },
+            onComplete = { completedCode ->
+                code = completedCode
+                verifyNow(completedCode)
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(Modifier.height(16.dp))
 
         Button(
-            onClick = {
-                verifying = true
-                OTPApi().verifyOtp(
-                    context = ctx,
-                    phone = phone,
-                    code = code,
-                    onSuccess = {
-                        verifying = false
-                        Toast.makeText(ctx, ctx.getString(R.string.confirmed), Toast.LENGTH_SHORT).show()
-                        onVerified()
-                    },
-                    onError = {
-                        verifying = false
-                        Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show()
-                    }
-                )
-            },
+            onClick = { verifyNow(code) },
             enabled = code.length == 6 && !verifying,
-            modifier = Modifier.fillMaxWidth().height(52.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
         ) {
-            if (verifying) CircularProgressIndicator(strokeWidth = 2.dp) else Text(ctx.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+            if (verifying) {
+                CircularProgressIndicator(strokeWidth = 2.dp)
+            } else {
+                Text(
+                    ctx.getString(R.string.confirm),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick = { if (secondsLeft == 0 && !sending) send() },
+            onClick = {
+                if (secondsLeft == 0 && !sending) {
+                    code = ""
+                    send()
+                }
+            },
             enabled = secondsLeft == 0 && !sending,
-            modifier = Modifier.fillMaxWidth().height(48.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
         ) {
-            Text(if (secondsLeft == 0) "ارسال مجدد کد" else "ارسال مجدد تا $secondsLeft ثانیه", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (secondsLeft == 0)
+                    "ارسال مجدد کد"
+                else
+                    "ارسال مجدد تا $secondsLeft ثانیه",
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
 
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack) { Text(ctx.getString(R.string.returned), style = MaterialTheme.typography.bodyLarge) }
+        TextButton(onClick = onBack) {
+            Text(ctx.getString(R.string.returned), style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }
 
@@ -150,9 +186,23 @@ fun OtpFields(
         val list = MutableList(length) { "" }
         digits.forEachIndexed { index, c -> list[index] = c.toString() }
         cells = list
+
+        if (value.isEmpty()) {
+            focusRequesters.firstOrNull()?.requestFocus()
+        }
     }
 
     fun currentCode(): String = cells.joinToString("")
+
+    fun updateCodeAndNotify(newCells: List<String>) {
+        cells = newCells
+        val codeNow = currentCode()
+        onValueChange(codeNow)
+        if (codeNow.length == length) {
+            onComplete(codeNow)
+            focusManager.clearFocus()
+        }
+    }
 
     fun pasteAt(index: Int, text: String) {
         val digits = text.filter { it.isDigit() }
@@ -164,76 +214,98 @@ fun OtpFields(
             list[ptr] = c.toString()
             ptr++
         }
-        cells = list
+        updateCodeAndNotify(list)
         val newCode = currentCode()
-        onValueChange(newCode)
         if (newCode.length == length) {
-            onComplete(newCode)
-            focusManager.clearFocus()
         } else if (ptr <= length - 1) {
             focusRequesters[ptr].requestFocus()
         }
     }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        for (i in 0 until length) {
-            OutlinedTextField(
-                value = cells[i],
-                onValueChange = { new ->
-                    if (new.length > 1) {
-                        pasteAt(i, new)
-                        return@OutlinedTextField
-                    }
-                    val digit = new.take(1).filter { it.isDigit() }
-                    val list = cells.toMutableList()
-                    list[i] = digit
-                    cells = list
-                    val codeNow = currentCode()
-                    onValueChange(codeNow)
-                    if (digit.isNotEmpty()) {
-                        if (i < length - 1) {
-                            focusManager.moveFocus(FocusDirection.Next)
-                        } else if (codeNow.length == length) {
-                            onComplete(codeNow)
-                            focusManager.clearFocus()
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            for (i in 0 until length) {
+                OutlinedTextField(
+                    value = cells[i],
+                    onValueChange = { new ->
+                        if (new.length > 1) {
+                            pasteAt(i, new)
+                            return@OutlinedTextField
                         }
-                    }
-                },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center,textDirection = TextDirection.Ltr),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = if (i == length - 1) ImeAction.Done else ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Next) },
-                    onDone = {
+
+                        val digit = new.take(1).filter { it.isDigit() }
+                        val list = cells.toMutableList()
+                        list[i] = digit
+                        cells = list
                         val codeNow = currentCode()
-                        if (codeNow.length == length) onComplete(codeNow)
-                    }
-                ),
-                modifier = Modifier
-                    .width(52.dp)
-                    .height(64.dp)
-                    .focusRequester(focusRequesters[i])
-                    .onPreviewKeyEvent { event ->
-                        if (
-                            event.type == KeyEventType.KeyDown &&
-                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL &&
-                            cells[i].isEmpty()
-                        ) {
-                            if (i > 0) focusManager.moveFocus(FocusDirection.Previous)
-                            true
-                        } else {
-                            false
+                        onValueChange(codeNow)
+
+                        if (digit.isNotEmpty()) {
+                            if (i < length - 1) {
+                                focusManager.moveFocus(FocusDirection.Next)
+                            } else if (codeNow.length == length) {
+                                onComplete(codeNow)
+                                focusManager.clearFocus()
+                            }
                         }
                     },
-                placeholder = { Text("", textAlign = TextAlign.Center) }
-            )
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        textAlign = TextAlign.Center,
+                        textDirection = TextDirection.Ltr
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = if (i == length - 1) ImeAction.Done else ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Next) },
+                        onDone = {
+                            val codeNow = currentCode()
+                            if (codeNow.length == length) onComplete(codeNow)
+                        }
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(64.dp)
+                        .focusRequester(focusRequesters[i])
+                        .onPreviewKeyEvent { event ->
+                            if (
+                                event.type == KeyEventType.KeyDown &&
+                                event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL
+                            ) {
+                                val list = cells.toMutableList()
+                                if (cells[i].isNotEmpty()) {
+                                    list[i] = ""
+                                    cells = list
+                                    onValueChange(currentCode())
+                                    if (i > 0) {
+                                        focusRequesters[i - 1].requestFocus()
+                                    }
+                                } else {
+                                    var j = i - 1
+                                    while (j >= 0 && list[j].isEmpty()) {
+                                        j--
+                                    }
+                                    if (j >= 0) {
+                                        list[j] = ""
+                                        cells = list
+                                        onValueChange(currentCode())
+                                        focusRequesters[j].requestFocus()
+                                    }
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        },
+                    placeholder = { Text("", textAlign = TextAlign.Center) }
+                )
+            }
         }
     }
 }
-}
+
