@@ -77,7 +77,7 @@ class LoginPage : ComponentActivity() {
             val uri = data?.data ?: return
             try {
                 contentResolver.openInputStream(uri)?.use { input ->
-                    FileManagement().handleExcelFile(input, this, sharedViewModel)
+                    FileManagement().handleExcelFile(input, this, this)
                 } ?: Toast.makeText(this, getString(R.string.failed), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -214,6 +214,7 @@ fun LoginFormScreen(
 
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var userId by remember { mutableLongStateOf(0L) }
     var roleDialogVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -248,7 +249,7 @@ fun LoginFormScreen(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             label = { Text(text = context.getString(R.string.mobile_number), style = MaterialTheme.typography.bodyLarge) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
 
         Spacer(Modifier.height(12.dp))
@@ -300,7 +301,9 @@ fun LoginFormScreen(
                     mobileNumber = username.trim(),
                     password = password,
                     onSuccess = { result ->
-                        serverRoles = result
+                        serverRoles = result.roles
+                        userId = result.user.userId
+                        Log.d("serverRoles", serverRoles.toString())
                         isLoading = false
                         roleDialogVisible = true
                     },
@@ -334,42 +337,49 @@ fun LoginFormScreen(
     }
 
     if (roleDialogVisible) {
-        RolePickerDialog(
-            context = context,
-            roles = serverRoles,
-            onDismiss = { roleDialogVisible = false },
-            onConfirm = { chosen ->
-                roleDialogVisible = false
-                sharedViewModel.insertUser(context = context,
-                    user = User(mobileNumber = username, password = password, roleId = chosen.roleId),
-                    onSuccess = { userID ->
-                        saveLoginState(context, true, userID, mobile = username, roleId = chosen.roleId)
-                        saveFirstLoginState(context, true)
-                        insertDefaultAuthorizationData()
+            RolePickerDialog(
+                context = context,
+                roles = serverRoles,
+                onDismiss = { roleDialogVisible = false },
+                onConfirm = { chosenRole ->
+                    // Save role properly
+                    saveLoginState(
+                        context,
+                        true,
+                        userId,
+                        mobile = username,
+                        roleId = chosenRole.roleId
+                    )
+                    navigateAfterLoginWithCostsCheck(
+                        context = context,
+                        roleId = chosenRole.roleId,
+                        userId = userId
+                    )
 
-                        saveLoginState(
-                            context,
-                            true,
-                            userID,
-                            mobile = username,
-                            roleId = chosen.roleId
-                        )
-                        saveFirstLoginState(context, true)
-                        insertDefaultAuthorizationData()
+                    // Upload token
+                    FirebaseMessaging.getInstance().token
+                        .addOnSuccessListener { token ->
+                            com.example.delta.volley.Users().fetchUserByMobile(
+                                context = context,
+                                mobileNumber = username.trim(),
+                                onSuccess = { user ->
+                                    if (user != null) {
+                                        TokenUploader.uploadFcmToken(
+                                            context = context,
+                                            user = user,
+                                            fcmToken = token
+                                        )
+                                    }
+                                },
+                                onNotFound = {},
+                                onError = {}
+                            )
+                        }
 
-                        navigateAfterLoginWithCostsCheck(
-                            context = context,
-                            roleId = chosen.roleId,
-                            userId = userID
-                        )
+                    roleDialogVisible = false
+                }
+            )
 
-                    },
-                    onError = {
-                        Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_SHORT).show()
-                    })
-
-            }
-        )
     }
 }
 
@@ -403,7 +413,6 @@ fun SignUpScreen(
                         user,
                         onSuccess = { userId ->
                             user.userId = userId
-                            insertDefaultAuthorizationData()
                             FirebaseMessaging.getInstance().token
                                 .addOnSuccessListener { token ->
                                     TokenUploader.uploadFcmToken(
@@ -411,10 +420,12 @@ fun SignUpScreen(
                                         user = user,
                                         fcmToken = token,
                                         onSuccess = {},
-                                        onError = {}
+                                        onError = { e ->
+                                            Log.e("FCM", "Failed to upload token", e)
+                                        }
                                     )
                                 }
-                            saveLoginState(context, true, user.userId, user.mobileNumber, roleId = 1)
+                            saveLoginState(context, true, user.userId, user.mobileNumber, roleId = 3)
                             saveFirstLoginState(context, true)
 
                             scope.launch(Dispatchers.Main) {
@@ -496,7 +507,8 @@ fun SignUpScreen(
                 label = { Text(stringResource(R.string.mobile_number)) },
                 isError = mobileError,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
             if (mobileError) {
                 Text(
@@ -536,8 +548,7 @@ fun SignUpScreen(
                 onClick = {
                     val candidate = User(
                         mobileNumber = mobile,
-                        password = password,
-                        roleId = 1L
+                        password = password
                     )
                     pendingUser = candidate
                     showOtp = true
@@ -615,68 +626,68 @@ fun isFirstLoggedIn(context: Context): Boolean {
     return prefs.getBoolean("first_login", false)
 }
 
-private fun insertDefaultAuthorizationData() {
-    CoroutineScope(Dispatchers.IO).launch {
-        val existingCount = authorizationDao.getAuthorizationCrossRefCount()
-        if (existingCount > 0) {
-            return@launch
-        }
-        val rolesList = roleDao.getRoles()
-        val roleMap = rolesList.associateBy { it.roleName }
-
-        suspend fun insertCrossRefs(
-            roleId: Long,
-            objectId: Long,
-            fields: List<AuthorizationField>,
-            permission: PermissionLevel
-        ) {
-            fields.forEach { field ->
-                authorizationDao.insertRoleAuthorizationFieldCrossRef(
-                    RoleAuthorizationObjectFieldCrossRef(
-                        roleId = roleId,
-                        objectId = objectId,
-                        fieldId = field.fieldId,
-                        permissionLevel = permission.value
-                    )
-                )
-            }
-        }
-
-        val adminManagerRoles = listOf(Roles.ADMIN, Roles.BUILDING_MANAGER)
-        adminManagerRoles.forEach { roleName ->
-            val role = roleMap[roleName] ?: return@forEach
-            AuthObject.getAll().forEach { authObject ->
-                val fields = authorizationDao.getFieldsForObject(authObject.id)
-                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
-            }
-        }
-
-        roleMap[Roles.PROPERTY_TENANT]?.let { tenantRole ->
-            val tenantFieldNames = listOf(
-                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-                BuildingProfileFields.TENANTS_TAB.fieldNameRes
-            )
-            val allFields = authorizationDao.getFieldsForObject(3L)
-            val tenantFields = allFields.filter { it.name in tenantFieldNames }
-            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
-        }
-
-        roleMap[Roles.PROPERTY_OWNER]?.let { ownerRole ->
-            val ownerFieldNames = listOf(
-                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
-                BuildingProfileFields.OWNERS_TAB.fieldNameRes
-            )
-            val allFields = authorizationDao.getFieldsForObject(3L)
-            val ownerFields = allFields.filter { it.name in ownerFieldNames }
-            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
-        }
-    }
-}
+//private fun insertDefaultAuthorizationData() {
+//    CoroutineScope(Dispatchers.IO).launch {
+//        val existingCount = authorizationDao.getAuthorizationCrossRefCount()
+//        if (existingCount > 0) {
+//            return@launch
+//        }
+//        val rolesList = roleDao.getRoles()
+//        val roleMap = rolesList.associateBy { it.roleName }
+//
+//        suspend fun insertCrossRefs(
+//            roleId: Long,
+//            objectId: Long,
+//            fields: List<AuthorizationField>,
+//            permission: PermissionLevel
+//        ) {
+//            fields.forEach { field ->
+//                authorizationDao.insertRoleAuthorizationFieldCrossRef(
+//                    RoleAuthorizationObjectFieldCrossRef(
+//                        roleId = roleId,
+//                        objectId = objectId,
+//                        fieldId = field.fieldId,
+//                        permissionLevel = permission
+//                    )
+//                )
+//            }
+//        }
+//
+//        val adminManagerRoles = listOf(Roles.ADMIN, Roles.BUILDING_MANAGER)
+//        adminManagerRoles.forEach { roleName ->
+//            val role = roleMap[roleName] ?: return@forEach
+//            AuthObject.getAll().forEach { authObject ->
+//                val fields = authorizationDao.getFieldsForObject(authObject.id)
+//                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
+//            }
+//        }
+//
+//        roleMap[Roles.PROPERTY_TENANT]?.let { tenantRole ->
+//            val tenantFieldNames = listOf(
+//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+//                BuildingProfileFields.TENANTS_TAB.fieldNameRes
+//            )
+//            val allFields = authorizationDao.getFieldsForObject(3L)
+//            val tenantFields = allFields.filter { it.name in tenantFieldNames }
+//            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
+//        }
+//
+//        roleMap[Roles.PROPERTY_OWNER]?.let { ownerRole ->
+//            val ownerFieldNames = listOf(
+//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
+//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
+//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
+//                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
+//                BuildingProfileFields.OWNERS_TAB.fieldNameRes
+//            )
+//            val allFields = authorizationDao.getFieldsForObject(3L)
+//            val ownerFields = allFields.filter { it.name in ownerFieldNames }
+//            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
+//        }
+//    }
+//}
 
 
 @Composable
@@ -688,7 +699,8 @@ fun RolePickerDialog(
 ) {
     val uniqueRoles = remember(roles) { roles.distinctBy { it.roleId to it.roleName } }
     var selected by remember(uniqueRoles) { mutableStateOf<Role?>(uniqueRoles.firstOrNull()) }
-
+    Log.d("selected", selected.toString())
+    Log.d("uniqueRoles", uniqueRoles.toString())
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -713,7 +725,7 @@ fun RolePickerDialog(
                 ) {
                     items(
                         items = uniqueRoles,
-                        key = { "${it.roleId}-${it.roleName.name}" }
+                        key = { "${it.roleId}-${it.roleName}" }
                     ) { role ->
                         val isSelected = selected?.roleId == role.roleId && selected?.roleName == role.roleName
                         Row(
@@ -727,7 +739,7 @@ fun RolePickerDialog(
                                 .padding(horizontal = 12.dp, vertical = 10.dp)
                         ) {
                             Text(
-                                text = role.roleName.getDisplayName(context),
+                                text = role.roleName,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface
@@ -745,7 +757,6 @@ fun navigateAfterLoginWithCostsCheck(
     roleId: Long,
     userId: Long
 ) {
-    // برای نقش‌های غیر 1 و 3 همیشه به HomePage می‌رویم
     if (roleId != 1L && roleId != 3L) {
         val intent = Intent(context, HomePageActivity::class.java).apply {
             putExtra("user_id", userId)
@@ -757,14 +768,13 @@ fun navigateAfterLoginWithCostsCheck(
         return
     }
 
-    // برای نقش‌های 1 و 3، قبل از رفتن به Dashboard هزینه‌ها را چک می‌کنیم
-    Cost().fetchBuildingsWithCosts(
+    Cost().fetchCostsWithDebts(
         context = context,
-        onSuccess = { list ->
-            Log.d("costlist", list.toString())
+        userId = userId,
+        onSuccess = { costs, debts ->
             // list: List<BuildingWithCosts>
 
-            val noCosts = list.isNotEmpty() && list[0].costs.isEmpty()
+            val noCosts = costs.isEmpty() || debts.isEmpty()
 
             val targetActivity =
                 if (noCosts) HomePageActivity::class.java

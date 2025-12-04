@@ -8,6 +8,6 @@ import androidx.room.PrimaryKey
 data class AuthorizationObject(
     @PrimaryKey(autoGenerate = true)
     val objectId: Long = 0,
-    val name: Int, // e.g., "HomePageActivity", "BuildingFormActivity"
-    val description: Int
+    val name: String, // e.g., "HomePageActivity", "BuildingFormActivity"
+    val description: String
 )

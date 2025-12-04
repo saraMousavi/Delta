@@ -17,28 +17,21 @@ import kotlinx.parcelize.Parcelize
             parentColumns = ["buildingId"],
             childColumns = ["buildingId"],
             onDelete = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = Owners::class,
-            parentColumns = ["ownerId"],
-            childColumns = ["ownerId"],
-            onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index("buildingId"),
-        Index("ownerId")
+        Index("buildingId")
     ]
 )
 data class Units(
     @PrimaryKey(autoGenerate = true) val unitId: Long = 0,
     @ColumnInfo(name = "buildingId") var buildingId: Long? = null,
-    @ColumnInfo(name = "ownerId") val ownerId: Long? = null,
     @ColumnInfo(name = "unit_number") val unitNumber: String,
+    @ColumnInfo(name = "floor_number") val floorNumber: Int = 0,
     @ColumnInfo(name = "area") val area: String,
     @ColumnInfo(name = "postCode") val postCode: String,
     @ColumnInfo(name = "number_of_room") val numberOfRooms: String,
-    @ColumnInfo(name = "number_of_warehouse") val numberOfWarehouse: String,
+    @ColumnInfo(name = "number_of_warehouse") val numberOfWarehouse: String = "",
     @ColumnInfo(name = "number_of_parking") val numberOfParking: String,
     @ColumnInfo(name = "excel_building_name") val excelBuildingName: String? = ""
 

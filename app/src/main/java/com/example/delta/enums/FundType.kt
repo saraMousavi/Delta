@@ -5,7 +5,8 @@ import com.example.delta.R
 
 enum class FundType(@StringRes val resId: Int) {
     OPERATIONAL(R.string.operational),
-    CAPITAL(R.string.capital);
+    CAPITAL(R.string.capital),
+    NONE(R.string.rental);
 
     fun getDisplayName(context: android.content.Context): String = context.getString(resId)
 

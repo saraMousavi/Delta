@@ -39,21 +39,24 @@ import kotlinx.parcelize.Parcelize
         Index("buildingTypeId"),
         Index("buildingUsageId"),
         Index("userId"),
-        Index("complexId")
+        Index("complexId"),
+        Index(value = ["serialNumber"], unique = true)
     ]
 )
-
 @Parcelize
 data class Buildings(
     @PrimaryKey(autoGenerate = false) val buildingId: Long = 0,
     val complexId: Long? = null,
     val name: String,
+    val serialNumber: String,
+    val floorCount: Int,
     val postCode: String,
     val street: String,
-    val province: String = "Tehran",  // Default province
-    val state: String = "Central",     // Default state
+    val province: String = "Tehran",
+    val state: String = "Central",
     val buildingTypeId: Long? = null,
     val buildingUsageId: Long? = null,
     val fund: Double,
     val userId: Long
 ) : Parcelable
+

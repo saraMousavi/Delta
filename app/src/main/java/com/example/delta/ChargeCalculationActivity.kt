@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundType
@@ -63,7 +65,9 @@ import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
+import com.example.delta.volley.Cost
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 
 class ChargeCalculationActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -103,6 +107,7 @@ class ChargeCalculationActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     val context = LocalContext.current
@@ -141,6 +146,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
     val transformation = remember { NumberCommaTransformation() }
 
     val mobileNumber = remember { Preference().getUserMobile(context) }
+    var allUnitsHaveOwner by remember { mutableStateOf(true) }
 
     LaunchedEffect(mobileNumber) {
         if (mobileNumber.isNullOrBlank()) return@LaunchedEffect
@@ -163,8 +169,10 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             chargeAlreadyCalculated = false
             isEditMode = true
             lastCalculatedCharges = null
+            allUnitsHaveOwner = true
             return@LaunchedEffect
         }
+
         try {
             val dto = Building().fetchBuildingFullSuspend(
                 context = context,
@@ -174,20 +182,50 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             buildingFull = dto
             unitsForSelectedBuilding = dto.units
 
-            val serverCostsForYear = dto.chargeCostsForYear
-            val serverCosts = when {
-                serverCostsForYear.isNotEmpty() -> serverCostsForYear
-                dto.costs.isNotEmpty() -> dto.costs.filter { it.chargeFlag == true }
-                else -> dto.defaultChargeCosts
+            val unitIdsWithOwner = dto.ownerUnits.map { it.unitId }.toSet()
+            val hasOwnerForAllUnits = dto.units.all { it.unitId in unitIdsWithOwner }
+            allUnitsHaveOwner = hasOwnerForAllUnits
+            Log.d("hasOwnerForAllUnits", hasOwnerForAllUnits.toString())
+            if (!hasOwnerForAllUnits) {
+                coroutineScope.launch {
+                    snackBarHostState.showSnackbar(context.getString(R.string.first_compete_owners))
+                }
             }
 
-            costItems = serverCosts
-            amountInputs = serverCosts.map { it.tempAmount.toString() }
-            lastSavedCostItems = serverCosts
-            sharedViewModel.chargeCostsList.value = serverCosts
-            chargeAlreadyCalculated = serverCosts.any { it.tempAmount > 0.0 }
+            val allCostsForBuilding = dto.costs.filter {
+                it.buildingId == selectedBuilding!!.buildingId
+            }
+            Log.d("allCostsForBuilding", allCostsForBuilding.toString())
+            fun fiscalYearOf(cost: Costs): String? {
+                val raw = cost.dueDate
+                if (raw.isBlank()) return null
+                val parts = raw.split("/")
+                return parts.firstOrNull()
+            }
+
+            val costsForSelectedYear = allCostsForBuilding.filter {
+                fiscalYearOf(it) == selectedYear
+                        && it.fundType.name == "OPERATIONAL" && it.chargeFlag == true
+            }
+
+            val baseCosts: List<Costs> = if (costsForSelectedYear.isNotEmpty()) {
+                costsForSelectedYear
+            } else {
+                allCostsForBuilding.filter { fiscalYearOf(it) == null }
+            }
+
+            costItems = baseCosts
+            amountInputs = baseCosts.map { it.tempAmount.toString() }
+            lastSavedCostItems = baseCosts
+            sharedViewModel.chargeCostsList.value = baseCosts
+
+            chargeAlreadyCalculated =
+                costsForSelectedYear.isNotEmpty() && baseCosts.any { it.tempAmount > 0.0 }
+
             isEditMode = !chargeAlreadyCalculated
             lastCalculatedCharges = null
+
+            Log.d("costItems", costItems.toString())
         } catch (_: Exception) {
             buildingFull = null
             unitsForSelectedBuilding = emptyList()
@@ -314,7 +352,6 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
 
                         Spacer(Modifier.height(8.dp))
                     }
-
                 }
 
                 if (isEditMode) {
@@ -357,9 +394,9 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                     if (units.isEmpty()) return@launch
 
                                     val tenantsById =
-                                        dto.tenants.associateBy { it.tenantId }
+                                        dto.tenantUnits.associateBy { it.tenantId }
                                     val tenantUnits = dto.tenantUnits
-
+                                    Log.d("tenantUnits", tenantUnits.toString())
                                     val tenantCountsByUnitId: Map<Long, Int> =
                                         tenantUnits.groupBy { it.unitId }.mapValues { (_, list) ->
                                             val sum = list.sumOf { tu ->
@@ -407,7 +444,7 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             enabled = isCalculateEnabled && selectedBuilding != null
                         ) {
                             Text(
-                                context.getString(R.string.calculate),
+                                text = context.getString(R.string.calculate),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
@@ -434,6 +471,36 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                     context,
                     equalChargeAmount.toDoubleOrNull()?.toLong() ?: 0L
                 )
+
+                val existingFixedCosts = remember(buildingFull, selectedBuilding, selectedYear) {
+                    val dto = buildingFull
+                    val b = selectedBuilding
+                    if (dto == null || b == null) {
+                        emptyList<Costs>()
+                    } else {
+                        dto.costs.filter { c ->
+                            c.buildingId == b.buildingId &&
+                                    c.fundType == FundType.OPERATIONAL &&
+                                    c.calculateMethod == CalculateMethod.EQUAL &&
+                                    c.costName == "شارژ" &&
+                                    c.dueDate.startsWith(selectedYear)
+                        }
+                    }
+                }
+
+                if (existingFixedCosts.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        existingFixedCosts.forEach { c ->
+                            FixedChargeRow(costInput = c)
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                }
+
                 OutlinedTextField(
                     value = equalChargeAmount,
                     onValueChange = { equalChargeAmount = it },
@@ -471,49 +538,80 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                                     val building = selectedBuilding ?: return@launch
                                     if (units.isEmpty()) return@launch
 
-                                    val map =
-                                        units.associate { unit -> unit to equalChargeAmount.toDouble() }
-                                    val costsAmountMap: Map<Costs, Double> =
-                                        costItems.mapIndexed { index, cost ->
-                                            val amount =
-                                                amountInputs.getOrNull(index)?.toDoubleOrNull()
-                                                    ?: 0.0
-                                            cost to amount
-                                        }.toMap()
-                                    sharedViewModel.insertDebtForCharge(
-                                        buildingId = building.buildingId,
-                                        fiscalYear = selectedYear,
-                                        chargeUnitMap = map,
-                                        costsAmountMap = costsAmountMap,
-                                        onError = {
+                                    val equal = equalChargeAmount.toDoubleOrNull() ?: 0.0
+                                    if (equal <= 0.0) {
+                                        snackBarHostState.showSnackbar(
+                                            context.getString(R.string.invalid_amount)
+                                        )
+                                        return@launch
+                                    }
 
-                                        },
-                                        onSuccess = { costs, debts ->
+                                    val fiscalYearInt = selectedYear.toIntOrNull() ?: return@launch
+                                    val fiscalYearStart = "$selectedYear/01/01"
+
+                                    val cost = Costs(
+                                        costId = 0L,
+                                        buildingId = building.buildingId,
+                                        costName = "شارژ",
+                                        tempAmount = equal,
+                                        period = Period.MONTHLY,
+                                        calculateMethod = CalculateMethod.EQUAL,
+                                        paymentLevel = PaymentLevel.UNIT,
+                                        responsible = Responsible.TENANT,
+                                        fundType = FundType.OPERATIONAL,
+                                        chargeFlag = true,
+                                        capitalFlag = false,
+                                        invoiceFlag = false,
+                                        dueDate = fiscalYearStart
+                                    )
+
+                                    val costsToSave = listOf(cost)
+
+                                    val debtsToSave = mutableListOf<Debts>()
+                                    for (unit in units) {
+                                        for (month in 1..12) {
+                                            val dueDate = String.format(
+                                                "%04d/%02d/01",
+                                                fiscalYearInt,
+                                                month
+                                            )
+                                            debtsToSave += Debts(
+                                                debtId = 0L,
+                                                unitId = unit.unitId,
+                                                costId = 0L,
+                                                ownerId = 0L,
+                                                buildingId = building.buildingId,
+                                                description = "شارژ",
+                                                dueDate = dueDate,
+                                                amount = equal,
+                                                paymentFlag = false
+                                            )
+                                        }
+                                    }
+
+                                    sharedViewModel.insertCostToServer(
+                                        context = context,
+                                        costs = costsToSave,
+                                        debts = debtsToSave,
+                                        onSuccess = {
                                             coroutineScope.launch {
-                                                sharedViewModel.insertCostToServer(
-                                                    context,
-                                                    costs,
-                                                    debts,
-                                                    onSuccess = {
-                                                        coroutineScope.launch {
-                                                            snackBarHostState.showSnackbar(
-                                                                context.getString(R.string.charge_calcualted_successfully)
-                                                            )
-                                                        }
-                                                    },
-                                                    onError = {
-                                                        coroutineScope.launch {
-                                                            snackBarHostState.showSnackbar(
-                                                                context.getString(R.string.failed)
-                                                            )
-                                                        }
-                                                    })
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.charge_calcualted_successfully)
+                                                )
+                                            }
+                                        },
+                                        onError = {
+                                            coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.failed)
+                                                )
                                             }
                                         }
                                     )
                                 }
 
-                            }) {
+                            }
+                        ) {
                             Text(
                                 context.getString(R.string.calculate),
                                 style = MaterialTheme.typography.bodyLarge
@@ -541,8 +639,10 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             onChargeConfirm = { costNames ->
                 coroutineScope.launch {
                     val building = selectedBuilding ?: return@launch
-                    costNames.forEach { costName ->
-                        val newCost = Costs(
+                    val api = Cost()
+
+                    val newCosts = costNames.map { costName ->
+                        Costs(
                             buildingId = building.buildingId,
                             costName = costName,
                             chargeFlag = true,
@@ -550,15 +650,29 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
                             responsible = Responsible.TENANT,
                             paymentLevel = PaymentLevel.UNIT,
                             calculateMethod = CalculateMethod.EQUAL,
-                            period = Period.YEARLY,
+                            period = Period.MONTHLY,
                             tempAmount = 0.0,
                             dueDate = ""
                         )
-                        sharedViewModel.insertNewCost(newCost, onSuccess = {})
-                        sharedViewModel.chargeCostsList.value += newCost
                     }
 
-                    showAddCostDialog = false
+                    val costsJsonArray = api.listToJsonArray(newCosts, api::costToJson)
+                    val debtsJsonArray = JSONArray()
+
+                    api.insertCost(
+                        context = context,
+                        costsJsonArray = costsJsonArray,
+                        debtsJsonArray = debtsJsonArray,
+                        onSuccess = {
+                            costItems = costItems + newCosts
+                            lastSavedCostItems = costItems
+                            sharedViewModel.chargeCostsList.value = costItems
+                            showAddCostDialog = false
+                        },
+                        onError = { e ->
+                            Log.e("ChargeCalculation", "insertCost failed", e)
+                        }
+                    )
                 }
             },
             costs = notChargesCost
@@ -570,44 +684,109 @@ fun ChargeCalculationScreen(sharedViewModel: SharedViewModel) {
             results = calculatedCharges,
             onSave = {
                 val building = selectedBuilding ?: return@ChargeResultDialog
-                val costsAmountMap: Map<Costs, Double> =
-                    costItems.mapIndexed { index, cost ->
-                        val amount = amountInputs.getOrNull(index)?.toDoubleOrNull() ?: 0.0
-                        cost to amount
-                    }.toMap()
-                sharedViewModel.insertDebtForCharge(
-                    buildingId = building.buildingId,
-                    fiscalYear = selectedYear,
-                    chargeUnitMap = calculatedCharges,
-                    onError = {
+                val results = calculatedCharges ?: return@ChargeResultDialog
+                val fiscalYearInt = selectedYear.toIntOrNull() ?: return@ChargeResultDialog
 
+                val api = Cost()
+                val fiscalYearStart = "$selectedYear/01/01"
+
+                val costsToSave: List<Costs> = costItems.mapIndexed { index, c ->
+                    val amount = amountInputs.getOrNull(index)?.toDoubleOrNull() ?: c.tempAmount
+                    c.copy(
+                        buildingId = building.buildingId,
+                        tempAmount = amount,
+                        dueDate = fiscalYearStart
+                    )
+                }
+                val costsJsonArray = api.listToJsonArray(costsToSave, api::costToJson)
+
+                val debtsToSave = mutableListOf<Debts>()
+                Log.d("results", results.toString())
+
+                for ((unit, yearlyAmount) in results) {
+                    if (yearlyAmount <= 0.0) continue
+
+                    for (month in 1..12) {
+                        val dueDate = String.format(
+                            "%04d/%02d/01",
+                            fiscalYearInt,
+                            month
+                        )
+                        debtsToSave += Debts(
+                            debtId = 0L,
+                            unitId = unit.unitId,
+                            costId = 1L,
+                            ownerId = 0L,
+                            buildingId = building.buildingId,
+                            description = "شارژ",
+                            dueDate = dueDate,
+                            amount = yearlyAmount,
+                            paymentFlag = false
+                        )
+                    }
+                }
+
+                val debtsJsonArray = JSONArray().apply {
+                    debtsToSave.forEach { d ->
+                        put(api.debtToJson(d))
+                    }
+                }
+
+                api.insertCost(
+                    context = context,
+                    costsJsonArray = costsJsonArray,
+                    debtsJsonArray = debtsJsonArray,
+                    onSuccess = {
+                        coroutineScope.launch {
+                            lastCalculatedCharges = calculatedCharges
+                            isEditMode = false
+                            chargeAlreadyCalculated = true
+
+                            showChargeResultDialog = false
+                            snackBarHostState.showSnackbar(
+                                context.getString(R.string.charge_calcualted_successfully)
+                            )
+                        }
                     },
-                    costsAmountMap = costsAmountMap,
-                    onSuccess = { costs, debts ->
-                        sharedViewModel.insertCostToServer(
-                            context,
-                            costs,
-                            debts,
-                            onSuccess = {
-                                coroutineScope.launch {
-                                    lastCalculatedCharges = calculatedCharges
-                                    isEditMode = false
-                                    chargeAlreadyCalculated = true
-
-                                    showChargeResultDialog = false
-                                    snackBarHostState.showSnackbar(context.getString(R.string.charge_calcualted_successfully))
-                                }
-                            },
-                            onError = {
-                                coroutineScope.launch {
-                                    showChargeResultDialog = false
-                                    snackBarHostState.showSnackbar(context.getString(R.string.failed))
-                                }
-                            })
+                    onError = { e ->
+                        Log.e("ChargeCalculation", "insertCost failed", e)
+                        coroutineScope.launch {
+                            showChargeResultDialog = false
+                            snackBarHostState.showSnackbar(
+                                context.getString(R.string.failed)
+                            )
+                        }
                     }
                 )
             },
             onDismiss = { showChargeResultDialog = false }
+        )
+    }
+}
+
+@Composable
+fun FixedChargeRow(costInput: Costs) {
+    val context = LocalContext.current
+    val transformation = remember { NumberCommaTransformation() }
+    val amountInWords = transformation.numberToWords(
+        context,
+        costInput.tempAmount.toLong()
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            costInput.dueDate.take(4),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(0.4f)
+        )
+        Text(
+            text = "${formatNumberWithCommas(costInput.tempAmount)} ${context.getString(R.string.toman)}",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(0.6f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
         )
     }
 }
@@ -646,7 +825,7 @@ fun CostInputRow(
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
                             onAmountChange(newValue)
                         }
                     },

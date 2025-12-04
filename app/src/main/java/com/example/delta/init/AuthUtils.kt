@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.viewmodel.SharedViewModel
@@ -16,21 +17,20 @@ object AuthUtils {
 
     @Composable
     fun checkFieldPermission(
-    userId: Long,
-    targetFieldNameRes: Int,
-    sharedViewModel: SharedViewModel
-    ):PermissionLevel? {
-        val fields by sharedViewModel.getAuthorizationDetailsForUser(userId)
+        userId: Long,
+        targetFieldNameRes: String,
+        sharedViewModel: SharedViewModel
+    ): PermissionLevel? {
+        val context = LocalContext.current
+        val fields by sharedViewModel
+            .getAuthorizationDetailsForUser(context, userId)
             .collectAsStateWithLifecycle(initialValue = emptyList())
 
         val fieldPermission = remember(fields, targetFieldNameRes) {
             fields.find { it.field.name == targetFieldNameRes }
         }
-        if (fieldPermission == null){
-            return null
-        } else {
-            val permissionLevelEnum = fieldPermission.crossRef.permissionLevelEnum
-            return permissionLevelEnum
-        }
+
+        return fieldPermission?.crossRef?.permissionLevel
     }
+
 }

@@ -34,7 +34,6 @@ class EarningsActivity : ComponentActivity() {
     }
     val sharedViewModel : SharedViewModel by viewModels()
 
-    @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {

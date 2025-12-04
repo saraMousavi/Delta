@@ -112,6 +112,7 @@ class Units {
             put("numberOfWarehouse", unit.numberOfWarehouse)
             put("numberOfParking", unit.numberOfParking)
             put("postCode", unit.postCode)
+            put("floorNumber", unit.floorNumber)
         }
 
         Log.d("UnitVolley", "Insert unit JSON: $body")
@@ -130,7 +131,8 @@ class Units {
                         numberOfRooms = obj.optString("numberOfRooms", "0"),
                         numberOfWarehouse = obj.optString("numberOfWarehouse", "0"),
                         numberOfParking = obj.optString("numberOfParking", "0"),
-                        postCode = obj.optString("postCode")
+                        postCode = obj.optString("postCode"),
+                        floorNumber = obj.optInt("floorNumber")
                     )
                     onSuccess(created)
                 } catch (e: Exception) {
@@ -162,6 +164,7 @@ class Units {
             put("numberOfWarehouse", unit.numberOfWarehouse)
             put("numberOfParking", unit.numberOfParking)
             put("postCode", unit.postCode)
+            put("floorNumber", unit.floorNumber)
         }
 
         Log.d("UnitVolley", "Update unit JSON: $body")
@@ -180,7 +183,8 @@ class Units {
                         numberOfRooms = obj.optString("numberOfRooms", "0"),
                         numberOfWarehouse = obj.optString("numberOfWarehouse", "0"),
                         numberOfParking = obj.optString("numberOfParking", "0"),
-                        postCode = obj.optString("postCode")
+                        postCode = obj.optString("postCode"),
+                        floorNumber = obj.optInt("floorNumber")
                     )
                     onSuccess(updated)
                 } catch (e: Exception) {

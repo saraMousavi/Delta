@@ -20,7 +20,7 @@ import org.json.JSONObject
 import kotlin.collections.forEach
 import kotlin.coroutines.resumeWithException
 
-class Cost {
+class Cost{
     private val baseUrl = "http://217.144.107.231:3000/costs"
     private val baseBuildingUrl = "http://217.144.107.231:3000/building"
 
@@ -60,13 +60,14 @@ class Cost {
         queue.add(request)
     }
 
-    fun costToJson(cost: Costs): JSONObject {
+    fun costToJson(cost: Costs, tempId: String? = null): JSONObject {
         return JSONObject().apply {
-//            put("costId", cost.costId)
-            Log.d("cost", cost.toString())
+            if (tempId != null) {
+                put("tempId", tempId)
+            }
             put("buildingId", cost.buildingId)
             put("costName", cost.costName)
-            put("tempAmount", cost.tempAmount)
+            put("tempAmount", if (cost.tempAmount == 1.0) 0.0 else cost.tempAmount)
             put("period", cost.period)
             put("calculateMethod", cost.calculateMethod)
             put("paymentLevel", cost.paymentLevel)
@@ -81,19 +82,29 @@ class Cost {
 
     fun debtToJson(debts: Debts, costTempId: String? = null): JSONObject {
         return JSONObject().apply {
-            if (costTempId != null) put("costTempId", costTempId) else put("costId", debts.costId)
-            Log.d("debts", debts.toString())
-            put("debtId", debts.debtId)
-            put("unitId", debts.unitId)
-            put("costId", debts.costId)
-            put("ownerId", debts.ownerId)
+            if (costTempId != null) {
+                put("costTempId", costTempId)
+            } else {
+                put("costId", debts.costId)
+            }
+
             put("buildingId", debts.buildingId)
+
+            debts.unitId?.let {
+                if (it > 0L) {
+                    put("unitId", debts.unitId)
+                }
+            }
+
+            put("ownerId", debts.ownerId)
             put("description", debts.description)
             put("dueDate", debts.dueDate)
             put("amount", debts.amount)
             put("paymentFlag", debts.paymentFlag)
         }
     }
+
+
 
     fun jsonArrayToCosts(array: JSONArray): List<Costs> {
         val list = mutableListOf<Costs>()
@@ -148,11 +159,12 @@ class Cost {
 
     fun fetchBuildingsWithCosts(
         context: Context,
+        mobileNumber: String,
         onSuccess: (List<BuildingWithCosts>) -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseBuildingUrl//with-costs"
+        val url = "$baseBuildingUrl/with-costs?mobileNumber=${mobileNumber.trim()}"
 
         val request = object : JsonArrayRequest(
             Method.GET,
@@ -164,22 +176,22 @@ class Cost {
                     for (i in 0 until response.length()) {
                         val bObj = response.getJSONObject(i)
 
-                        // 1) parse building
                         val building = Buildings(
-                            buildingId      = bObj.optLong("buildingId"),
-                            complexId       = if (bObj.isNull("complexId")) null else bObj.optLong("complexId"),
-                            name            = bObj.optString("name", ""),
-                            postCode        = bObj.optString("postCode", ""),
-                            street          = bObj.optString("street", ""),
-                            province        = bObj.optString("province", ""),
-                            state           = bObj.optString("state", ""),
-                            buildingTypeId  = if (bObj.isNull("buildingTypeId")) null else bObj.optLong("buildingTypeId"),
+                            buildingId = bObj.optLong("buildingId"),
+                            complexId = if (bObj.isNull("complexId")) null else bObj.optLong("complexId"),
+                            name = bObj.optString("name", ""),
+                            postCode = bObj.optString("postCode", ""),
+                            street = bObj.optString("street", ""),
+                            province = bObj.optString("province", ""),
+                            state = bObj.optString("state", ""),
+                            buildingTypeId = if (bObj.isNull("buildingTypeId")) null else bObj.optLong("buildingTypeId"),
                             buildingUsageId = if (bObj.isNull("buildingUsageId")) null else bObj.optLong("buildingUsageId"),
-                            fund            = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
-                            userId          = bObj.optLong("userId")
+                            fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
+                            userId = bObj.optLong("userId"),
+                            serialNumber = bObj.optString("serialNumber"),
+                            floorCount = bObj.optInt("floorCount"),
                         )
 
-                        // 2) parse costs array
                         val costsArray = bObj.optJSONArray("costs") ?: JSONArray()
                         val costs = jsonArrayToCosts(costsArray)
 
@@ -195,8 +207,7 @@ class Cost {
                 }
             },
             { error ->
-                val ex = formatVolleyError("FetchBuildingsWithCosts", error)
-                onError(ex)
+                onError(formatVolleyError("FetchBuildingsWithCosts", error))
             }
         ) {
             override fun getBodyContentType(): String =
@@ -206,10 +217,12 @@ class Cost {
         queue.add(request)
     }
 
+
     fun fetchCostsWithDebts(
         context: Context,
         ownerId: Long? = null,
         unitId: Long? = null,
+        userId: Long? = null,
         onSuccess: (List<Costs>, List<Debts>) -> Unit,
         onError: (Exception) -> Unit
     ) {
@@ -221,6 +234,9 @@ class Cost {
         }
         if (unitId != null) {
             queryParams += "unitId=$unitId"
+        }
+        if (userId != null) {
+            queryParams += "userId=$userId"
         }
 
         val query = if (queryParams.isNotEmpty()) {
@@ -289,7 +305,6 @@ class Cost {
             Log.e(tag, "Headers: ${resp.headers}")
             Log.e(tag, "Body: $body")
 
-            // یک Exception معنادار برگردون
             return Exception("HTTP $status: $body")
         } else {
             // خطاهایی مثل Timeout / NoConnection / DNS
@@ -299,6 +314,38 @@ class Cost {
         }
     }
 
+    fun markCostInvoicedOnServer(
+        context: Context,
+        costId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$costId/mark-invoiced"
+
+        val payload = JSONObject().apply {
+            put("costId", costId)
+        }
+
+        val req = object : JsonObjectRequest(
+            Method.POST,
+            url,
+            payload,
+            { resp ->
+                val ok = resp.optBoolean("ok", false)
+                onSuccess(ok)
+            },
+            { err ->
+                val ex = formatVolleyError("CostInvoice", err)
+                onError(ex)
+            }
+        ) {
+            override fun getBodyContentType(): String =
+                "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
 
     fun invoiceCostIfEnoughFund(
         context: Context,
@@ -464,12 +511,145 @@ class Cost {
         )
     }
 
+    fun costNameExists(
+        context: Context,
+        buildingId: Long?,
+        costName: String,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val base = "$baseUrl/name-exists"
+        val builder = android.net.Uri.parse(base).buildUpon()
+            .appendQueryParameter("costName", costName)
+        buildingId?.let { builder.appendQueryParameter("buildingId", it.toString()) }
+        val url = builder.build().toString()
+
+        val queue = Volley.newRequestQueue(context)
+        val req = JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { obj: JSONObject ->
+                val exists = obj.optBoolean("exists", false)
+                onSuccess(exists)
+            },
+            { err ->
+                onError(formatVolleyError("CostApi(costNameExists)", err))
+            }
+        )
+        queue.add(req)
+    }
+
+    fun insertDebtForCapitalCostOnServer(
+        context: Context,
+        buildingId: Long,
+        cost: Costs,
+        amountPerOwner: Double,
+        dueDate: String,
+        description: String,
+        onSuccess: (List<Costs>, List<Debts>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/capital-with-debts"
+
+        val costJson = JSONObject().apply {
+            put("costName", cost.costName)
+            put("tempAmount", cost.tempAmount)
+            put("period", cost.period.name)
+            put("calculateMethod", cost.calculateMethod.name)
+            put("paymentLevel", cost.paymentLevel.name)
+            put("responsible", cost.responsible.name)
+            put("fundType", cost.fundType.name)
+            put("chargeFlag", cost.chargeFlag)
+            put("capitalFlag", cost.capitalFlag)
+            put("invoiceFlag", cost.invoiceFlag)
+        }
+
+        val payload = JSONObject().apply {
+            put("buildingId", buildingId)
+            put("amountPerOwner", amountPerOwner)
+            put("dueDate", dueDate)
+            put("description", description)
+            put("cost", costJson)
+        }
+
+        val req = object : JsonObjectRequest(
+            Method.POST,
+            url,
+            payload,
+            { resp ->
+                try {
+                    val insertedCostsArr = resp.optJSONArray("insertedCosts") ?: JSONArray()
+                    val insertedDebtsArr = resp.optJSONArray("insertedDebts") ?: JSONArray()
+
+                    val costsList = jsonArrayToCosts(insertedCostsArr)
+                    val debtsList = jsonArrayToDebts(insertedDebtsArr)
+
+                    onSuccess(costsList, debtsList)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                val ex = formatVolleyError("CostApi(insertDebtForCapitalCostOnServer)", err)
+                onError(ex)
+            }
+        ) {
+            override fun getBodyContentType(): String =
+                "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    suspend fun insertDebtForCapitalCostSuspend(
+        context: Context,
+        buildingId: Long,
+        cost: Costs,
+        amountPerOwner: Double,
+        dueDate: String,
+        description: String
+    ): Pair<List<Costs>, List<Debts>> = suspendCancellableCoroutine { cont ->
+        insertDebtForCapitalCostOnServer(
+            context = context,
+            buildingId = buildingId,
+            cost = cost,
+            amountPerOwner = amountPerOwner,
+            dueDate = dueDate,
+            description = description,
+            onSuccess = { c, d ->
+                if (cont.isActive) cont.resume(c to d, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+        )
+    }
 
 
+    suspend fun costNameExistsSuspend(
+        context: Context,
+        buildingId: Long?,
+        costName: String
+    ): Boolean = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        costNameExists(
+            context = context,
+            buildingId = buildingId,
+            costName = costName,
+            onSuccess = { exists ->
+                if (cont.isActive) cont.resume(exists, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWith(Result.failure(e))
+            }
+        )
+    }
+    data class BuildingWithCosts(
+        val building: Buildings,
+        val costs: List<Costs>
+    )
 
 }
 
-data class BuildingWithCosts(
-    val building: Buildings,
-    val costs: List<Costs>
-)
+

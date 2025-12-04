@@ -26,18 +26,11 @@ import androidx.room.PrimaryKey
             parentColumns = ["buildingId"],
             childColumns = ["buildingId"],
             onDelete = CASCADE
-        ),
-        ForeignKey(
-            entity = Owners::class,
-            parentColumns = ["ownerId"],
-            childColumns = ["ownerId"],
-            onDelete = CASCADE
         )
     ],
     indices = [
         Index("costId"),
-        Index("unitId"),
-        Index("ownerId")
+        Index("unitId")
     ]
 )
 

@@ -66,6 +66,8 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.enums.FundType
 import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.volley.Owner
+import com.example.delta.volley.Tenant
 import kotlinx.coroutines.flow.collectLatest
 
 class CostDetailActivity : ComponentActivity() {
@@ -100,7 +102,6 @@ class CostDetailActivity : ComponentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CostDetailScreen(
@@ -108,31 +109,34 @@ fun CostDetailScreen(
     sharedViewModel: SharedViewModel
 ) {
     val costName = cost!!.costName
-//    val debts by sharedViewModel.getDebtsForEachCost(costId = cost.costId)
-//        .collectAsState(initial = emptyList())
     var showFundDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var showInvoiceBtn by remember { mutableStateOf(true) }
     LaunchedEffect(cost.costId) {
         sharedViewModel.loadDebtsForCost(context, cost.costId)
     }
+
     val debts by sharedViewModel.debtsForCost.collectAsState()
-    // SnackbarHostState to show messages
-    val snackbarHostState = remember { SnackbarHostState() }
+
+    val snackBarHostState = remember { SnackbarHostState() }
     val activity = LocalActivity.current
-    // Listen to invoice result events to show feedback (success or error in snackbar)
+
     LaunchedEffect(sharedViewModel.invoiceResult) {
         sharedViewModel.invoiceResult.collectLatest { success ->
-            if (success) {
-                snackbarHostState.showSnackbar(context.getString(R.string.invoiced_succesfully))
+            if (success == true) {
+                showInvoiceBtn = false
+                snackBarHostState.showSnackbar(
+                    context.getString(R.string.invoiced_succesfully)
+                )
                 showFundDialog = false
             } else {
                 if (cost.fundType == FundType.OPERATIONAL) {
-                    snackbarHostState.showSnackbar(
+                    snackBarHostState.showSnackbar(
                         context.getString(R.string.insufficient_operational_fund_balance)
                     )
                 } else {
-                    snackbarHostState.showSnackbar(
+                    snackBarHostState.showSnackbar(
                         context.getString(R.string.insufficient_fund_balance)
                     )
                 }
@@ -152,7 +156,10 @@ fun CostDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { activity!!.finish() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
                 }
             )
@@ -163,31 +170,30 @@ fun CostDetailScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            SnackbarHost(hostState = snackBarHostState)
 
-            // Snackbar host to display feedback on invoicing
-            SnackbarHost(hostState = snackbarHostState)
             Spacer(Modifier.height(8.dp))
+
             Text(
                 text = "${context.getString(R.string.due)}: ${cost.dueDate}",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Responsible party
             Text(
                 text = "${context.getString(R.string.responsible)}: ${cost.responsible.getDisplayName(context)}",
                 style = MaterialTheme.typography.bodyLarge
             )
+
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Horizontal scrolling LazyRow of debts/payees with snapping
             val listState = rememberLazyListState()
             val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
 
             if (debts.isEmpty()) {
-                // Show message if no debts
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -212,58 +218,116 @@ fun CostDetailScreen(
                         .weight(1f)
                 ) {
                     items(debts) { debt ->
-                        DebtCard(debt = debt, sharedViewModel = sharedViewModel)
+                        DebtCard(
+                            debt = debt,
+                            sharedViewModel = sharedViewModel
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Invoice button full width with elevation and rounded corners
             Button(
                 onClick = { showFundDialog = true },
                 modifier = Modifier.fillMaxWidth(),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                enabled = showInvoiceBtn
             ) {
                 Text(
                     text = context.getString(R.string.invoice),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         }
     }
 
-    // Bottom sheet dialog to confirm fund usage
     if (showFundDialog) {
         FundUsageBottomSheetDialog(
             onConfirm = {
-                sharedViewModel.invoiceCostIfEnoughFund(cost)
+                sharedViewModel.invoiceCostIfEnoughFund(context = context, cost = cost)
                 showFundDialog = false
             },
-            onCancel = {
-                showFundDialog = false
-            }
+            onCancel = { showFundDialog = false }
         )
     }
 }
 
+
 // Enhanced DebtCard composable with styling & payment status icon + text
 @Composable
-fun DebtCard(debt: Debts, sharedViewModel: SharedViewModel) {
+fun DebtCard(
+    debt: Debts,
+    sharedViewModel: SharedViewModel
+) {
     val context = LocalContext.current
-    // Get owner by ownerId (nullable)
-    Log.d("debt.ownerId", debt.ownerId.toString())
-    val owner by sharedViewModel.getOwner(debt.ownerId ?: -1L).collectAsState(initial = null)
-    val tenant by sharedViewModel.getActiveTenantsWithRelationForUnit(debt.unitId?:0).collectAsState(initial = null)
 
-    // Determine who is the latest: example fallback logic
-    val personName = when {
-        owner != null -> "${owner!!.firstName} ${owner!!.lastName}"
-        tenant != null -> "${tenant!!.tenant.firstName} ${tenant!!.tenant.lastName}"
-        else -> context.getString(R.string.unknown_person)
+    var ownerName by remember(debt.ownerId) { mutableStateOf<String?>(null) }
+    var tenantName by remember(debt.unitId, debt.buildingId) { mutableStateOf<String?>(null) }
+
+    var ownerLoaded by remember(debt.ownerId) { mutableStateOf(false) }
+    var tenantLoaded by remember(debt.unitId, debt.buildingId) { mutableStateOf(false) }
+
+    // Owner by ownerId
+    LaunchedEffect(debt.ownerId) {
+        val ownerId = debt.ownerId
+        if (ownerId != null && ownerId > 0 && !ownerLoaded) {
+            ownerLoaded = true
+            Owner().getOwnerWithUnits(
+                context = context,
+                ownerId = ownerId,
+                onSuccess = { dto ->
+                    val name = listOfNotNull(dto.user?.firstName, dto.user?.lastName)
+                        .joinToString(" ")
+                        .trim()
+                    ownerName = name.ifBlank { null }
+                    Log.d("DebtCard", "Owner name from server = $ownerName")
+                },
+                onError = { e ->
+                    Log.e("DebtCard", "Failed to fetch owner $ownerId", e)
+                    ownerName = null
+                }
+            )
+        }
     }
 
+    // Tenant as unit resident (by buildingId + unitId)
+    LaunchedEffect(debt.unitId, debt.buildingId) {
+        val unitId = debt.unitId
+        val buildingId = debt.buildingId
+        if (unitId!! > 0 && buildingId > 0 && !tenantLoaded) {
+            tenantLoaded = true
+            Tenant().getTenantForUnitInBuilding(
+                context = context,
+                buildingId = buildingId,
+                unitId = unitId,
+                onSuccess = { dto ->
+                    val user = dto?.user
+                    val name = if (user != null) {
+                        listOfNotNull(user.firstName, user.lastName)
+                            .joinToString(" ")
+                            .trim()
+                    } else {
+                        ""
+                    }
+                    tenantName = name.ifBlank { null }
+                    Log.d("DebtCard", "Tenant name from server = $tenantName")
+                },
+                onError = { e ->
+                    Log.e("DebtCard", "Failed to fetch tenant for unit $unitId", e)
+                    tenantName = null
+                }
+            )
+        }
+    }
+
+    // Prefer tenant (resident) over owner
+    val personName = when {
+        !tenantName.isNullOrBlank() -> tenantName!!
+        !ownerName.isNullOrBlank() -> ownerName!!
+        else -> context.getString(R.string.unknown_person)
+    }
 
     Card(
         modifier = Modifier
@@ -290,13 +354,13 @@ fun DebtCard(debt: Debts, sharedViewModel: SharedViewModel) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${formatNumberWithCommas(debt.amount)} ${LocalContext.current.getString(R.string.toman)}",
+                    text = "${formatNumberWithCommas(debt.amount)} ${context.getString(R.string.toman)}",
                     style = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.primary
                     )
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                // Add Text for personName here:
+
                 Text(
                     text = personName,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -315,32 +379,38 @@ fun DebtCard(debt: Debts, sharedViewModel: SharedViewModel) {
                 if (debt.paymentFlag) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = LocalContext.current.getString(R.string.payments),
+                        contentDescription = context.getString(R.string.payments),
                         tint = Color(0xFF4CAF50),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = LocalContext.current.getString(R.string.payments),
-                        style = MaterialTheme.typography.bodyLarge.copy(color = Color(context.getColor(R.color.Green)))
+                        text = context.getString(R.string.payments),
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color(context.getColor(R.color.Green))
+                        )
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Cancel,
-                        contentDescription = LocalContext.current.getString(R.string.not_paid),
+                        contentDescription = context.getString(R.string.not_paid),
                         tint = Color(context.getColor(R.color.Red_light)),
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = LocalContext.current.getString(R.string.not_paid),
-                        style = MaterialTheme.typography.bodyLarge.copy(color = Color(context.getColor(R.color.Red_light)))
+                        text = context.getString(R.string.not_paid),
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color(context.getColor(R.color.Red_light))
+                        )
                     )
                 }
             }
         }
     }
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

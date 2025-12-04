@@ -10,6 +10,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import android.webkit.MimeTypeMap
 import android.provider.OpenableColumns
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -109,19 +110,27 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.outlined.Calculate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import coil.compose.rememberAsyncImagePainter
-import com.example.delta.data.entity.Owners
+import com.example.delta.data.entity.ChatManagerDto
+import com.example.delta.data.entity.ChatMessageDto
 import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.enums.HomePageFields
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.AuthUtils
+import com.example.delta.init.FloorFormatter
 import com.example.delta.init.Preference
 import com.example.delta.volley.BuildingFile
 import kotlinx.coroutines.launch
@@ -243,6 +252,77 @@ fun InputAndButton(sharedViewModel: SharedViewModel, insertItem: (String) -> Uni
         }
     }
 }
+
+data class FloorOption(
+    val value: Int,
+    val label: String
+)
+
+fun buildFloorOptionsForBuilding(
+    context: Context,
+    floorCount: Int
+): List<FloorOption> {
+    val result = mutableListOf<FloorOption>()
+
+    // Ground floor
+    val groundValue = FloorFormatter.ground()
+    result += FloorOption(
+        value = groundValue,
+        label = FloorFormatter.toLabel(context, groundValue)
+    )
+
+    // Floors above ground: 1..(floorCount - 1)
+    val aboveCount = (floorCount - 1).coerceAtLeast(0)
+    for (i in 1..aboveCount) {
+        val value = FloorFormatter.normalFloor(i)
+        result += FloorOption(
+            value = value,
+            label = FloorFormatter.toLabel(context, value)
+        )
+    }
+
+    return result
+}
+
+//
+//@Composable
+//fun FloorDropdown(
+//    selectedFloor: Int?,
+//    onFloorSelected: (Int) -> Unit
+//) {
+//    val context = LocalContext.current
+//    val options = remember { buildFloorOptionsForBuilding(context, selectedFloor) }
+//    var expanded by remember { mutableStateOf(false) }
+//
+//    val selectedLabel = options.firstOrNull { it.value == selectedFloor }?.label ?: ""
+//
+//    Box {
+//        OutlinedTextField(
+//            value = selectedLabel,
+//            onValueChange = { },
+//            readOnly = true,
+//            label = { Text(stringResource(R.string.floor)) },
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .clickable { expanded = true }
+//        )
+//
+//        DropdownMenu(
+//            expanded = expanded,
+//            onDismissRequest = { expanded = false }
+//        ) {
+//            options.forEach { opt ->
+//                DropdownMenuItem(
+//                    text = { Text(opt.label) },
+//                    onClick = {
+//                        onFloorSelected(opt.value)
+//                        expanded = false
+//                    }
+//                )
+//            }
+//        }
+//    }
+//}
 
 
 @Composable
@@ -466,36 +546,37 @@ fun ProvinceStateSelector(
     val availableStates = remember(sharedViewModel.province) {
         IranianLocations.provinces[sharedViewModel.province] ?: emptyList()
     }
-
-    Column(modifier = modifier) {
-        // Province Selector
-        ExposedDropdownMenuBoxExample(
-            sharedViewModel = sharedViewModel,
-            items = provinces,
-            selectedItem = sharedViewModel.province,
-            onItemSelected = { selectedProvince ->
-                sharedViewModel.province = selectedProvince
-                sharedViewModel.state = "" // Reset state when province changes
-            },
-            label = context.getString(R.string.province),
-            modifier = Modifier.fillMaxWidth(),
-            itemLabel = { it }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // State Selector
-        ExposedDropdownMenuBoxExample(
-            sharedViewModel = sharedViewModel,
-            items = availableStates,
-            selectedItem = sharedViewModel.state,
-            onItemSelected = { selectedState ->
-                sharedViewModel.state = selectedState
-            },
-            label = context.getString(R.string.state),
-            modifier = Modifier.fillMaxWidth(),
-            itemLabel = { it }
-        )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
+                items = provinces,
+                selectedItem = sharedViewModel.province,
+                onItemSelected = { selectedProvince ->
+                    sharedViewModel.province = selectedProvince
+                    sharedViewModel.state = "" // Reset state when province changes
+                },
+                label = context.getString(R.string.province),
+                modifier = Modifier.fillMaxWidth(),
+                itemLabel = { it }
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
+                items = availableStates,
+                selectedItem = sharedViewModel.state,
+                onItemSelected = { selectedState ->
+                    sharedViewModel.state = selectedState
+                },
+                label = context.getString(R.string.state),
+                modifier = Modifier.fillMaxWidth(),
+                itemLabel = { it }
+            )
+        }
     }
 }
 
@@ -549,38 +630,6 @@ fun ChipGroupUnits(
                     onSelectionChange(newSelection)
                 },
                 label = { Text(text = unit.unitNumber, style = MaterialTheme.typography.bodyLarge) }
-            )
-        }
-    }
-}
-
-@Composable
-fun ChipGroupOwners(
-    selectedOwners: List<Owners>,
-    onSelectionChange: (List<Owners>) -> Unit,
-    owners: List<Owners>,
-    label: String
-) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-    FlowRow(
-        modifier = Modifier.padding(8.dp)
-    ) {
-        owners.forEach { owner ->
-            InputChip(
-                selected = selectedOwners.contains(owner),
-                onClick = {
-                    val newSelection = if (selectedOwners.contains(owner)) {
-                        selectedOwners.filter { it != owner }
-                    } else {
-                        selectedOwners + owner
-                    }
-                    onSelectionChange(newSelection)
-                },
-                label = { Text(text = "${owner.firstName} ${owner.lastName}", style = MaterialTheme.typography.bodyLarge) }
             )
         }
     }
@@ -766,10 +815,15 @@ fun SettingsScreen(
 
     val firstGroup = listOf(
         NavItem(
-            title = R.string.supporting,
-            icon = Icons.Outlined.Support,
-            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
+            title = R.string.user_management,
+            icon = Icons.Outlined.Lock,
+            onClick = { context.startActivity(Intent(context, UserManagementActivity::class.java)) }
         ),
+//        NavItem(
+//            title = R.string.supporting,
+//            icon = Icons.Outlined.Support,
+//            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
+//        ),
         NavItem(
             title = R.string.income_list,
             icon = Icons.Outlined.AttachMoney,
@@ -787,11 +841,6 @@ fun SettingsScreen(
             title = R.string.building_usage_list,
             icon = Icons.Outlined.Business,
             onClick = { context.startActivity(Intent(context, BuildingUsageActivity::class.java)) }
-        ),
-        NavItem(
-            title = R.string.user_management,
-            icon = Icons.Outlined.Lock,
-            onClick = { context.startActivity(Intent(context, UserManagementActivity::class.java)) }
         )
     )
 
@@ -1004,22 +1053,11 @@ fun CurvedBottomNavigation(
     val density = LocalDensity.current
     val userId = Preference().getUserId(context = context)
 
-    val permissionLevelSetting = AuthUtils.checkFieldPermission(
-        userId,
-        HomePageFields.SETTING.fieldNameRes,
-        sharedViewModel
-    )
-
-    val permissionLevelAddBuilding = AuthUtils.checkFieldPermission(
-        userId,
-        HomePageFields.ADD_BUILDING.fieldNameRes,
-        sharedViewModel
-    )
+    val chatUnread by sharedViewModel.chatUnreadCount.collectAsState()
 
     Box(modifier = modifier.fillMaxWidth()) {
         if (currentRoute != null) {
             val selectedIndex = items.indexOfFirst { it.route == currentRoute }
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1028,13 +1066,12 @@ fun CurvedBottomNavigation(
                     .offset(y = (-4).dp)
             ) {
                 val containerWidth = remember { mutableFloatStateOf(0f) }
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { containerWidth.floatValue = it.width.toFloat() }
                 ) {
-                    if (containerWidth.floatValue > 0) {
+                    if (containerWidth.floatValue > 0 && selectedIndex >= 0) {
                         val animatedOffset by animateOffsetAsState(
                             targetValue = density.run {
                                 val itemWidth = containerWidth.floatValue / items.size
@@ -1075,31 +1112,36 @@ fun CurvedBottomNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEach { screen ->
+                    val badge = if (screen == Screen.Chat) chatUnread else 0
                     CurvedBottomNavItem(
                         icon = screen.icon,
                         label = screen.title,
                         selected = currentRoute == screen.route,
                         isAddButton = screen == Screen.Add,
+                        badgeCount = badge,
                         onClick = {
+                            val route = screen.route
                             if (screen == Screen.Add) {
-//                                if (permissionLevelAddBuilding == PermissionLevel.FULL || permissionLevelAddBuilding == PermissionLevel.WRITE) {
                                 context.startActivity(
                                     Intent(
                                         context,
                                         BuildingFormActivity::class.java
                                     )
                                 )
-//                                } else {
-//                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
-//                                }
                             } else if (screen == Screen.Settings) {
-//                                if (permissionLevelSetting == PermissionLevel.FULL || permissionLevelSetting == PermissionLevel.WRITE) {
-                                navController.navigate(screen.route)
-//                                } else {
-//                                    Toast.makeText(context, context.getString(R.string.auth_cancel), Toast.LENGTH_LONG).show()
-//                                }
-                            } else {
-                                navController.navigate(screen.route)
+                                navController.navigate(route)
+                            } else if (screen == Screen.Home) {
+                                navController.navigate(route)
+                            } else if (screen == Screen.Dashboard) {
+                                context.startActivity(
+                                    Intent(
+                                        context,
+                                        DashboardActivity::class.java
+                                    )
+                                )
+                            } else if (screen == Screen.Chat) {
+                                sharedViewModel.refreshUnreadCount()
+                                navController.navigate(route)
                             }
                         }
                     )
@@ -1115,6 +1157,7 @@ fun CurvedBottomNavItem(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    badgeCount: Int = 0,
     isAddButton: Boolean = false
 ) {
     Column(
@@ -1162,6 +1205,21 @@ fun CurvedBottomNavItem(
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
         )
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .size(16.dp)
+                    .background(MaterialTheme.colorScheme.error, shape = CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (badgeCount > 9) "9+" else badgeCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onError
+                )
+            }
+        }
    }
 }
 
@@ -1181,9 +1239,11 @@ fun copyUriToInternalStorage(context: Context, uri: Uri, filename: String): Stri
         null
     }
 }
+
 @Composable
 fun UploadFile(
     sharedViewModel: SharedViewModel,
+    isEditing: Boolean,
     context: Context,
     maxFileSizeBytes: Long = 5 * 1024 * 1024,
     modifier: Modifier = Modifier,
@@ -1192,8 +1252,9 @@ fun UploadFile(
     val fileApi = remember { BuildingFile() }
 
     var isSaving by remember { mutableStateOf(false) }
-    val savedFilePaths = sharedViewModel.savedFilePaths
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val buildingFiles by sharedViewModel.buildingFiles.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -1219,7 +1280,7 @@ fun UploadFile(
                             fileUrl = savedPath,
                             buildingId = null,
                             onSuccess = { uploaded ->
-                                savedFilePaths.add(uploaded.fileUrl)
+//                                sharedViewModel.addFileList(uploaded)
                                 errorMessage = null
                                 onFileSaved(uploaded)
                                 isSaving = false
@@ -1242,52 +1303,50 @@ fun UploadFile(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box {
-                Row(horizontalArrangement = Arrangement.SpaceBetween) {
-                    Button(
-                        onClick = { filePicker.launch("*/*") },
-                        enabled = !isSaving
-                    ) {
-                        if (isSaving) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        } else {
-                            Text(
-                                text = context.getString(R.string.upload),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-
-                    errorMessage?.let {
+        if (isEditing) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(
+                    onClick = { filePicker.launch("*/*") },
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
                         Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error
+                            text = context.getString(R.string.upload),
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(items = savedFilePaths) { path ->
+            items(items = buildingFiles) { path ->
                 FileItem(
-                    filePath = path,
-                    onClick = { openFile(context, path) },
+                    filePath = path.fileUrl,
+                    onClick = { openFile(context, path.fileUrl) },
                     onDelete = {
-                        sharedViewModel.deleteFile(path)
+                        sharedViewModel.deleteFile(path.fileUrl)
                     },
                     modifier = Modifier.size(64.dp)
                 )
@@ -1295,6 +1354,8 @@ fun UploadFile(
         }
     }
 }
+
+
 
 
 // Helper function to get file size from Uri
@@ -1460,6 +1521,211 @@ fun String.englishToPersianDigits(): String {
             else -> char
         }
     }.joinToString("")
+}
+
+
+//************************Chat
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(sharedViewModel: SharedViewModel) {
+    val context = LocalContext.current
+    val managers by sharedViewModel.chatManagers.collectAsState()
+    val chatState by sharedViewModel.currentChat.collectAsState()
+
+    var showManagerDialog by remember { mutableStateOf(false) }
+    var inputText by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        sharedViewModel.loadChatManagersForCurrentUser()
+        sharedViewModel.refreshUnreadCount()
+    }
+
+    val currentThread = chatState?.thread
+    val messages = chatState?.messages.orEmpty()
+
+    LaunchedEffect(currentThread?.threadId) {
+        if (currentThread?.threadId != null && currentThread.threadId != 0L) {
+            sharedViewModel.markCurrentThreadRead()
+            sharedViewModel.startChatPolling(context)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(id = R.string.chat_title),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            OutlinedButton(onClick = { showManagerDialog = true }) {
+                Text(
+                    text = stringResource(id = R.string.chat_select_manager),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Log.d("currentThread", currentThread.toString())
+        if (currentThread == null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(id = R.string.chat_start_hint),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier.weight(1f)
+            ) {
+                ChatMessagesList(messages = messages)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Log.d("inputText", inputText.toString())
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    modifier = Modifier.weight(1f),
+                    maxLines = 4,
+                    textStyle = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        val text = inputText.trim()
+                        if (text.isNotEmpty()) {
+                            sharedViewModel.sendChatMessage(context, text)
+                            inputText = ""
+                        }
+                    },
+                    enabled = inputText.isNotBlank()
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.chat_send),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+            Spacer(Modifier.height(85.dp))
+        }
+    }
+
+    if (showManagerDialog) {
+        ManagersDialog(
+            managers = managers,
+            onDismiss = { showManagerDialog = false },
+            onSelect = { manager ->
+                sharedViewModel.openChatWithManager(
+                    context = context,
+                    managerUserId = manager.userId,
+                    managerName = manager.fullName,
+                    buildingId = null
+                )
+                showManagerDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ChatMessagesList(messages: List<ChatMessageDto>) {
+    val context = LocalContext.current
+    val userId = com.example.delta.init.Preference().getUserId(context)
+    Log.d("messages", messages.toString())
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        reverseLayout = false
+    ) {
+        items(messages) { msg ->
+            val isMine = msg.senderId == userId
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
+            ) {
+                Surface(
+                    color = if (isMine) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        text = msg.text,
+                        modifier = Modifier.padding(8.dp),
+                        color = if (isMine) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManagersDialog(
+    managers: List<ChatManagerDto>,
+    onDismiss: () -> Unit,
+    onSelect: (ChatManagerDto) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(id = R.string.chat_select_manager),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            if (managers.isEmpty()) {
+                Text(
+                    text = stringResource(id = R.string.chat_manager_not_found),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                Column {
+                    managers.forEach { m ->
+                        TextButton(
+                            onClick = { onSelect(m) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = m.fullName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Start
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = stringResource(id = R.string.chat_close),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    )
 }
 
 

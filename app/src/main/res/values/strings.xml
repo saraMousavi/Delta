@@ -104,7 +104,7 @@
     <string name="auth_code">کد تایید</string>
     <string name="login">ورود</string>
     <string name="amount">مبلغ</string>
-    <string name="all_units_same_area">آیا متراژ تمام واحدها یکسان است؟</string>
+    <string name="all_units_same_area">آیا اطلاعات تمام واحدها یکسان است؟</string>
     <string name="gas">گاز</string>
     <string name="water">آب</string>
     <string name="electricity">برق</string>
@@ -116,8 +116,8 @@
     <string name="mortgage">رهن</string>
     <string name="all_units_same_costs">هزینه های تمام واحد ها مشابه است</string>
     <string name="weekly">هفته</string>
-    <string name="monthly">ماه</string>
-    <string name="yearly">سال</string>
+    <string name="monthly">ماهیانه</string>
+    <string name="yearly">سالیانه</string>
     <string name="period">دوره</string>
     <string name="amount_unit">واحد پول</string>
     <string name="hezar_toman">هزار تومان</string>
@@ -254,7 +254,7 @@
     <string name="full">کامل</string>
     <string name="automatic">اتوماتیک</string>
     <string name="add_new_cost">ثبت هزینه جدید</string>
-    <string name="add_new_earning">"ثبت درآمد برای "</string>
+    <string name="add_new_earning">ثبت درآمد جدید</string>
     <string name="earning_title">عنوان درآمد</string>
     <string name="doesnt_have">ندارد</string>
     <string name="add_auth">ثبت دسترسی</string>
@@ -326,11 +326,11 @@
     <string name="add_new_phone">ثبت شماره جدید</string>
     <string name="name">نام</string>
     <string name="select_type">نوع شماره</string>
-    <string name="bilan_report">گزارش بیلان</string>
+    <string name="bilan_report">گزارش مالی(ارقام به میلیون تومان)</string>
     <string name="no_phone_recorded">هیچ تماسی ثبت نشده است.</string>
     <string name="click_on_cost_columns">لطفا برای مشاهده جزئیات هزینه برای ستون ها کلیک کنید.</string>
     <string name="other">سایر</string>
-    <string name="cost_detail">"جزئیات هزینه ی "</string>
+    <string name="cost_detail">"جزئیات "</string>
     <string name="select_role">انتخاب نقش</string>
     <string name="complex_manager">مدیر شهرک</string>
     <string name="independent_user">کاربر مستقل</string>
@@ -366,7 +366,7 @@
     <string name="central_antenna">آنتن مرکزی</string>
     <string name="protection_system">سیستم های نظارتی/حفاظتی</string>
     <string name="net">هزینه های نگهداری</string>
-    <string name="charges_calculation">محاسبه شارژ</string>
+    <string name="charges_calculation">محاسبه شارژ سالیانه</string>
     <string name="no_data">اطلاعاتی برای نمایش وجود ندارد.</string>
     <string name="charge_method">روش محاسبه شارژ</string>
     <string name="fiscal_year">سال مالی</string>
@@ -447,7 +447,7 @@
     <string name="insert_emergency_phone_book_successfully">ثبت تماس اضطراری با موفقیت انجام شد و در تب اضطراری قرار گرفت.</string>
     <string name="insert_phone_book_successfully">ثبت تماس ساکنین با موفقیت انجام شد و در تب ساکنین قرار گرفت.</string>
     <string name="file_exeed">حداکثر اندازه فایل جهت بارگذاری</string>
-    <string name="capital_info">هزینه عمرانی</string>
+    <string name="capital_info">پیش بینی سالیانه هزینه عمرانی</string>
     <string name="capital_info_insert">ثبت هزینه عمرانی</string>
     <string name="network_error">خطای شبکه</string>
     <string name="wrong_expired_code">کد نادرست/منقضی</string>
@@ -480,5 +480,81 @@
     <string name="dang_limit_hint">حداقل دانگ وارد شده</string>
     <string name="no_units_with_owner">ابتدا قسمت مالکین تکمیل گردد.</string>
     <string name="first_compete_units">ابتدا قسمت واحدها تکمیل گردد.</string>
+    <string name="invalid_amount">مبلغ نامعتبر می باشد.</string>
+    <string name="first_compete_owners">ابتدا قسمت مالکین تکمیل گردد.</string>
+    <string name="duplicate_mobile_owner_owner">این شماره موبایل قبلا به عنوان مالک در برنامه ثبت شده است.</string>
+    <string name="duplicate_mobile_tenant">این شماره موبایل قبلا به عنوان ساکن در برنامه ثبت شده است.</string>
+    <string name="floor_basement_single">زیرزمین</string>
+    <string name="floor_basement_n">زیرزمین %1$d</string>
+    <string name="floor_ground">همکف</string>
+    <string name="floor_n">طبقه %1$d</string>
+    <string name="floor">طبقه</string>
+    <string name="building_serial_number">شناسه ساختمان</string>
+    <string name="invalid_serial_number">شناسه معتبر برای ساختمان 18 رقمی می باشد.</string>
+    <string name="owner_is_resident">آیا مالک در این ساختمان سکونت دارد؟</string>
+    <string name="no_building_found">ساختمانی ثبت نشده است</string>
+    <string name="no_building_hint">برای شروع، اولین ساختمان خود را ثبت کنید.</string>
+    <string name="add_building">ثبت ساختمان جدید</string>
+    <string name="search">جستجو</string>
+    <string name="user_not_found">کاربری با این شماره ثبت نشده است.</string>
+    <string name="create_new_user">ثبت کاربر جدید</string>
+    <string name="create_new_role">ثبت نقش جدید</string>
+    <string name="role_name">نام نقش</string>
+    <string name="role_permissions">سطح دسترسی</string>
+    <string name="no_permissions_for_role">دسترسی برای این نقش ثبت نشده است.</string>
+    <string name="select_role_type">انتخاب توع دسترسی</string>
+    <string name="floor_count">تعداد طبقات</string>
+    <string name="settings_section_financial">تنظیمات مالی</string>
+    <string name="settings_section_system">تنظیمات سیستمی</string>
+    <string name="units_registered_for_building">واحدهای مربوط به این ساختمان ثبت گردید.</string>
+    <string name="add_unit">واحد جدید</string>
+    <string name="unit_already_exists">این شماره واحد قبلا ثبت شده است.</string>
+    <string name="cannot_remove_charged_costs">امکان حذف آیتم ها پس از محاسبه شارژ وجود ندارد.</string>
+    <string name="select_new_units_and_dang">انتخاب واحد جدید</string>
+    <string name="wallet">کیف پول</string>
+    <string name="current_budget">موجودی فعلی</string>
+    <string name="increase_current_budget">افزایش موجودی</string>
+    <string name="coming_soon">به زودی...</string>
+    <string name="earning_period_too_short">
+    بازه انتخاب\u200Cشده برای این دوره خیلی کوتاه است. لطفاً بازه را متناسب با دوره ماهانه یا سالانه تنظیم کنید.
+</string>
+    <string name="invalid_date_format">
+    قالب تاریخ نامعتبر است. قالب صحیح: YYYY/MM/DD
+</string>
+    <string name="startdate_before_enddate">
+    تاریخ شروع باید قبل یا مساوی تاریخ پایان باشد.
+</string>
+    <string name="invalid_building_id">
+    شناسه ساختمان نامعتبر است.
+</string>
+    <string name="unknown_server_response">
+    خطای نامشخص از سرور رخ داد.
+</string>
+    <string name="select_all">انتخاب همه</string>
+    <string name="agree">موافقم</string>
+    <string name="cost_exceed_capital_fund">مبلغ وارد شده از موجودی صندوق عمرانی بیشتر است. مایل به تعریف هزینه موردی می باشید؟</string>
+    <string name="use_operational_fund_only">برداشت مستقیم از صندوق جاری</string>
+    <string name="insufficient_operational_fund_balance_insert_new_cost">مبلغ وارد شده از موجودی صندوق جاری بیشتر است. پس از ثبت جهت پرداخت در کارتابل ساکنین قرار خواهد گرفت.</string>
+    <string name="buildings_member">اعضای ساختمان</string>
+    <string name="current_year_debt">بدهی های سال جاری</string>
+    <string name="current_year_pays">پرداختی های سال جاری</string>
+    <string name="current_year_receipt">درآمد دریافتی سال جاری</string>
+    <string name="current_year_pending_receipt">درآمد در انتظار دریافت</string>
+    <string name="current_costs">سایر هزینه های جاری</string>
+    <string name="assign_new_role">اختصاص نقش جدید</string>
+    <string name="role_name_required">انتخاب نام نقش الزامی است.</string>
+    <string name="role_required">انتخاب نش الزامی است.</string>
+    <string name="building_required">انتخاب ساختمان الزامی است.</string>
+    <string name="insert_mobile_for_access">جهت ثبت یا ویرایش دسترسی ها، شماره موبایل کاربر را وارد نمایید:</string>
+
+    <string name="confirm_delete_object_message">حذف تمام دسترسی ها</string>
+    <string name="confirm_delete_field_message">حذف فیلد</string>
+    <string name="chat_title">ارتباط با مدیریت</string>
+    <string name="chat_select_manager">انتخاب مدیر</string>
+    <string name="chat_start_hint">جهت شروع گفتگو یکی از مدیران را انتخاب نمایید.</string>
+    <string name="chat_send">ارسال</string>
+    <string name="chat_manager_not_found">پیغامی یافت نشد.</string>
+    <string name="chat_close">بستن </string>
+    <string name="rental">رهن و اجاره</string>
 
 </resources>

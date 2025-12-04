@@ -9,8 +9,8 @@ import androidx.room.Index
     tableName = "tenants_units_cross_ref",
     foreignKeys = [
         ForeignKey(
-            entity = Tenants::class,
-            parentColumns = ["tenantId"],
+            entity = User::class,
+            parentColumns = ["userId"],
             childColumns = ["tenantId"],
             onDelete = ForeignKey.CASCADE
         ),
@@ -29,6 +29,7 @@ import androidx.room.Index
 data class TenantsUnitsCrossRef(
     val tenantId: Long,
     val unitId: Long,
+    val numberOfTenants: String,
     val startDate: String,  // Add relationship-specific fields
     val endDate: String,
     val status: String

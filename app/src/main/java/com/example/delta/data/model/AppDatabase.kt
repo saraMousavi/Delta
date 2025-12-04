@@ -16,17 +16,13 @@ import com.example.delta.data.dao.DebtsDao
 import com.example.delta.data.dao.EarningsDao
 import com.example.delta.data.dao.FundsDao
 import com.example.delta.data.dao.NotificationDao
-import com.example.delta.data.dao.OwnersDao
 import com.example.delta.data.dao.PhonebookDao
 import com.example.delta.data.dao.RoleDao
-import com.example.delta.data.dao.TenantDao
 import com.example.delta.data.dao.UnitsDao
 import com.example.delta.data.dao.UploadedFileDao
 import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.AuthorizationObject
-import com.example.delta.data.entity.BuildingOwnerCrossRef
-import com.example.delta.data.entity.BuildingTenantCrossRef
 import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
@@ -39,17 +35,15 @@ import com.example.delta.data.entity.Earnings
 import com.example.delta.data.entity.EmergencyNumber
 import com.example.delta.data.entity.Funds
 import com.example.delta.data.entity.Notification
-import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.OwnersUnitsCrossRef
 import com.example.delta.data.entity.PhonebookEntry
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
-import com.example.delta.data.entity.Tenants
 import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.UploadedFileEntity
 import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleCrossRef
+import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
 import com.example.delta.data.entity.UsersNotificationCrossRef
 import com.example.delta.init.Converter
@@ -58,13 +52,12 @@ import com.example.delta.init.Converter
     entities = [BuildingTypes::class,
         BuildingUsages::class, Buildings::class,
         Costs::class, Earnings::class, Units::class,
-        Debts::class, Owners::class, Tenants::class,
-        BuildingOwnerCrossRef::class, BuildingTenantCrossRef::class,
+        Debts::class,
         OwnersUnitsCrossRef::class, TenantsUnitsCrossRef::class,
         AuthorizationObject::class,
         AuthorizationField::class,
         RoleAuthorizationObjectFieldCrossRef::class,
-        User::class, Role::class, UserRoleCrossRef::class,
+        User::class, Role::class, UserRoleBuildingUnitCrossRef::class,
         UploadedFileEntity::class, BuildingUploadedFileCrossRef::class,
         PhonebookEntry::class, EmergencyNumber::class,
         Notification::class, UsersNotificationCrossRef::class,
@@ -84,8 +77,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun earningsDao(): EarningsDao
     abstract fun unitsDao(): UnitsDao
     abstract fun debtsDao(): DebtsDao
-    abstract fun ownersDao(): OwnersDao
-    abstract fun tenantDao(): TenantDao
     abstract fun usersDao(): UsersDao
     abstract fun authorizationDao(): AuthorizationDao
     abstract fun roleDao(): RoleDao

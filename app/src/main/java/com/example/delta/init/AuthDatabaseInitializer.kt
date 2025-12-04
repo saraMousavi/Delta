@@ -9,15 +9,15 @@ object AuthDatabaseInitializer {
         val authDao = db.authorizationDao()
 
         if (authDao.getCount() == 0) {
-            AuthObject.getAll().forEach { authObj ->
-                authDao.insertAuthorizationObject(
-                    AuthorizationObject(
-                        objectId = authObj.id,
-                        name = authObj.displayNameRes,       // Store the Int resource id
-                        description = authObj.descriptionRes // Store the Int resource id
-                    )
-                )
-            }
+//            AuthObject.getAll().forEach { authObj ->
+//                authDao.insertAuthorizationObject(
+//                    AuthorizationObject(
+//                        objectId = authObj.id,
+//                        name = authObj.displayNameRes,       // Store the Int resource id
+//                        description = authObj.descriptionRes // Store the Int resource id
+//                    )
+//                )
+//            }
         }
     }
 }

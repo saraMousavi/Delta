@@ -12,33 +12,33 @@ object AuthFieldDatabaseInitializer {
         val authDao = db.authorizationDao()
         if (authDao.getFieldCount() == 0) {
             BuildingProfileFields.entries.forEach { field ->
-                authDao.insertAuthorizationField(
-                    AuthorizationField(
-                        objectId = field.objectId,
-                        name = field.fieldNameRes,
-                        fieldType = field.fieldType
-                    )
-                )
+//                authDao.insertAuthorizationField(
+//                    AuthorizationField(
+//                        objectId = field.objectId,
+//                        name = field.fieldNameRes,
+//                        fieldType = field.fieldType
+//                    )
+//                )
             }
 
             HomePageFields.entries.forEach { field ->
-                authDao.insertAuthorizationField(
-                    AuthorizationField(
-                        objectId = field.objectId,
-                        name = field.fieldNameRes,
-                        fieldType = field.fieldType
-                    )
-                )
+//                authDao.insertAuthorizationField(
+//                    AuthorizationField(
+//                        objectId = field.objectId,
+//                        name = field.fieldNameRes,
+//                        fieldType = field.fieldType
+//                    )
+//                )
             }
 
             BuildingFormFields.entries.forEach { field ->
-                authDao.insertAuthorizationField(
-                    AuthorizationField(
-                        objectId = field.objectId,
-                        name = field.fieldNameRes,
-                        fieldType = field.fieldType
-                    )
-                )
+//                authDao.insertAuthorizationField(
+//                    AuthorizationField(
+//                        objectId = field.objectId,
+//                        name = field.fieldNameRes,
+//                        fieldType = field.fieldType
+//                    )
+//                )
             }
             Log.d("authDao.getAllAuthorizationObjects()", authDao.getAllAuthorizationObjects().toString())
             Log.d("---", authDao.getAllAuthorizationFields().toString())

@@ -2,7 +2,6 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -39,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,15 +52,18 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
+import com.example.delta.data.entity.Debts
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
 import com.example.delta.init.NumberCommaTransformation
+import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
-import com.example.delta.volley.BuildingWithCosts
+import com.example.delta.volley.Building
 import com.example.delta.volley.Cost
+import com.example.delta.volley.Cost.BuildingWithCosts
 import kotlinx.coroutines.launch
 
 class CapitalActivity : ComponentActivity() {
@@ -121,20 +121,22 @@ fun CapitalInfoList(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var showDialog by remember { mutableStateOf(false) }
-
     val snackBarHostState = remember { SnackbarHostState() }
 
-    // 1) load buildings + costs from server once
+    var selectedYear by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         Cost().fetchBuildingsWithCosts(
             context = context,
+            mobileNumber = Preference().getUserMobile(context) ?: "",
             onSuccess = { list ->
                 buildingsWithCosts = list
                 isLoading = false
 
                 if (list.isNotEmpty()) {
-                    selectedBuilding = list.first().building
-                    costItems = list.first().costs
+                    val first = list.first()
+                    selectedBuilding = first.building
+                    costItems = first.costs.filter { it.capitalFlag == true }
                 }
             },
             onError = { e ->
@@ -144,11 +146,29 @@ fun CapitalInfoList(
         )
     }
 
-    // 2) whenever selectedBuilding changes, update costItems from buildingsWithCosts
     LaunchedEffect(selectedBuilding, buildingsWithCosts) {
         selectedBuilding?.let { b ->
             val match = buildingsWithCosts.find { it.building.buildingId == b.buildingId }
-            costItems = match?.costs ?: emptyList()
+            costItems = (match?.costs ?: emptyList()).filter { it.capitalFlag == true && it.costName == context.getString(R.string.capital_costs) }
+            selectedYear = null
+        }
+    }
+
+    val availableYears = remember(costItems) {
+        costItems
+            .mapNotNull { c ->
+                val d = c.dueDate
+                if (d.length >= 4) d.substring(0, 4) else null
+            }
+            .distinct()
+            .sorted()
+    }
+
+    val visibleCosts = remember(costItems, selectedYear) {
+        if (selectedYear.isNullOrBlank()) {
+            costItems
+        } else {
+            costItems.filter { it.dueDate.startsWith(selectedYear!!) }
         }
     }
 
@@ -190,7 +210,19 @@ fun CapitalInfoList(
                                 },
                                 label = context.getString(R.string.building),
                                 itemLabel = { it.name },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(0.5f)
+                            )
+
+                            ExposedDropdownMenuBoxExample(
+                                sharedViewModel = sharedViewModel,
+                                items = availableYears,
+                                selectedItem = selectedYear,
+                                onItemSelected = { year ->
+                                    selectedYear = year
+                                },
+                                label = context.getString(R.string.fiscal_year),
+                                itemLabel = { it },
+                                modifier = Modifier.weight(0.5f)
                             )
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -216,9 +248,9 @@ fun CapitalInfoList(
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     }
 
-                    items(costItems.size) { index ->
+                    items(visibleCosts.size) { index ->
                         CapitalCostRow(
-                            costInput = costItems[index]
+                            costInput = visibleCosts[index]
                         )
                         Spacer(Modifier.height(8.dp))
                     }
@@ -245,9 +277,56 @@ fun CapitalInfoList(
         AddNewCapitalDialog(
             sharedViewModel = sharedViewModel,
             onDismiss = { showDialog = false },
-            onConfirm = { fiscalYear, amount ->
+            onConfirm = { fiscalYear, amountStr ->
                 coroutineScope.launch {
-                    selectedBuilding?.let { building ->
+                    val building = selectedBuilding
+                    if (building == null) {
+                        showDialog = false
+                        return@launch
+                    }
+
+                    val amount = amountStr.toDoubleOrNull() ?: 0.0
+                    if (amount <= 0.0) {
+                        snackBarHostState.showSnackbar(
+                            context.getString(R.string.invalid_amount)
+                        )
+                        return@launch
+                    }
+
+                    try {
+                        val dto = Building().fetchBuildingFullSuspend(
+                            context = context,
+                            buildingId = building.buildingId,
+                            fiscalYear = fiscalYear
+                        )
+
+                        val unitIdsWithOwner = dto.ownerUnits.map { it.unitId }.toSet()
+                        val allUnitsHaveOwner = dto.units.all { it.unitId in unitIdsWithOwner }
+
+                        if (!allUnitsHaveOwner) {
+                            snackBarHostState.showSnackbar(
+                                context.getString(R.string.first_compete_owners)
+                            )
+                            return@launch
+                        }
+
+                        val ownerUnits = dto.ownerUnits
+
+                        val ownerDangMap: Map<Long, Double> =
+                            ownerUnits.groupBy { it.ownerId }
+                                .mapValues { (_, list) -> list.sumOf { it.dang } }
+
+                        if (ownerDangMap.isEmpty()) {
+                            snackBarHostState.showSnackbar(
+                                context.getString(R.string.first_compete_owners)
+                            )
+                            return@launch
+                        }
+
+                        val totalDang = ownerDangMap.values.sum()
+
+                        val dueDate = "$fiscalYear/01/01"
+
                         val newCost = Costs(
                             buildingId = building.buildingId,
                             costName = context.getString(R.string.capital_costs),
@@ -258,50 +337,56 @@ fun CapitalInfoList(
                             paymentLevel = PaymentLevel.UNIT,
                             calculateMethod = CalculateMethod.EQUAL,
                             period = Period.YEARLY,
-                            tempAmount = amount.toDouble(),
-                            dueDate = "$fiscalYear/01/01"
+                            tempAmount = amount,
+                            dueDate = dueDate
                         )
 
-                        sharedViewModel.insertDebtForCapitalCost(
-                            building.buildingId,
-                            newCost,
-                            amount.toDouble(),
-                            "$fiscalYear/01/01",
-                            description = context.getString(R.string.capital_info),
-                            onSuccess = { costs, debts ->
+                        val ownerCount = ownerDangMap.size.coerceAtLeast(1)
+                        val debtsToSave = ownerDangMap.map { (ownerId, ownerDang) ->
+                            val share = if (totalDang > 0.0) {
+                                amount * (ownerDang / totalDang)
+                            } else {
+                                amount / ownerCount
+                            }
+
+                            Debts(
+                                debtId = 0L,
+                                unitId = 0L,
+                                costId = 0L,
+                                ownerId = ownerId,
+                                buildingId = building.buildingId,
+                                description = context.getString(R.string.capital_info),
+                                dueDate = dueDate,
+                                amount = share,
+                                paymentFlag = false
+                            )
+                        }
+
+                        sharedViewModel.insertCostToServer(
+                            context = context,
+                            costs = listOf(newCost),
+                            debts = debtsToSave,
+                            onSuccess = {
                                 coroutineScope.launch {
-                                    sharedViewModel.insertCostToServer(
-                                        context,
-                                        costs,
-                                        debts,
-                                        onSuccess = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(
-                                                    context.getString(R.string.capital_calcualted_successfully)
-                                                )
-                                            }
-                                            // Optional: refresh from server again after insert
-                                            Cost().fetchBuildingsWithCosts(
-                                                context = context,
-                                                onSuccess = { list ->
-                                                    buildingsWithCosts = list
-                                                    selectedBuilding?.let { sb ->
-                                                        val match = list.find { it.building.buildingId == sb.buildingId }
-                                                        costItems = match?.costs ?: emptyList()
-                                                    }
-                                                },
-                                                onError = { /* ignore for now */ }
-                                            )
-                                        },
-                                        onError = {
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(
-                                                    context.getString(R.string.failed)
-                                                )
-                                            }
-                                        }
+                                    snackBarHostState.showSnackbar(
+                                        context.getString(R.string.capital_calcualted_successfully)
                                     )
                                 }
+
+                                Cost().fetchBuildingsWithCosts(
+                                    context = context,
+                                    mobileNumber = Preference().getUserMobile(context) ?: "",
+                                    onSuccess = { list ->
+                                        buildingsWithCosts = list
+                                        selectedBuilding?.let { sb ->
+                                            val match =
+                                                list.find { it.building.buildingId == sb.buildingId }
+                                            costItems =
+                                                (match?.costs ?: emptyList()).filter { it.capitalFlag == true }
+                                        }
+                                    },
+                                    onError = { }
+                                )
                             },
                             onError = {
                                 coroutineScope.launch {
@@ -311,13 +396,20 @@ fun CapitalInfoList(
                                 }
                             }
                         )
+                    } catch (e: Exception) {
+                        snackBarHostState.showSnackbar(
+                            context.getString(R.string.failed)
+                        )
+                    } finally {
                         showDialog = false
                     }
                 }
             }
+
         )
     }
 }
+
 
 
 @Composable
@@ -337,7 +429,7 @@ fun CapitalCostRow(
             text = "$amountInWords ${context.getString(R.string.toman)}",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(0.5f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
+            textAlign = TextAlign.End
         )
     }
     HorizontalDivider(Modifier.padding(vertical = 8.dp))

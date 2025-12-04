@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -24,9 +25,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.HomeWork
@@ -41,9 +44,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,8 +61,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,13 +83,15 @@ import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.OwnerTabItem
 import com.example.delta.data.entity.OwnerTabType
-import com.example.delta.data.entity.Owners
-import com.example.delta.data.entity.UnitWithDang
+import com.example.delta.data.entity.OwnersUnitsCrossRef
+import com.example.delta.data.entity.Units
+import com.example.delta.data.entity.User
 import com.example.delta.enums.FilterType
 import com.example.delta.enums.FundType
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Cost
 import com.example.delta.volley.Fund
+import com.example.delta.volley.Owner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -92,11 +101,13 @@ class OwnerDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val ownerId = intent.getLongExtra("ownerId", -1L)
+        val buildingId = intent.getLongExtra("buildingId", -1L)
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     OwnerDetailsScreen(
                         ownerId = ownerId,
+                        buildingId = buildingId,
                         sharedViewModel = sharedViewModel,
                         onBack = { finish() }
                     )
@@ -110,6 +121,7 @@ class OwnerDetailsActivity : ComponentActivity() {
 @Composable
 fun OwnerDetailsScreen(
     ownerId: Long,
+    buildingId:Long,
     sharedViewModel: SharedViewModel,
     onBack: () -> Unit
 ) {
@@ -159,7 +171,7 @@ fun OwnerDetailsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             when (tabs[selectedTab].type) {
-                OwnerTabType.OVERVIEW -> OwnerOverviewTab(ownerId, sharedViewModel)
+                OwnerTabType.OVERVIEW -> OwnerOverviewTab(ownerId, buildingId = buildingId )
                 OwnerTabType.FINANCIALS -> OwnerFinancialsTab(
                     ownerId = ownerId,
                     sharedViewModel = sharedViewModel,
@@ -170,48 +182,89 @@ fun OwnerDetailsScreen(
         }
     }
 }
-
 @Composable
 fun OwnerOverviewTab(
     ownerId: Long,
-    sharedViewModel: SharedViewModel,
+    buildingId: Long,
     modifier: Modifier = Modifier
 ) {
+    val listState = rememberLazyListState()
     val context = LocalContext.current
     val ownerApi = remember { com.example.delta.volley.Owner() }
 
-    var owner by remember { mutableStateOf<Owners?>(null) }
-    var unitsForOwner by remember { mutableStateOf<List<UnitWithDang>>(emptyList()) }
-    var isEditing by remember { mutableStateOf(false) }
+    var user by remember { mutableStateOf<User?>(null) }
+    var unitsForOwner by remember { mutableStateOf<List<Units>>(emptyList()) }
+    var ownerUnits by remember { mutableStateOf<List<OwnersUnitsCrossRef>>(emptyList()) }
+    var editableOwnerUnits by remember { mutableStateOf<List<OwnersUnitsCrossRef>>(emptyList()) }
+
     val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-
-    var firstName by remember { mutableStateOf("") }
-    var lastName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var mobile by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-
+    var isEditing by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var units by remember { mutableStateOf<List<Units>>(emptyList()) }
+    var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
 
-    LaunchedEffect(ownerId) {
+    val dangSums = remember(ownersWithUnits) {
+        ownersWithUnits
+            .flatMap { it.ownerUnits }
+            .groupBy { it.unitId }
+            .mapValues { (_, list) -> list.sumOf { it.dang } }
+    }
+
+    val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
+
+    val selectableUnits by remember(units, dangSums) {
+        derivedStateOf {
+            units.filter { u ->
+                val usedDang = dangSums[u.unitId] ?: 0.0
+                usedDang < 6.0
+            }
+        }
+    }
+
+    LaunchedEffect(ownerId, buildingId) {
         isLoading = true
         errorMessage = null
+
+        Owner().getOwnersWithUnitsByBuilding(
+            context = context,
+            buildingId = buildingId,
+            onSuccess = { list ->
+                ownersWithUnits = list
+            },
+            onError = {
+                Toast.makeText(
+                    context,
+                    it.message ?: context.getString(R.string.failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+
+        com.example.delta.volley.Units().fetchUnitsForBuilding(
+            context = context,
+            buildingId = buildingId,
+            onSuccess = { list ->
+                units = list
+            },
+            onError = { e ->
+                Toast.makeText(
+                    context,
+                    e.message ?: context.getString(R.string.failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
 
         ownerApi.getOwnerWithUnits(
             context = context,
             ownerId = ownerId,
             onSuccess = { dto ->
-                owner = dto.owner
+                user = dto.user
+                ownerUnits = dto.ownerUnits
                 unitsForOwner = dto.units
-                firstName = dto.owner.firstName
-                lastName = dto.owner.lastName
-                email = dto.owner.email
-                phone = dto.owner.phoneNumber
-                mobile = dto.owner.mobileNumber
-                address = dto.owner.address
+                editableOwnerUnits = dto.ownerUnits
                 isLoading = false
             },
             onError = { e ->
@@ -238,12 +291,15 @@ fun OwnerOverviewTab(
             shape = RoundedCornerShape(8.dp),
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
-            LazyColumn(modifier = Modifier.padding(16.dp)) {
-                if (owner == null && isLoading) {
+            LazyColumn(
+                modifier = Modifier.padding(16.dp),
+                contentPadding = PaddingValues(bottom = 72.dp),
+                state = listState
+            ) {
+                if (user == null && isLoading) {
                     item {
                         CircularProgressIndicator(
-                            modifier = Modifier
-                                .padding(vertical = 24.dp),
+                            modifier = Modifier.padding(vertical = 24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
@@ -252,7 +308,7 @@ fun OwnerOverviewTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else if (owner == null && errorMessage != null) {
+                } else if (user == null && errorMessage != null) {
                     item {
                         Text(
                             text = errorMessage ?: "",
@@ -260,152 +316,314 @@ fun OwnerOverviewTab(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                } else if (owner != null) {
-                    if (isEditing) {
-                        item {
-                            OwnerTextField(R.string.first_name, firstName) { firstName = it }
-                        }
-                        item { Spacer(Modifier.height(8.dp)) }
-                        item {
-                            OwnerTextField(R.string.last_name, lastName) { lastName = it }
-                        }
-                        item { Spacer(Modifier.height(8.dp)) }
-                        item {
-                            OwnerTextField(R.string.email, email) { email = it }
-                        }
-                        item { Spacer(Modifier.height(8.dp)) }
-                        item {
-                            OwnerTextField(R.string.phone_number, phone) { phone = it }
-                        }
-                        item { Spacer(Modifier.height(8.dp)) }
-                        item {
-                            OwnerTextField(R.string.mobile_number, mobile) { mobile = it }
-                        }
-                        item { Spacer(Modifier.height(8.dp)) }
-                        item {
-                            OwnerTextField(R.string.address, address) { address = it }
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                        item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = {
-                                        sharedViewModel.updateOwner(
-                                            owner!!.copy(
-                                                firstName = firstName,
-                                                lastName = lastName,
-                                                email = email,
-                                                phoneNumber = phone,
-                                                mobileNumber = mobile,
-                                                address = address
-                                            ),
-                                            onError = {
-                                                coroutineScope.launch {
-                                                    snackBarHostState.showSnackbar(
-                                                        context.getString(
-                                                            R.string.operation_problem
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        )
-                                        isEditing = false
-                                    }
+                } else if (user != null) {
+                    item {
+                        OwnerInfoRow(
+                            Icons.Default.Person,
+                            "${user!!.firstName} ${user!!.lastName}"
+                        )
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+
+                    item {
+                        OwnerInfoRow(
+                            Icons.Default.Email,
+                            user!!.email?.ifBlank { context.getString(R.string.no_email) } ?: ""
+                        )
+                    }
+                    item { Spacer(Modifier.height(12.dp)) }
+
+                    item {
+                        OwnerInfoRow(
+                            Icons.Default.Phone,
+                            user!!.phoneNumber!!.ifBlank { context.getString(R.string.no_phone) }
+                        )
+                    }
+                    item { Spacer(Modifier.height(12.dp)) }
+
+                    item {
+                        OwnerInfoRow(
+                            Icons.Default.MobileFriendly,
+                            user!!.mobileNumber.ifBlank { context.getString(R.string.no) }
+                        )
+                    }
+                    item { Spacer(Modifier.height(12.dp)) }
+
+                    item {
+                        OwnerInfoRow(
+                            Icons.Default.HomeWork,
+                            user!!.address?.ifBlank { context.getString(R.string.no) }.toString()
+                        )
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+
+                    item {
+                        Text(
+                            text = context.getString(R.string.units),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+
+                    if (!isEditing) {
+                        items(ownerUnits, key = { "own-${it.unitId}" }) { unitCross ->
+                            val thisUnit = unitsForOwner.firstOrNull { it.unitId == unitCross.unitId }
+                            if (thisUnit != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        context.getString(R.string.insert),
-                                        style = MaterialTheme.typography.bodyLarge
+                                        text = "${context.getString(R.string.unit_number)}: ${thisUnit.unitNumber}, " +
+                                                "${context.getString(R.string.area)}: ${thisUnit.area}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                                OutlinedButton(onClick = { isEditing = false }) {
                                     Text(
-                                        context.getString(R.string.cancel),
-                                        style = MaterialTheme.typography.bodyLarge
+                                        text = "${context.getString(R.string.dang)}: ${unitCross.dang}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         }
                     } else {
-                        item {
-                            OwnerInfoRow(
-                                Icons.Default.Person,
-                                "${owner!!.firstName} ${owner!!.lastName}"
-                            )
+                        items(editableOwnerUnits, key = { "editable-${it.unitId}" }) { unitCross ->
+                            val thisUnit = unitsForOwner.firstOrNull { it.unitId == unitCross.unitId }
+                            val unitLabel = if (thisUnit != null) {
+                                "${context.getString(R.string.unit_number)}: ${thisUnit.unitNumber}, " +
+                                        "${context.getString(R.string.area)}: ${thisUnit.area}"
+                            } else {
+                                "${context.getString(R.string.unit_number)}: ${unitCross.unitId}"
+                            }
+
+                            var dangText by remember(unitCross.unitId) {
+                                mutableStateOf(unitCross.dang.toString())
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = unitLabel,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    OutlinedTextField(
+                                        value = dangText,
+                                        onValueChange = { newValue ->
+                                            dangText = newValue
+                                            val asDouble = newValue.toDoubleOrNull() ?: 0.0
+                                            editableOwnerUnits = editableOwnerUnits.map {
+                                                if (it.unitId == unitCross.unitId) {
+                                                    it.copy(dang = asDouble)
+                                                } else it
+                                            }
+                                        },
+                                        label = { Text(context.getString(R.string.dang)) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        editableOwnerUnits =
+                                            editableOwnerUnits.filterNot { it.unitId == unitCross.unitId }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove unit"
+                                    )
+                                }
+                            }
                         }
-                        item { Spacer(Modifier.height(16.dp)) }
 
                         item {
-                            OwnerInfoRow(
-                                Icons.Default.Email,
-                                owner!!.email.ifBlank { context.getString(R.string.no_email) }
+                            Text(
+                                text = context.getString(R.string.select_new_units_and_dang),
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
                             )
                         }
-                        item { Spacer(Modifier.height(12.dp)) }
-                        item {
-                            OwnerInfoRow(
-                                Icons.Default.Phone,
-                                owner!!.phoneNumber.ifBlank { context.getString(R.string.no_phone) }
-                            )
-                        }
-                        item { Spacer(Modifier.height(12.dp)) }
-                        item {
-                            OwnerInfoRow(
-                                Icons.Default.MobileFriendly,
-                                owner!!.mobileNumber.ifBlank { context.getString(R.string.no) }
-                            )
-                        }
-                        item { Spacer(Modifier.height(12.dp)) }
-                        item {
-                            OwnerInfoRow(
-                                Icons.Default.HomeWork,
-                                owner!!.address.ifBlank { context.getString(R.string.no) }
-                            )
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                        item {
-                            if (unitsForOwner.isNotEmpty()) {
-                                Column {
-                                    Text(
-                                        text = context.getString(R.string.units),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.padding(bottom = 4.dp)
-                                    )
-                                    unitsForOwner.forEach { unit ->
-                                        Row {
-                                            Text(
-                                                text = "${context.getString(R.string.unit_number)}: ${unit.unit.unitNumber}, " +
-                                                        "${context.getString(R.string.area)}: ${unit.unit.area}",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                        items(selectableUnits, key = { it.unitId }) { unit ->
+                            val usedDang = dangSums[unit.unitId] ?: 0.0
+                            val maxAllowed = (6.0 - usedDang).coerceAtLeast(0.0)
+
+                            val currentSelection =
+                                selectedUnitsList.firstOrNull { it.unitId == unit.unitId }
+
+                            var localDangText by remember(
+                                unit.unitId,
+                                currentSelection?.dang
+                            ) {
+                                mutableStateOf(
+                                    currentSelection?.dang
+                                        ?.takeIf { it > 0.0 }
+                                        ?.toString()
+                                        ?: ""
+                                )
+                            }
+
+                            val isChecked = currentSelection != null
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        if (checked) {
+                                            val v = localDangText.toDoubleOrNull() ?: 0.0
+                                            val clamped = v.coerceIn(0.0, maxAllowed)
+                                            selectedUnitsList.removeAll { it.unitId == unit.unitId }
+                                            selectedUnitsList.add(
+                                                OwnersUnitsCrossRef(
+                                                    ownerId = 0L,
+                                                    unitId = unit.unitId,
+                                                    dang = clamped
+                                                )
                                             )
-                                            Spacer(Modifier.width(16.dp))
-                                            Text(
-                                                text = "${context.getString(R.string.dang)}: ${unit.dang}",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        } else {
+                                            selectedUnitsList.removeAll { it.unitId == unit.unitId }
                                         }
+                                    }
+                                )
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+//                                    Text(
+//                                        text = "${context.getString(R.string.area)}: ${unit.area}",
+//                                        style = MaterialTheme.typography.bodyLarge
+//                                    )
+
+                                    if (isChecked) {
+                                        OutlinedTextField(
+                                            value = localDangText,
+                                            onValueChange = { text ->
+                                                localDangText = text
+
+                                                val v = text.toDoubleOrNull()
+                                                if (v != null) {
+                                                    val clamped = v.coerceIn(0.0, maxAllowed)
+                                                    val idx = selectedUnitsList.indexOfFirst {
+                                                        it.unitId == unit.unitId
+                                                    }
+                                                    if (idx >= 0) {
+                                                        selectedUnitsList[idx] =
+                                                            selectedUnitsList[idx].copy(dang = clamped)
+                                                    }
+                                                }
+                                            },
+                                            label = {
+                                                Text(
+                                                    text = context.getString(R.string.dang),
+                                                    style = MaterialTheme.typography.bodyLarge
+                                                )
+                                            },
+                                            textStyle = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
                                     }
                                 }
                             }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         }
                     }
                 }
             }
         }
 
-        if (!isEditing && owner != null) {
+        SnackbarHost(
+            hostState = snackBarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        if (isEditing) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(Color(context.getColor(R.color.white)))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        isEditing = false
+                        editableOwnerUnits = ownerUnits
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Button(
+                    onClick = {
+                        val payloadUnits = editableOwnerUnits.filter { it.unitId > 0 }
+                        ownerApi.updateOwnerUnitsAndRoleVolley(
+                            context = context,
+                            buildingId = buildingId,
+                            userId = ownerId,
+                            units = payloadUnits,
+                            isManager = false,
+                            onSuccess = {
+                                ownerUnits = payloadUnits
+                                isEditing = false
+                                coroutineScope.launch {
+                                    snackBarHostState.showSnackbar(
+                                        context.getString(R.string.success_update)
+                                    )
+                                }
+                            },
+                            onError = { e ->
+                                coroutineScope.launch {
+                                    snackBarHostState.showSnackbar(
+                                        e.message ?: context.getString(R.string.failed)
+                                    )
+                                }
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = context.getString(R.string.edit))
+                }
+            }
+        }
+
+        if (!isEditing) {
             FloatingActionButton(
                 onClick = { isEditing = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp)
             ) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit owner details")
+                Icon(Icons.Default.Edit, contentDescription = "Edit owner units")
             }
         }
     }
 }
+
 
 @Composable
 fun OwnerInfoRow(icon: ImageVector, label: String) {
@@ -480,17 +698,17 @@ fun OwnerFinancialsTab(
     val unpaidDebts = remember(allDebts) {
         allDebts.filter { it.paymentFlag == false }
     }
-
+    Log.d("unpaidDebts", unpaidDebts.toString())
     val payments = remember(allDebts) {
         allDebts.filter { it.paymentFlag == true }
     }
-
-    val chargeDebts = remember(allDebts) {
-        allDebts.filter { it.paymentFlag == false && it.description == "شارژ" }
-    }
+    Log.d("payments", payments.toString())
+//    val chargeDebts = remember(allDebts) {
+//        allDebts.filter { it.paymentFlag == false && it.description == "شارژ" }
+//    }
 
     val transactions = remember(allDebts, payments) {
-        (allDebts.map {
+        (unpaidDebts.map {
             TransactionItem(it.debtId, it.amount, it.dueDate, it.description, FilterType.DEBT)
         } + payments.map {
             TransactionItem(it.debtId, it.amount, it.dueDate, it.description, FilterType.PAYMENT)
@@ -647,6 +865,7 @@ fun OwnerFinancialsTab(
                                             fundType = fundType,
                                             onSuccess = {
                                                 coroutineScope.launch {
+                                                    sharedViewModel.loadFundBalances(context, debt.buildingId)
                                                     snackBarHostState.showSnackbar(
                                                         context.getString(
                                                             if (fundType == FundType.OPERATIONAL)
@@ -674,56 +893,56 @@ fun OwnerFinancialsTab(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .background(Color(context.getColor(R.color.white)))
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Button(
-                onClick = {
-                    coroutineScope.launch {
-                        if (chargeDebts.isEmpty()) {
-                            snackBarHostState.showSnackbar(
-                                context.getString(R.string.no_transactions_recorded)
-                            )
-                        } else {
-                            showTransferDialog = true
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            ) {
-                Text(
-                    text = context.getString(R.string.transfer_debt_to_tenant),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
+//        Column(
+//            modifier = Modifier
+//                .align(Alignment.BottomEnd)
+//                .background(Color(context.getColor(R.color.white)))
+//                .padding(16.dp)
+//                .fillMaxWidth(),
+//            verticalArrangement = Arrangement.spacedBy(12.dp),
+//            horizontalAlignment = Alignment.CenterHorizontally
+//        ) {
+//            Button(
+//                onClick = {
+//                    coroutineScope.launch {
+//                        if (chargeDebts.isEmpty()) {
+//                            snackBarHostState.showSnackbar(
+//                                context.getString(R.string.no_transactions_recorded)
+//                            )
+//                        } else {
+//                            showTransferDialog = true
+//                        }
+//                    }
+//                },
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(56.dp),
+//                shape = RoundedCornerShape(28.dp),
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+//                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+//                )
+//            ) {
+//                Text(
+//                    text = context.getString(R.string.transfer_debt_to_tenant),
+//                    style = MaterialTheme.typography.bodyLarge
+//                )
+//            }
+//        }
     }
 
-    if (showTransferDialog) {
-        Log.d("chargeDebts", chargeDebts.toString())
-        TransferDebtsDialog(
-            debts = chargeDebts,
-            onConfirm = {
-                showTransferDialog = false
-            },
-            onDismiss = {
-                showTransferDialog = false
-            }
-        )
-    }
+//    if (showTransferDialog) {
+//        Log.d("chargeDebts", chargeDebts.toString())
+//        TransferDebtsDialog(
+//            debts = chargeDebts,
+//            onConfirm = {
+//                showTransferDialog = false
+//            },
+//            onDismiss = {
+//                showTransferDialog = false
+//            }
+//        )
+//    }
 }
 
 @Composable
@@ -813,7 +1032,7 @@ fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
         ) {
             Column {
                 Text(
-                    text = transaction.description.ifBlank { "No Description" },
+                    text = transaction.description.ifBlank { "سایر" },
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(Modifier.height(8.dp))

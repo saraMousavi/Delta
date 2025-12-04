@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.House
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MobileFriendly
 import androidx.compose.material.icons.filled.Person
@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -41,14 +42,18 @@ import com.example.delta.enums.FilterType
 import com.example.delta.enums.FundType
 import com.example.delta.viewmodel.SharedViewModel
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.TenantWithRelation
+import com.example.delta.data.entity.TenantsUnitsCrossRef
+import com.example.delta.data.entity.Units
+import com.example.delta.data.entity.User
 import com.example.delta.volley.Cost
 import com.example.delta.volley.Fund
+import com.example.delta.volley.Tenant
+import java.text.NumberFormat
+import java.util.Locale
+
 
 class TenantsDetailsActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
@@ -57,12 +62,14 @@ class TenantsDetailsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val unitId = intent.getLongExtra("UNIT_DATA", -1L)
         val tenantId = intent.getLongExtra("TENANT_DATA", -1L)
+        val buildingId = intent.getLongExtra("BUILDING_ID", -1L)
         setContent {
             AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     TenantDetailsScreen(
                         unitId = unitId,
                         tenantId = tenantId,
+                        buildingId = buildingId,
                         sharedViewModel = sharedViewModel
                     )
                 }
@@ -75,6 +82,7 @@ class TenantsDetailsActivity : ComponentActivity() {
 fun TenantDetailsScreen(
     unitId: Long,
     tenantId: Long,
+    buildingId: Long,
     sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -86,11 +94,11 @@ fun TenantDetailsScreen(
     var tenantName by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(tenantId) {
-        com.example.delta.volley.Tenant().getTenant(
+        Tenant().getTenantWithUnit(
             context = context,
             tenantId = tenantId,
             onSuccess = { t ->
-                tenantName = "${t.firstName} ${t.lastName}"
+                tenantName = "${t.user!!.firstName} ${t.user.lastName}"
             },
             onError = {
                 tenantName = null
@@ -139,6 +147,7 @@ fun TenantDetailsScreen(
                 OwnerTabType.OVERVIEW -> TenantOverviewTab(
                     unitId = unitId,
                     tenantId = tenantId,
+                    buildingId = buildingId,
                     sharedViewModel = sharedViewModel,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -153,24 +162,27 @@ fun TenantDetailsScreen(
         }
     }
 }
-
 @Composable
 fun TenantOverviewTab(
     unitId: Long,
     tenantId: Long,
+    buildingId: Long,
     sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackBarHostState = remember { SnackbarHostState() }
+    val validation = remember { com.example.delta.init.Validation() }
 
     var isEditing by remember { mutableStateOf(false) }
 
     val tenantApi = remember { com.example.delta.volley.Tenant() }
     val costApi = remember { com.example.delta.volley.Cost() }
 
-    var tenantWithRelation by remember { mutableStateOf<TenantWithRelation?>(null) }
+    var tenantWithRelation by remember { mutableStateOf<TenantsUnitsCrossRef?>(null) }
+    var user by remember { mutableStateOf<User?>(null) }
+    var unit by remember { mutableStateOf<Units?>(null) }
     var rentDebt by remember { mutableStateOf(0.0) }
     var mortgageDebt by remember { mutableStateOf(0.0) }
 
@@ -181,23 +193,13 @@ fun TenantOverviewTab(
         isLoading = true
         errorMessage = null
 
-        var loadedTenant: com.example.delta.data.entity.Tenants? = null
-
-        tenantApi.getTenant(
+        tenantApi.getTenantWithUnit(
             context = context,
             tenantId = tenantId,
             onSuccess = { t ->
-                loadedTenant = t
-                tenantWithRelation = TenantWithRelation(
-                    tenant = t,
-                    crossRef = com.example.delta.data.entity.TenantsUnitsCrossRef(
-                        tenantId = t.tenantId,
-                        unitId = unitId,
-                        startDate = t.startDate,
-                        endDate = t.endDate,
-                        status = t.status
-                    )
-                )
+                user = t.user
+                unit = t.unit
+                tenantWithRelation = t.tenantUnit
                 isLoading = false
             },
             onError = { e ->
@@ -265,15 +267,15 @@ fun TenantOverviewTab(
         return
     }
 
-    var firstName by remember(isEditing, twr) { mutableStateOf(twr.tenant.firstName) }
-    var lastName by remember(isEditing, twr) { mutableStateOf(twr.tenant.lastName) }
-    var phone by remember(isEditing, twr) { mutableStateOf(twr.tenant.phoneNumber) }
-    var mobile by remember(isEditing, twr) { mutableStateOf(twr.tenant.mobileNumber) }
-    var email by remember(isEditing, twr) { mutableStateOf(twr.tenant.email) }
-    var startDate by remember(isEditing, twr) { mutableStateOf(twr.tenant.startDate) }
-    var endDate by remember(isEditing, twr) { mutableStateOf(twr.tenant.endDate) }
-    var numberOfTenant by remember(isEditing, twr) { mutableStateOf(twr.tenant.numberOfTenants) }
-    var selectedStatus by remember(isEditing, twr) { mutableStateOf(twr.tenant.status) }
+    var firstName by remember(isEditing, twr) { mutableStateOf(user!!.firstName) }
+    var lastName by remember(isEditing, twr) { mutableStateOf(user!!.lastName) }
+    var phone by remember(isEditing, twr) { mutableStateOf(user!!.phoneNumber) }
+    var mobile by remember(isEditing, twr) { mutableStateOf(user!!.mobileNumber) }
+    var email by remember(isEditing, twr) { mutableStateOf(user!!.email) }
+    var startDate by remember(isEditing, twr) { mutableStateOf(tenantWithRelation!!.startDate) }
+    var endDate by remember(isEditing, twr) { mutableStateOf(tenantWithRelation!!.endDate) }
+    var numberOfTenant by remember(isEditing, twr) { mutableStateOf(tenantWithRelation!!.numberOfTenants) }
+    var selectedStatus by remember(isEditing, twr) { mutableStateOf(tenantWithRelation!!.status) }
 
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
@@ -284,11 +286,10 @@ fun TenantOverviewTab(
     val rentValue = rentText.toDoubleOrNull() ?: 0.0
     val mortgageValue = mortgageText.toDoubleOrNull() ?: 0.0
 
-    val isInsertEnabled = firstName.isNotBlank() &&
-            lastName.isNotBlank() &&
-            phone.isNotBlank() &&
-            mobile.isNotBlank() &&
-            email.isNotBlank() &&
+    val isInsertEnabled = //firstName.isNotBlank() &&
+            //lastName.isNotBlank() &&
+            //phone!!.isNotBlank() &&
+            //mobile.isNotBlank() &&
             startDate.isNotBlank() &&
             endDate.isNotBlank() &&
             numberOfTenant.isNotBlank() &&
@@ -302,7 +303,7 @@ fun TenantOverviewTab(
         Card(
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
@@ -314,20 +315,38 @@ fun TenantOverviewTab(
                 contentPadding = PaddingValues(bottom = 84.dp)
             ) {
                 item {
-                    if (isEditing) {
-                        OwnerTextField(R.string.first_name, firstName) { firstName = it }
-                        Spacer(Modifier.height(8.dp))
-                        OwnerTextField(R.string.last_name, lastName) { lastName = it }
-                        Spacer(Modifier.height(8.dp))
-                        OwnerTextField(R.string.number_of_tenants, numberOfTenant) { numberOfTenant = it }
-                        Spacer(Modifier.height(8.dp))
-                        OwnerTextField(R.string.phone_number, phone) { phone = it }
-                        Spacer(Modifier.height(8.dp))
-                        OwnerTextField(R.string.mobile_number, mobile) { mobile = it }
-                        Spacer(Modifier.height(8.dp))
-                        OwnerTextField(R.string.email, email) { email = it }
-                        Spacer(Modifier.height(8.dp))
+                    OwnerInfoRow(Icons.Default.Person, "${user!!.firstName} ${user!!.lastName}")
 
+                    Spacer(Modifier.height(8.dp))
+                    OwnerInfoRow(
+                        Icons.Default.Phone,
+                        "${context.getString(R.string.phone_number)}: ${user!!.phoneNumber}"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OwnerInfoRow(
+                        Icons.Default.MobileFriendly,
+                        "${context.getString(R.string.mobile_number)}: ${user!!.mobileNumber}"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OwnerInfoRow(
+                        Icons.Default.Email,
+                        "${context.getString(R.string.email)}: ${user!!.email}"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (isEditing) {
+                        OutlinedTextField(
+                            value = numberOfTenant,
+                            onValueChange = { value ->
+                                if (value.isEmpty() || value.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                                    numberOfTenant = value
+                                }
+                            },
+                            singleLine = true,
+                            label = { Text(context.getString(R.string.number_of_tenants), style = MaterialTheme.typography.bodyLarge) },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = startDate,
                             onValueChange = { },
@@ -409,42 +428,29 @@ fun TenantOverviewTab(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     } else {
-                        val t = twr.tenant
-                        OwnerInfoRow(Icons.Default.Person, "${t.firstName} ${t.lastName}")
+                        OwnerInfoRow(
+                            Icons.Default.Person,
+                            "${context.getString(R.string.unit_number)}: ${unit!!.unitNumber}"
+                        )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Person,
-                            "${context.getString(R.string.number_of_tenants)}: ${t.numberOfTenants}"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(
-                            Icons.Default.Phone,
-                            "${context.getString(R.string.phone_number)}: ${t.phoneNumber}"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(
-                            Icons.Default.MobileFriendly,
-                            "${context.getString(R.string.mobile_number)}: ${t.mobileNumber}"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(
-                            Icons.Default.Email,
-                            "${context.getString(R.string.email)}: ${t.email}"
+                            "${context.getString(R.string.number_of_tenants)}: ${tenantWithRelation!!.numberOfTenants}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.DateRange,
-                            "${context.getString(R.string.start_date)}: ${t.startDate}"
+                            "${context.getString(R.string.start_date)}: ${tenantWithRelation!!.startDate}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.DateRange,
-                            "${context.getString(R.string.end_date)}: ${t.endDate}"
+                            "${context.getString(R.string.end_date)}: ${tenantWithRelation!!.endDate}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
                             Icons.Default.Info,
-                            "${context.getString(R.string.status)}: ${t.status}"
+                            "${context.getString(R.string.status)}: ${tenantWithRelation!!.status}"
                         )
                         Spacer(Modifier.height(8.dp))
                         OwnerInfoRow(
@@ -488,28 +494,49 @@ fun TenantOverviewTab(
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            try {
-                                isEditing = false
-                                sharedViewModel.updateTenantWithCostsAndDebts(
-                                    tenantWithRelation = twr,
-                                    updatedTenant = twr.tenant.copy(
-                                        firstName = firstName.trim(),
-                                        lastName = lastName.trim(),
-                                        numberOfTenants = numberOfTenant.trim(),
-                                        phoneNumber = phone.trim(),
-                                        mobileNumber = mobile.trim(),
-                                        email = email.trim(),
-                                        startDate = startDate,
-                                        endDate = endDate,
-                                        status = selectedStatus
-                                    ),
-                                    rentAmount = rentValue,
-                                    mortgageAmount = mortgageValue
+                            if (email!!.isNotBlank() &&
+                                !validation.isValidEmail(email.toString())
+                            ) {
+                                snackBarHostState.showSnackbar(
+                                    context.getString(R.string.invalid_email)
                                 )
-                                snackBarHostState.showSnackbar(context.getString(R.string.success_update))
+                                return@launch
+                            }
+
+                            if (!validation.isValidIranMobile(mobile)) {
+                                snackBarHostState.showSnackbar(
+                                    context.getString(R.string.invalid_mobile_number)
+                                )
+                                return@launch
+                            }
+
+                            try {
+                                tenantApi.updateTenant(
+                                    context = context,
+                                    tenantId = tenantId,
+                                    buildingId = buildingId,
+                                    tenantUnit= tenantWithRelation,
+                                    rentDebt = rentDebt,
+                                    mortgageDebt= mortgageDebt,
+                                    onSuccess = {
+
+                                        isEditing = false
+                                        coroutineScope.launch {
+                                            snackBarHostState.showSnackbar(
+                                                context.getString(R.string.success_update)
+                                            )
+                                        }
+                                    },
+                                    onError = { e ->
+                                        coroutineScope.launch {
+                                                snackBarHostState.showSnackbar(
+                                                    context.getString(R.string.failed)
+                                                )
+                                        }
+                                    }
+                                )
                             } catch (e: Exception) {
                                 isEditing = false
-                                Log.e("error", e.message.toString())
                                 snackBarHostState.showSnackbar(context.getString(R.string.failed))
                             }
                         }
@@ -525,12 +552,23 @@ fun TenantOverviewTab(
         if (!isEditing) {
             FloatingActionButton(
                 onClick = { isEditing = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
             ) {
                 Icon(Icons.Default.Edit, contentDescription = context.getString(R.string.edit))
             }
         }
+
+        SnackbarHost(
+            hostState = snackBarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
+}
+
+fun formatNumberWithCommas(number: Double): String {
+    return NumberFormat.getNumberInstance(Locale.US).format(number)
 }
 
 @Composable
@@ -557,6 +595,8 @@ fun TenantFinancialsTab(
             ownerId = null,
             unitId = unitId,
             onSuccess = { costs, debts ->
+                Log.d("costs", costs.toString())
+                Log.d("debts", debts.toString())
                 allCosts = costs
                 allDebts = debts
                 isLoading = false
@@ -722,6 +762,7 @@ fun TenantFinancialsTab(
                                     fundType = fundType,
                                     onSuccess = {
                                         coroutineScope.launch {
+                                            sharedViewModel.loadFundBalances(context, debt.buildingId)
                                             snackBarHostState.showSnackbar(
                                                 context.getString(
                                                     if (fundType == FundType.OPERATIONAL)

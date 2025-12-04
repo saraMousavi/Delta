@@ -8,11 +8,9 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.delta.data.entity.Role
-import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleCrossRef
+import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.data.entity.UsersBuildingsCrossRef
-import com.example.delta.volley.Users
 
 @Dao
 interface UsersDao {    
@@ -20,7 +18,7 @@ interface UsersDao {
         suspend fun insertUser(user: User): Long
 
         @Insert
-        suspend fun insertUserRoleCrossRef(crossRef: UserRoleCrossRef)
+        suspend fun insertUserRoleCrossRef(crossRef: UserRoleBuildingUnitCrossRef)
 
         @Insert
         suspend fun insertUserBuildingCrossRef(crossRef: UsersBuildingsCrossRef)
@@ -41,8 +39,6 @@ interface UsersDao {
         fun getUserById(userId: Long): User?
 
 
-        @Query("SELECT * FROM user WHERE roleId = :roleId")
-        fun getUserByRoleId(roleId: Long): User
 
 
         @Query("""
@@ -53,7 +49,7 @@ interface UsersDao {
 
         @Transaction
         @Query("SELECT * FROM user_role_cross_ref")
-        fun getUsersWithRoles(): List<UserRoleCrossRef>
+        fun getUsersWithRoles(): List<UserRoleBuildingUnitCrossRef>
 
         @Transaction
         @Query("SELECT u.* FROM users_buildings_cross_ref ubc " +

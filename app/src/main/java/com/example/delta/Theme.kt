@@ -75,6 +75,16 @@ val AppTypography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         fontFamily = customFontFamily
+    ),
+    headlineLarge = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 30.sp,
+        fontFamily = customFontFamily
+    ),
+    headlineMedium = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 22.sp,
+        fontFamily = customFontFamily
     )
     // Add more styles if needed
 )

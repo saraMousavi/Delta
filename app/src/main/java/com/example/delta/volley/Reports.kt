@@ -6,9 +6,7 @@ import android.util.Log
 import com.android.volley.Request
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
-import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Units
-import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
 import com.example.delta.data.entity.Earnings
@@ -26,15 +24,48 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 data class DashboardResponse(
+    val ok: Boolean,
     val buildingId: Long,
     val units: List<Units>,
-    val owners: List<Owners>,
-    val debts: List<Debts>,
-    val pays: List<Debts>,      // paid debts (paymentFlag = true)
+    val debtList: List<Debts>,
+    val paysList: List<Debts>,
     val costs: List<Costs>,
     val earnings: List<Earnings>,
-    val credits: List<Credits>
+    val pendingReceipt: List<Credits>,
+    val receiptList: List<Credits>,
+    val debts: List<Debts>,
+    val credits: List<Credits>,
+
+    val capitalSummary: ChartSummary,
+    val chargeSummary: ChartSummary,
+    val operationalSummary: ChartSummary,
+    val capitalDetailByOwner: List<CapitalOwnerBreakdown>,
+    val chargeDetailByUnit: List<UnitBreakdown>,
+    val operationalDetailByUnit: List<UnitBreakdown>
 )
+
+
+data class ChartSummary(
+    val paid: Double,
+    val unpaid: Double
+)
+
+data class CapitalOwnerBreakdown(
+    val ownerId: Long,
+    val userId: Long?,
+    val fullName: String,
+    val paid: Double,
+    val unpaid: Double
+)
+
+data class UnitBreakdown(
+    val unitId: Long,
+    val unitNumber: String,
+    val paid: Double,
+    val unpaid: Double
+)
+
+
 
 class Reports {
 
@@ -56,6 +87,45 @@ class Reports {
         }
     }
 
+    private fun parseChartSummary(obj: JSONObject?): ChartSummary {
+        if (obj == null) return ChartSummary(0.0, 0.0)
+        return ChartSummary(
+            paid = obj.optDouble("paid", 0.0),
+            unpaid = obj.optDouble("unpaid", 0.0)
+        )
+    }
+
+    private fun parseCapitalOwnerBreakdown(arr: JSONArray?): List<CapitalOwnerBreakdown> {
+        if (arr == null) return emptyList()
+        val list = mutableListOf<CapitalOwnerBreakdown>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += CapitalOwnerBreakdown(
+                ownerId = o.optLong("ownerId"),
+                userId = if (o.isNull("userId")) null else o.optLong("userId"),
+                fullName = o.optString("fullName", ""),
+                paid = o.optDouble("paid", 0.0),
+                unpaid = o.optDouble("unpaid", 0.0)
+            )
+        }
+        return list
+    }
+
+    private fun parseUnitBreakdown(arr: JSONArray?): List<UnitBreakdown> {
+        if (arr == null) return emptyList()
+        val list = mutableListOf<UnitBreakdown>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += UnitBreakdown(
+                unitId = o.optLong("unitId"),
+                unitNumber = o.optString("unitNumber", ""),
+                paid = o.optDouble("paid", 0.0),
+                unpaid = o.optDouble("unpaid", 0.0)
+            )
+        }
+        return list
+    }
+
     fun getDashboardData(
         context: Context,
         buildingId: Long,
@@ -72,6 +142,7 @@ class Reports {
             { resp ->
                 try {
                     val result = parseDashboardResponse(resp)
+                    Log.d("dashBoardResult", result.toString())
                     onSuccess(result)
                 } catch (e: Exception) {
                     onError(e)
@@ -97,34 +168,12 @@ class Reports {
         )
     }
 
-    private fun parseDashboardResponse(json: JSONObject): DashboardResponse {
-        val buildingId = json.optLong("buildingId", 0L)
-        val units = parseUnitsArray(json.optJSONArray("units") ?: JSONArray())
-        val owners = parseOwnersArray(json.optJSONArray("owners") ?: JSONArray())
-        val debts = parseDebtsArray(json.optJSONArray("debts") ?: JSONArray())
-        val pays = parseDebtsArray(json.optJSONArray("pays") ?: JSONArray())
-        val costs = parseCostsArray(json.optJSONArray("costs") ?: JSONArray())
-        val earnings = parseEarningsArray(json.optJSONArray("earnings") ?: JSONArray())
-        val credits = parseCreditsArray(json.optJSONArray("credits") ?: JSONArray())
-
-        return DashboardResponse(
-            buildingId = buildingId,
-            units = units,
-            owners = owners,
-            debts = debts,
-            pays = pays,
-            costs = costs,
-            earnings = earnings,
-            credits = credits
-        )
-    }
-
-    private fun parseUnitsArray(arr: JSONArray): List<Units> {
-        val out = ArrayList<Units>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            out.add(
-                Units(
+    private fun parseDashboardResponse(resp: JSONObject): DashboardResponse {
+        fun parseUnits(arr: JSONArray): List<Units> {
+            val list = mutableListOf<Units>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list += Units(
                     unitId = o.optLong("unitId", 0L),
                     buildingId = o.optLong("buildingId", 0L),
                     unitNumber = o.optString("unitNumber", ""),
@@ -134,37 +183,15 @@ class Reports {
                     numberOfWarehouse = o.optInt("numberOfWarehouse", 0).toString(),
                     postCode = o.optString("postCode")
                 )
-            )
+            }
+            return list
         }
-        return out
-    }
 
-    private fun parseOwnersArray(arr: JSONArray): List<Owners> {
-        val out = ArrayList<Owners>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            out.add(
-                Owners(
-                    ownerId = o.optLong("ownerId", 0L),
-                    firstName = o.optString("firstName", ""),
-                    lastName = o.optString("lastName", ""),
-                    phoneNumber = o.optString("phoneNumber", ""),
-                    mobileNumber = o.optString("mobileNumber", ""),
-                    birthday = o.optString("birthday", ""),
-                    address = o.optString("address", ""),
-                    email = o.optString("email", "")
-                )
-            )
-        }
-        return out
-    }
-
-    private fun parseDebtsArray(arr: JSONArray): List<Debts> {
-        val out = ArrayList<Debts>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            out.add(
-                Debts(
+        fun parseDebts(arr: JSONArray): List<Debts> {
+            val list = mutableListOf<Debts>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list += Debts(
                     debtId = o.optLong("debtId", 0L),
                     buildingId = o.optLong("buildingId", 0L),
                     unitId = o.optLong("unitId", 0L),
@@ -175,23 +202,15 @@ class Reports {
                     amount = o.optDouble("amount", 0.0),
                     paymentFlag = o.optBoolean("paymentFlag", false)
                 )
-            )
-        }
-        return out
-    }
-
-    private fun parseCostsArray(arr: JSONArray): List<Costs> {
-        val out = ArrayList<Costs>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val periodStr = o.optString("period", "NONE")
-            val periodEnum = try {
-                Period.valueOf(periodStr)
-            } catch (_: Exception) {
-                Period.NONE
             }
-            out.add(
-                Costs(
+            return list
+        }
+
+        fun parseCosts(arr: JSONArray): List<Costs> {
+            val list = mutableListOf<Costs>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list += Costs(
                     costId        = o.optLong("costId"),
                     buildingId    = if (o.isNull("buildingId")) null else o.optLong("buildingId"),
                     costName      = o.optString("costName"),
@@ -225,23 +244,21 @@ class Reports {
                     chargeFlag    = o.optBoolean("chargeFlag", false),
                     dueDate       = o.optString("dueDate")
                 )
-            )
-        }
-        return out
-    }
-
-    private fun parseEarningsArray(arr: JSONArray): List<Earnings> {
-        val out = ArrayList<Earnings>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val periodStr = o.optString("period", "NONE")
-            val periodEnum = try {
-                Period.valueOf(periodStr)
-            } catch (_: Exception) {
-                Period.NONE
             }
-            out.add(
-                Earnings(
+            return list
+        }
+
+        fun parseEarnings(arr: JSONArray): List<Earnings> {
+            val list = mutableListOf<Earnings>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val periodStr = o.optString("period", "NONE")
+                val periodEnum = try {
+                    Period.valueOf(periodStr)
+                } catch (_: Exception) {
+                    Period.NONE
+                }
+                list += Earnings(
                     earningsId = o.optLong("earningsId", 0L),
                     earningsName = o.optString("earningsName", ""),
                     buildingId = if (o.isNull("buildingId")) null else o.optLong("buildingId"),
@@ -251,17 +268,15 @@ class Reports {
                     startDate = o.optString("startDate", ""),
                     endDate = o.optString("endDate", "")
                 )
-            )
+            }
+            return list
         }
-        return out
-    }
 
-    private fun parseCreditsArray(arr: JSONArray): List<Credits> {
-        val out = ArrayList<Credits>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            out.add(
-                Credits(
+        fun parseCredits(arr: JSONArray): List<Credits> {
+            val list = mutableListOf<Credits>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list += Credits(
                     creditsId = o.optLong("creditsId", 0L),
                     earningsId = o.optLong("earningsId", 0L),
                     buildingId = o.optLong("buildingId", 0L),
@@ -270,8 +285,51 @@ class Reports {
                     amount = o.optDouble("amount", 0.0),
                     receiptFlag = o.optBoolean("receiptFlag", false)
                 )
-            )
+            }
+            return list
         }
-        return out
+
+        val unitsArr          = resp.optJSONArray("units")          ?: JSONArray()
+        val debtListArr       = resp.optJSONArray("debtList")       ?: JSONArray()
+        val paysListArr       = resp.optJSONArray("paysList")       ?: JSONArray()
+        val costsArr          = resp.optJSONArray("costs")          ?: JSONArray()
+        val earningsArr       = resp.optJSONArray("earnings")       ?: JSONArray()
+        val pendingReceiptArr = resp.optJSONArray("pendingReceipt") ?: JSONArray()
+        val receiptListArr    = resp.optJSONArray("receiptList")    ?: JSONArray()
+        val debts    = resp.optJSONArray("debts")    ?: JSONArray()
+        val credits    = resp.optJSONArray("credits")    ?: JSONArray()
+
+        val debtsArr          = resp.optJSONArray("debts")
+        val creditsArr        = resp.optJSONArray("credits")
+
+        val capitalSummaryObj     = resp.optJSONObject("capitalSummary")
+        val chargeSummaryObj      = resp.optJSONObject("chargeSummary")
+        val operationalSummaryObj = resp.optJSONObject("operationalSummary")
+
+        val capitalDetailArr      = resp.optJSONArray("capitalDetailByOwner")
+        val chargeDetailArr       = resp.optJSONArray("chargeDetailByUnit")
+        val operationalDetailArr  = resp.optJSONArray("operationalDetailByUnit")
+
+        return DashboardResponse(
+            ok             = resp.optBoolean("ok", false),
+            buildingId     = resp.optLong("buildingId"),
+            units          = parseUnits(unitsArr ?: JSONArray()),
+            debtList       = parseDebts(debtListArr ?: JSONArray()),
+            paysList       = parseDebts(paysListArr ?: JSONArray()),
+            costs          = parseCosts(costsArr ?: JSONArray()),
+            earnings       = parseEarnings(earningsArr ?: JSONArray()),
+            pendingReceipt = parseCredits(pendingReceiptArr ?: JSONArray()),
+            receiptList    = parseCredits(receiptListArr ?: JSONArray()),
+            debts          = parseDebts(debtsArr ?: JSONArray()),
+            credits        = parseCredits(creditsArr ?: JSONArray()),
+            capitalSummary = parseChartSummary(capitalSummaryObj),
+            chargeSummary  = parseChartSummary(chargeSummaryObj),
+            operationalSummary = parseChartSummary(operationalSummaryObj),
+            capitalDetailByOwner = parseCapitalOwnerBreakdown(capitalDetailArr),
+            chargeDetailByUnit = parseUnitBreakdown(chargeDetailArr),
+            operationalDetailByUnit = parseUnitBreakdown(operationalDetailArr)
+        )
     }
+
+
 }

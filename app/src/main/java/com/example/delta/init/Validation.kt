@@ -7,15 +7,12 @@ class Validation {
         return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
 
-    // Simple phone validation: digits only, length 7-15 (adjust as needed)
     fun isValidPhone(phone: String): Boolean {
         val phoneRegex = Regex("^\\d{7,15}\$")
         return phoneRegex.matches(phone)
     }
 
-    // Iran mobile number validation
     fun isValidIranMobile(mobile: String): Boolean {
-        // Iran mobile numbers start with 09 and have 11 digits total
         val iranMobileRegex = Regex("^09\\d{9}\$")
         return iranMobileRegex.matches(mobile)
     }
@@ -27,6 +24,21 @@ class Validation {
 
     fun validateDang(dang: Double): Boolean {
         return dang in 0.0..6.0
+    }
+
+    // --- NEW: deed serial (18-digit unique id) ---
+    fun normalizeDeedSerial(raw: String): String {
+        return raw.filter { it.isDigit() }
+    }
+
+    fun isValidDeedSerial(raw: String): Boolean {
+        val digits = normalizeDeedSerial(raw)
+        return digits.length == 18
+    }
+
+    // Optional: floor number range
+    fun isValidFloorNumber(floor: Int): Boolean {
+        return floor in -5..50
     }
 
     fun isBuildingInfoValid(sharedViewModel: SharedViewModel): Boolean {
@@ -42,32 +54,27 @@ class Validation {
                         (sharedViewModel.numberOfUnits.isNotBlank() && sharedViewModel.unitArea.isNotBlank()))
     }
 
-
     fun isTenantPeriodConflicted(
         unitId: Long,
         startDate: String,
         endDate: String,
         sharedViewModel: SharedViewModel
     ): Boolean {
-        // Get all tenants for this unit
-        val tenantsForUnit = sharedViewModel.tenantUnitMap.filter {
-            it.value.unitId == unitId && it.key.status == "فعال" // "فعال" = "active"
-        }
-        // Parse dates
-        val newStart = sharedViewModel.parsePersianDate(startDate)
-        val newEnd = sharedViewModel.parsePersianDate(endDate)
-        for (tenant in tenantsForUnit) {
-            val existingStart = sharedViewModel.parsePersianDate(tenant.key.startDate)
-            val existingEnd = sharedViewModel.parsePersianDate(tenant.key.endDate)
-            // If periods overlap
-            if (existingStart != null && existingEnd != null && newStart != null && newEnd != null) {
-                val overlap =
-                    !(newEnd < existingStart || newStart > existingEnd)
-                if (overlap) return true
-            }
-        }
+//        val tenantsForUnit = sharedViewModel.tenantUnitMap.filter {
+//            it.value.unitId == unitId && it.key.status == "فعال"
+//        }
+//
+//        val newStart = sharedViewModel.parsePersianDate(startDate)
+//        val newEnd = sharedViewModel.parsePersianDate(endDate)
+//
+//        for (tenant in tenantsForUnit) {
+//            val existingStart = sharedViewModel.parsePersianDate(tenant.key.startDate)
+//            val existingEnd = sharedViewModel.parsePersianDate(tenant.key.endDate)
+//            if (existingStart != null && existingEnd != null && newStart != null && newEnd != null) {
+//                val overlap = !(newEnd < existingStart || newStart > existingEnd)
+//                if (overlap) return true
+//            }
+//        }
         return false
     }
-
-
 }

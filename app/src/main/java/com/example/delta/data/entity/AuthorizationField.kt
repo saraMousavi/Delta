@@ -18,6 +18,6 @@ data class AuthorizationField(
     @PrimaryKey(autoGenerate = true)
     val fieldId: Long = 0,
     val objectId: Long,  // Parent object reference
-    val name: Int,    // e.g., "fundTab", "phoneNumberField"
+    val name: String,    // e.g., "fundTab", "phoneNumberField"
     val fieldType: String // "text", "checkbox", "button", etc.
 )

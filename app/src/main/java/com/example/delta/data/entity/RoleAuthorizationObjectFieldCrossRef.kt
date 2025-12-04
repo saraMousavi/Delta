@@ -38,10 +38,5 @@ data class RoleAuthorizationObjectFieldCrossRef(
     val roleId: Long,
     val objectId: Long,
     val fieldId: Long,
-    val permissionLevel: Int // 0=read, 1=write, 2= delete 3=full
-){
-    // Helper property (not stored in DB)
-    val permissionLevelEnum: PermissionLevel
-        get() = PermissionLevel.fromValue(permissionLevel)
-}
-
+    val permissionLevel: PermissionLevel // 0=read, 1=write, 2= delete 3=full
+)

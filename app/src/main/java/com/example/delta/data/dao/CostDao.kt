@@ -2,7 +2,6 @@ package com.example.delta.data.dao
 
 import androidx.room.*
 import com.example.delta.data.entity.Costs
-import com.example.delta.data.entity.Owners
 import com.example.delta.data.entity.Units
 import com.example.delta.enums.FundType
 import kotlinx.coroutines.flow.Flow
@@ -37,19 +36,6 @@ interface CostDao {
         buildingId: Long
     ): List<Units>
 
-    @Query(
-        """
-    SELECT DISTINCT owners.*
-    FROM owners
-    INNER JOIN debts ON owners.ownerId = debts.ownerId
-    WHERE debts.costId = :costId
-      AND debts.buildingId = :buildingId
-"""
-    )
-    fun getOwnersOfBuildingFromCost(
-        costId: Long,
-        buildingId: Long
-    ): List<Owners>
 
 
     @Query("SELECT * FROM costs where buildingId is null")

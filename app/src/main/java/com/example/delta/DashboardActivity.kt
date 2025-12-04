@@ -2,6 +2,7 @@ package com.example.delta
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -9,6 +10,8 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.*
@@ -24,11 +27,15 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
-import com.example.delta.data.entity.Buildings
+import com.example.delta.data.entity.Costs
+import com.example.delta.enums.DashboardCategory
+import com.example.delta.enums.FundType
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
-import com.example.delta.volley.BuildingWithCosts
+import com.example.delta.volley.CapitalOwnerBreakdown
 import com.example.delta.volley.Cost
+import com.example.delta.volley.Cost.BuildingWithCosts
+import com.example.delta.volley.UnitBreakdown
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.BarData
@@ -38,13 +45,10 @@ import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
 import com.github.mikephil.charting.listener.OnChartValueSelectedListener
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
+import ir.hamsaa.persiandatepicker.util.PersianCalendar
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.collections.first
+import kotlin.collections.forEachIndexed
 
 class DashboardActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -67,6 +71,7 @@ class DashboardActivity : ComponentActivity() {
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsActivityScreen(
@@ -82,10 +87,10 @@ fun ReportsActivityScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // 1) Load buildings + costs from server (single request)
     LaunchedEffect(Unit) {
         Cost().fetchBuildingsWithCosts(
             context = context,
+            mobileNumber = Preference().getUserMobile(context) ?: "",
             onSuccess = { list ->
                 buildingsWithCosts = list
                 isLoading = false
@@ -108,12 +113,10 @@ fun ReportsActivityScreen(
         )
     }
 
-    // 2) Flatten buildings list from buildingsWithCosts
     val buildings = remember(buildingsWithCosts) {
         buildingsWithCosts.map { it.building }
     }
 
-    // 3) When selected building changes, load dashboard data (debts, pays, units, owners, …)
     LaunchedEffect(selectedBuildingId) {
         val bId = selectedBuildingId
         if (bId != null && bId > 0) {
@@ -121,19 +124,21 @@ fun ReportsActivityScreen(
         }
     }
 
-    // 4) Resolve selected building object
-    val selectedBuilding = buildings.find { it.buildingId == selectedBuildingId }
-        ?: buildings.firstOrNull()
-
     val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
-    val buildingId = selectedBuilding?.buildingId ?: -1L
 
     val debtsList by sharedViewModel.dashboardDebts.collectAsState()
     val paysList by sharedViewModel.dashboardPays.collectAsState()
-    val allCosts by sharedViewModel.dashboardCosts.collectAsState()
     val unitsList by sharedViewModel.dashboardUnits.collectAsState()
-    val ownersList by sharedViewModel.dashboardOwners.collectAsState()
+    val receiptList by sharedViewModel.dashboardReceipt.collectAsState()
+    val pendingReceiptList by sharedViewModel.dashboardPendingReceipt.collectAsState()
+    val costsList by sharedViewModel.dashboardCosts.collectAsState()
+    val capitalSummary by sharedViewModel.dashboardCapitalSummary.collectAsState()
+    val chargeSummary by sharedViewModel.dashboardChargeSummary.collectAsState()
+    val operationalSummary by sharedViewModel.dashboardOperationalSummary.collectAsState()
 
+    val capitalDetailByOwner by sharedViewModel.dashboardCapitalDetailByOwner.collectAsState()
+    val chargeDetailByUnit by sharedViewModel.dashboardChargeDetailByUnit.collectAsState()
+    val operationalDetailByUnit by sharedViewModel.dashboardOperationalDetailByUnit.collectAsState()
     var showNoRecordedData by remember { mutableStateOf(false) }
     showNoRecordedData = debtsList.isEmpty() && paysList.isEmpty()
 
@@ -143,46 +148,172 @@ fun ReportsActivityScreen(
         context.getString(R.string.rent)
     )
 
-    val debtsByCostName = debtsList
-        .filter { it.description !in excludedDescriptions }
-        .groupBy { it.description }
-        .mapValues { it.value.sumOf { d -> d.amount } }
-
-    val paysByCostName = paysList
-        .filter { it.description !in excludedDescriptions }
-        .groupBy { it.description }
-        .mapValues { it.value.sumOf { p -> p.amount } }
-
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
-
-    val allCostNames = (debtsByCostName.keys + paysByCostName.keys).distinct()
-    val xAxisLabels = allCostNames.toTypedArray()
-
-    val filteredDebtsByUnit = remember(debtsList, selectedCategory, unitsList) {
-        if (selectedCategory == null) emptyMap<String, Double>()
-        else debtsList
-            .filter { it.description == selectedCategory }
-            .groupBy { debt ->
-                unitsList.find { it.unitId == debt.unitId }?.unitNumber
-                    ?: context.getString(R.string.other)
-            }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    val costsById = remember(costsList) {
+        costsList.associateBy { it.costId }
     }
 
-    val filteredPaysByUnit = remember(paysList, selectedCategory, unitsList) {
-        if (selectedCategory == null) emptyMap<String, Double>()
-        else paysList
-            .filter { it.description == selectedCategory }
-            .groupBy { pay ->
-                unitsList.find { it.unitId == pay.unitId }?.unitNumber
-                    ?: context.getString(R.string.other)
+    val operationalEffectiveCostIds = remember(costsList) {
+        costsList
+            .filter { it.fundType == FundType.OPERATIONAL }
+            .groupBy { it.costName }
+            .filter { (_, group) -> group.any { it.tempAmount == 0.0 } }
+            .flatMap { (_, group) -> group.map { it.costId } }
+            .toSet()
+    }
+
+    fun resolveCategory(cost: Costs): CostCategoryInfo? {
+        if (cost.costName in excludedDescriptions) return null
+        return if (cost.fundType == FundType.CAPITAL) {
+            CostCategoryInfo(
+                key = "CAPITAL_${cost.costId}",
+                title = cost.costName,
+                fundType = cost.fundType
+            )
+        } else {
+            val isEffective = operationalEffectiveCostIds.contains(cost.costId)
+            if (isEffective) {
+                CostCategoryInfo(
+                    key = "OP_EFF_${cost.costId}",
+                    title = cost.costName,
+                    fundType = cost.fundType
+                )
+            } else {
+                CostCategoryInfo(
+                    key = "OP_CURRENT",
+                    title = context.getString(R.string.current_costs),
+                    fundType = cost.fundType
+                )
             }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
+        }
+    }
+
+    data class CategoryAgg(
+        val info: CostCategoryInfo,
+        var debtTotal: Double,
+        var payTotal: Double
+    )
+
+    val categoryAggMap = remember(debtsList, paysList, costsList) {
+        val map = linkedMapOf<String, CategoryAgg>()
+
+        fun ensureCategory(cost: Costs): CategoryAgg? {
+            val info = resolveCategory(cost) ?: return null
+            val existing = map[info.key]
+            if (existing != null) return existing
+            val agg = CategoryAgg(info, 0.0, 0.0)
+            map[info.key] = agg
+            return agg
+        }
+
+        debtsList.forEach { d ->
+            val cost = costsById[d.costId] ?: return@forEach
+            val agg = ensureCategory(cost) ?: return@forEach
+            agg.debtTotal += d.amount
+        }
+
+        paysList.forEach { p ->
+            val cost = costsById[p.costId] ?: return@forEach
+            val agg = ensureCategory(cost) ?: return@forEach
+            agg.payTotal += p.amount
+        }
+
+        map
+    }
+
+    val allCategories = categoryAggMap.values.map { it.info }
+    val xAxisLabels = allCategories.map { it.title }.toTypedArray()
+
+    val debtsByCategoryKey = categoryAggMap.mapValues { it.value.debtTotal }
+    val paysByCategoryKey = categoryAggMap.mapValues { it.value.payTotal }
+
+    var selectedCategoryKey by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(selectedCategoryKey) {
+        if (selectedCategoryKey != null) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+
+
+    val filteredDebtsByUnit = remember(debtsList, selectedCategoryKey, unitsList, costsList) {
+        if (selectedCategoryKey == null) emptyMap<String, Double>()
+        else {
+            debtsList
+                .filter { d ->
+                    val cost = costsById[d.costId] ?: return@filter false
+                    val cat = resolveCategory(cost) ?: return@filter false
+                    cat.key == selectedCategoryKey
+                }
+                .groupBy { debt ->
+                    unitsList.find { it.unitId == debt.unitId }?.unitNumber
+                        ?: context.getString(R.string.other)
+                }
+                .mapValues { entry -> entry.value.sumOf { it.amount } }
+        }
+    }
+
+    val filteredPaysByUnit = remember(paysList, selectedCategoryKey, unitsList, costsList) {
+        if (selectedCategoryKey == null) emptyMap<String, Double>()
+        else {
+            paysList
+                .filter { p ->
+                    val cost = costsById[p.costId] ?: return@filter false
+                    val cat = resolveCategory(cost) ?: return@filter false
+                    cat.key == selectedCategoryKey
+                }
+                .groupBy { pay ->
+                    unitsList.find { it.unitId == pay.unitId }?.unitNumber
+                        ?: context.getString(R.string.other)
+                }
+                .mapValues { entry -> entry.value.sumOf { it.amount } }
+        }
     }
 
     val detailXAxisLabels = (filteredDebtsByUnit.keys + filteredPaysByUnit.keys)
         .distinct()
         .toTypedArray()
+
+
+    val numberFormatter = remember { NumberFormat.getNumberInstance(Locale.US) }
+
+    fun extractYear(date: String?): String? {
+        if (date.isNullOrBlank()) return null
+        val parts = date.split("/")
+        return if (parts.isNotEmpty()) parts[0] else null
+    }
+
+    val currentYear: String = remember {
+        val pc = PersianCalendar()
+        pc.persianYear.toString()
+    }
+
+
+    val totalDebtsCurrentYear: Double = remember(debtsList, currentYear) {
+        debtsList
+            .filter { extractYear(it.dueDate) == currentYear }
+            .sumOf { it.amount / 1_000_000f }
+    }
+
+    val totalPaysCurrentYear: Double = remember(paysList, currentYear) {
+        paysList
+            .filter { extractYear(it.dueDate) == currentYear }
+            .sumOf { it.amount / 1_000_000f}
+    }
+
+    val totalReceiptCurrentYear: Double = remember(receiptList, currentYear) {
+        receiptList
+            .filter { extractYear(it.dueDate) == currentYear }
+            .sumOf { it.amount / 1_000_000f}
+    }
+
+    val totalPendingReceiptCurrentYear: Double = remember(pendingReceiptList, currentYear) {
+        pendingReceiptList
+            .filter { extractYear(it.dueDate) == currentYear }
+            .sumOf { it.amount / 1_000_000f}
+    }
+
+
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = onHomeClick) {
@@ -191,14 +322,26 @@ fun ReportsActivityScreen(
         },
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(text = context.getString(R.string.title_dashboard), style = MaterialTheme.typography.bodyLarge) }
+                title = {
+                    Text(
+                        text = context.getString(R.string.title_dashboard),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(scrollState)
+        ) {
             if (!showNoDataChartDialog) {
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
                 ) {
                     items(buildings) { building ->
                         FilterChip(
@@ -214,18 +357,68 @@ fun ReportsActivityScreen(
                         )
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
-
                 Text(
                     text = context.getString(R.string.bilan_report),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SummaryCard(
+                        title = context.getString(R.string.current_year_debt),
+                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        amount = totalDebtsCurrentYear,
+                        formatter = numberFormatter,
+                        modifier = Modifier.weight(1f),
+                        amountColor = Color(context.getColor(R.color.Red_light))
+                    )
+                    SummaryCard(
+                        title = context.getString(R.string.current_year_pays),
+                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        amount = totalPaysCurrentYear,
+                        formatter = numberFormatter,
+                        modifier = Modifier.weight(1f),
+                        amountColor = Color(context.getColor(R.color.Green))
+                    )
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SummaryCard(
+                        title = context.getString(R.string.current_year_pending_receipt),
+                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        amount = totalPendingReceiptCurrentYear,
+                        formatter = numberFormatter,
+                        modifier = Modifier.weight(1f),
+                        amountColor = Color(context.getColor(R.color.Red_light))
+                    )
+                    SummaryCard(
+                        title = context.getString(R.string.current_year_receipt),
+                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        amount = totalReceiptCurrentYear,
+                        formatter = numberFormatter,
+                        modifier = Modifier.weight(1f),
+                        amountColor = Color(context.getColor(R.color.Green))
+                    )
+                }
+
                 if (showNoRecordedData) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -237,6 +430,7 @@ fun ReportsActivityScreen(
                     AndroidView(
                         factory = { ctx ->
                             BarChart(ctx).apply {
+                                setNoDataText(context.getString(R.string.no_data))
                                 description.isEnabled = false
                                 setPinchZoom(false)
                                 setDrawGridBackground(false)
@@ -248,7 +442,7 @@ fun ReportsActivityScreen(
                                     setDrawGridLines(true)
                                     granularity = 1f
                                     typeface = yekanTypeface
-                                    valueFormatter = MoneyValueFormatter()
+                                    valueFormatter = MillionValueFormatter()
                                     textSize = 13f
                                 }
                                 legend.apply {
@@ -263,30 +457,41 @@ fun ReportsActivityScreen(
                                     typeface = yekanTypeface
                                     labelRotationAngle = -15f
                                     setCenterAxisLabels(true)
-                                    valueFormatter = IndexAxisValueFormatter(xAxisLabels)
                                 }
                             }
                         },
                         update = { chart ->
+                            val labels = arrayOf("هزینه های عمرانی", "هزینه های جاری", "شارژ")
+
                             val debtsEntries = mutableListOf<BarEntry>()
                             val paysEntries = mutableListOf<BarEntry>()
 
-                            allCostNames.forEachIndexed { index, costName ->
-                                val debtAmount = debtsByCostName[costName]?.toFloat() ?: 0f
-                                val payAmount = paysByCostName[costName]?.toFloat() ?: 0f
-                                debtsEntries.add(BarEntry(index.toFloat(), debtAmount))
-                                paysEntries.add(BarEntry(index.toFloat(), payAmount))
-                            }
+                            val capitalDebt = capitalSummary!!.unpaid.toFloat()
+                            val capitalPay = capitalSummary!!.paid.toFloat()
+                            val operationalDebt = operationalSummary!!.unpaid.toFloat()
+                            val operationalPay = operationalSummary!!.paid.toFloat()
+                            val chargeDebt = chargeSummary!!.unpaid.toFloat()
+                            val chargePay = chargeSummary!!.paid.toFloat()
 
-                            if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
-                                val debtDataSet =
-                                    BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                                        color = Color(context.getColor(R.color.Red_light)).toArgb()
-                                        valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                                        valueTextSize = 12f
-                                        valueTypeface = yekanTypeface
-                                        valueFormatter = MoneyValueFormatter()
-                                    }
+                            debtsEntries.add(BarEntry(0f, capitalDebt))
+                            paysEntries.add(BarEntry(0f, capitalPay))
+
+                            debtsEntries.add(BarEntry(1f, operationalDebt))
+                            paysEntries.add(BarEntry(1f, operationalPay))
+
+                            debtsEntries.add(BarEntry(2f, chargeDebt))
+                            paysEntries.add(BarEntry(2f, chargePay))
+
+                            val hasData = debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
+
+                            if (hasData) {
+                                val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                                    color = Color(context.getColor(R.color.Red_light)).toArgb()
+                                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                                    valueTextSize = 12f
+                                    valueTypeface = yekanTypeface
+                                    valueFormatter = MillionValueFormatter()
+                                }
                                 val payDataSet = BarDataSet(
                                     paysEntries,
                                     context.getString(R.string.payments)
@@ -295,18 +500,18 @@ fun ReportsActivityScreen(
                                     valueTextColor = Color(context.getColor(R.color.black)).toArgb()
                                     valueTextSize = 12f
                                     valueTypeface = yekanTypeface
-                                    valueFormatter = MoneyValueFormatter()
+                                    valueFormatter = MillionValueFormatter()
                                 }
 
                                 val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
                                 val groupSpace = 0.4f
                                 val barSpace = 0.05f
 
-                                data.groupBars(0f, groupSpace, barSpace)
+                                chart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
                                 chart.data = data
-                                chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-                                chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                                data.groupBars(0f, groupSpace, barSpace)
                                 chart.xAxis.axisMinimum = -0.5f
+                                chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
                                 chart.invalidate()
                             } else {
                                 chart.clear()
@@ -320,13 +525,16 @@ fun ReportsActivityScreen(
                                 ) {
                                     if (e == null) return
                                     val xIndex = e.x.toInt()
-                                    selectedCategory = if (xIndex in allCostNames.indices) {
-                                        allCostNames[xIndex]
-                                    } else null
+                                    selectedCategoryKey = when (xIndex) {
+                                        0 -> "هزینه های عمرانی"
+                                        1 -> "هزینه های جاری"
+                                        2 -> "شارژ"
+                                        else -> null
+                                    }
                                 }
 
                                 override fun onNothingSelected() {
-                                    selectedCategory = null
+                                    selectedCategoryKey = null
                                 }
                             })
                         },
@@ -336,26 +544,52 @@ fun ReportsActivityScreen(
                             .padding(horizontal = 16.dp)
                     )
 
+
                     Spacer(Modifier.height(16.dp))
 
-                    if (selectedCategory == null) {
+                    Spacer(Modifier.height(16.dp))
+
+                    if (selectedCategoryKey == null) {
                         Text(
                             text = context.getString(R.string.click_on_cost_columns),
                             style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
                             textAlign = TextAlign.Center
                         )
                     } else {
-                        CategoryDetailChartByUnit(
-                            category = selectedCategory!!,
-                            debtsByUnit = filteredDebtsByUnit,
-                            paysByUnit = filteredPaysByUnit,
-                            xAxisLabels = detailXAxisLabels,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(16.dp)
-                        )
+                        when (selectedCategoryKey) {
+                            "هزینه های عمرانی" -> {
+                                CategoryDetailChartByOwner(
+                                    category = "هزینه های عمرانی",
+                                    items = capitalDetailByOwner,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                )
+                            }
+                            "هزینه های جاری" -> {
+                                CategoryDetailChartByUnit(
+                                    category = "هزینه های جاری",
+                                    items = operationalDetailByUnit,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                )
+                            }
+                            "شارژ" -> {
+                                CategoryDetailChartByUnit(
+                                    category = "شارژ",
+                                    items = chargeDetailByUnit,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                )
+                            }
+                        }
                     }
+
                 }
             }
         }
@@ -364,8 +598,18 @@ fun ReportsActivityScreen(
     if (showNoDataChartDialog) {
         AlertDialog(
             onDismissRequest = { showNoDataChartDialog = false },
-            title = { Text(text = context.getString(R.string.chart_alarm), style = MaterialTheme.typography.bodyLarge) },
-            text = { Text(text = context.getString(R.string.chart_alarm_info), style = MaterialTheme.typography.bodyLarge) },
+            title = {
+                Text(
+                    text = context.getString(R.string.chart_alarm),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = context.getString(R.string.chart_alarm_info),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -373,23 +617,137 @@ fun ReportsActivityScreen(
                         onHomeClick()
                     }
                 ) {
-                    Text(text = context.getString(R.string.confirm), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = context.getString(R.string.confirm),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         )
     }
 }
 
+fun formatMillionLabel(value: Double): String {
+    val formatter = NumberFormat.getNumberInstance(Locale.US)
+    val million = value / 1_000_000.0
+    return formatter.format(million) + " میلیون تومان"
+}
+
+
 @Composable
 fun CategoryDetailChartByUnit(
     category: String,
-    debtsByUnit: Map<String, Double>,
-    paysByUnit: Map<String, Double>,
-    xAxisLabels: Array<String>,
+    items: List<UnitBreakdown>,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
+
+    val labels = items.map { it.unitNumber.ifBlank { it.unitId.toString() } }.toTypedArray()
+
+    Column(modifier = modifier) {
+        Text(
+            text = "${context.getString(R.string.cost_detail)} $category ${context.getString(R.string.based_on_unit)}",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        AndroidView(
+            factory = { ctx ->
+                BarChart(ctx).apply {
+                    setNoDataText(context.getString(R.string.no_data))
+                    description.isEnabled = false
+                    setPinchZoom(false)
+                    setDrawGridBackground(false)
+                    legend.isEnabled = true
+                    axisRight.isEnabled = false
+                    axisLeft.apply {
+                        axisMinimum = 0f
+                        setDrawGridLines(true)
+                        granularity = 1f
+                        typeface = yekanTypeface
+                        valueFormatter = MillionValueFormatter()
+                    }
+                    legend.apply {
+                        typeface = yekanTypeface
+                        textSize = 12f
+                        textColor = Color(ctx.getColor(R.color.black)).toArgb()
+                    }
+                    xAxis.apply {
+                        position = XAxis.XAxisPosition.BOTTOM
+                        granularity = 1f
+                        setDrawGridLines(false)
+                        setCenterAxisLabels(true)
+                        textSize = 14f
+                        typeface = yekanTypeface
+                        valueFormatter = IndexAxisValueFormatter(labels)
+                    }
+                }
+            },
+            update = { chart ->
+                val debtsEntries = mutableListOf<BarEntry>()
+                val paysEntries = mutableListOf<BarEntry>()
+
+                items.forEachIndexed { index, item ->
+                    debtsEntries.add(BarEntry(index.toFloat(), item.unpaid.toFloat()))
+                    paysEntries.add(BarEntry(index.toFloat(), item.paid.toFloat()))
+                }
+
+                val hasData = debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
+
+                if (hasData) {
+                    val debtDataSet =
+                        BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                            color = Color(context.getColor(R.color.secondary_color)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                            valueFormatter = MillionValueFormatter()
+                        }
+                    val payDataSet =
+                        BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                            color = Color(context.getColor(R.color.teal_700)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                            valueFormatter = MillionValueFormatter()
+                        }
+
+                    val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                    val groupSpace = 0.4f
+                    val barSpace = 0.05f
+
+                    data.groupBars(0f, groupSpace, barSpace)
+                    chart.data = data
+                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
+                    chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                    chart.xAxis.axisMinimum = -0.5f
+                    chart.notifyDataSetChanged()
+                    chart.animateY(1000)
+                    chart.invalidate()
+                } else {
+                    chart.clear()
+                    chart.invalidate()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(350.dp)
+        )
+    }
+}
+
+
+@Composable
+fun CategoryDetailChartByOwner(
+    category: String,
+    items: List<CapitalOwnerBreakdown>,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
+
+    val labels = items.map { it.fullName.ifBlank { it.ownerId.toString() } }.toTypedArray()
 
     Column(modifier = modifier) {
         Text(
@@ -411,7 +769,7 @@ fun CategoryDetailChartByUnit(
                         setDrawGridLines(true)
                         granularity = 1f
                         typeface = yekanTypeface
-                        valueFormatter = MoneyValueFormatter()
+                        valueFormatter = MillionValueFormatter()
                     }
                     legend.apply {
                         typeface = yekanTypeface
@@ -425,7 +783,7 @@ fun CategoryDetailChartByUnit(
                         setCenterAxisLabels(true)
                         textSize = 14f
                         typeface = yekanTypeface
-                        valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                        valueFormatter = IndexAxisValueFormatter(labels)
                     }
                 }
             },
@@ -433,28 +791,30 @@ fun CategoryDetailChartByUnit(
                 val debtsEntries = mutableListOf<BarEntry>()
                 val paysEntries = mutableListOf<BarEntry>()
 
-                xAxisLabels.forEachIndexed { index, unitLabel ->
-                    val debtSum = debtsByUnit[unitLabel]?.toFloat() ?: 0f
-                    val paySum = paysByUnit[unitLabel]?.toFloat() ?: 0f
-                    debtsEntries.add(BarEntry(index.toFloat(), debtSum))
-                    paysEntries.add(BarEntry(index.toFloat(), paySum))
+                items.forEachIndexed { index, item ->
+                    debtsEntries.add(BarEntry(index.toFloat(), item.unpaid.toFloat()))
+                    paysEntries.add(BarEntry(index.toFloat(), item.paid.toFloat()))
                 }
 
-                if (debtsEntries.isNotEmpty() || paysEntries.isNotEmpty()) {
-                    val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                        color = Color(context.getColor(R.color.secondary_color)).toArgb()
-                        valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                        valueTextSize = 12f
-                        valueTypeface = yekanTypeface
-                        valueFormatter = MoneyValueFormatter()
-                    }
-                    val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
-                        color = Color(context.getColor(R.color.teal_700)).toArgb()
-                        valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                        valueTextSize = 12f
-                        valueTypeface = yekanTypeface
-                        valueFormatter = MoneyValueFormatter()
-                    }
+                val hasData = debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
+
+                if (hasData) {
+                    val debtDataSet =
+                        BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
+                            color = Color(context.getColor(R.color.secondary_color)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                            valueFormatter = MillionValueFormatter()
+                        }
+                    val payDataSet =
+                        BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
+                            color = Color(context.getColor(R.color.teal_700)).toArgb()
+                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextSize = 12f
+                            valueTypeface = yekanTypeface
+                            valueFormatter = MillionValueFormatter()
+                        }
 
                     val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
                     val groupSpace = 0.4f
@@ -462,7 +822,7 @@ fun CategoryDetailChartByUnit(
 
                     data.groupBars(0f, groupSpace, barSpace)
                     chart.data = data
-                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
+                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
                     chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
                     chart.xAxis.axisMinimum = -0.5f
                     chart.notifyDataSetChanged()
@@ -480,95 +840,63 @@ fun CategoryDetailChartByUnit(
     }
 }
 
-//@Composable
-//fun CategoryDetailChart(
-//    category: String,
-//    debtsSum: Double,
-//    paysSum: Double,
-//    modifier: Modifier = Modifier
-//) {
-//    val context = LocalContext.current
-//    val yekanTypeface = remember { ResourcesCompat.getFont(context, R.font.yekan) }
-//    val xAxisLabels = arrayOf(category)
-//
-//    Column(modifier = modifier) {
-//        Text(
-//            text = "${context.getString(R.string.cost_detail)} $category",
-//            style = MaterialTheme.typography.bodyLarge,
-//            modifier = Modifier.padding(bottom = 12.dp)
-//        )
-//        AndroidView(
-//            factory = { ctx ->
-//                BarChart(ctx).apply {
-//                    description.isEnabled = false
-//                    setPinchZoom(false)
-//                    setDrawGridBackground(false)
-//                    legend.isEnabled = true
-//                    axisRight.isEnabled = false
-//                    axisLeft.apply {
-//                        axisMinimum = 0f
-//                        setDrawGridLines(true)
-//                        granularity = 1f
-//                        typeface = yekanTypeface
-//                        valueFormatter = MoneyValueFormatter()
-//                    }
-//                    legend.apply {
-//                        typeface = yekanTypeface
-//                        textSize = 12f
-//                        textColor = Color(ctx.getColor(R.color.black)).toArgb()
-//                    }
-//                    xAxis.apply {
-//                        position = XAxis.XAxisPosition.BOTTOM
-//                        granularity = 1f
-//                        setDrawGridLines(false)
-//                        setCenterAxisLabels(true)
-//                        textSize = 14f
-//                        typeface = yekanTypeface
-//                        valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-//                    }
-//                }
-//            },
-//            update = { chart ->
-//                val debtsEntries = listOf(BarEntry(0f, debtsSum.toFloat()))
-//                val paysEntries = listOf(BarEntry(0f, paysSum.toFloat()))
-//
-//                val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-//                    color = Color(context.getColor(R.color.secondary_color)).toArgb()
-//                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-//                    valueTextSize = 12f
-//                    valueTypeface = yekanTypeface
-//                    valueFormatter = MoneyValueFormatter()
-//                }
-//
-//                val payDataSet = BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
-//                    color = Color(context.getColor(R.color.teal_700)).toArgb()
-//                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-//                    valueTextSize = 12f
-//                    valueTypeface = yekanTypeface
-//                    valueFormatter = MoneyValueFormatter()
-//                }
-//
-//                val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
-//                val groupSpace = 0.4f
-//                val barSpace = 0.05f
-//
-//                data.groupBars(0f, groupSpace, barSpace)
-//                chart.data = data
-//                chart.xAxis.valueFormatter = IndexAxisValueFormatter(xAxisLabels)
-//                chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
-//                chart.xAxis.axisMinimum = -0.5f
-//                chart.notifyDataSetChanged()
-//                chart.animateY(1000)
-//                chart.invalidate()
-//            },
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .height(350.dp)
-//        )
-//    }
-//}
+
+@Composable
+fun SummaryCard(
+    title: String,
+    subtitle: String,
+    amount: Double,
+    formatter: NumberFormat,
+    modifier: Modifier = Modifier,
+    amountColor: Color = Color.Black
+) {
+    Card(
+        modifier = modifier,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+            Text(
+                text = formatter.format(amount),
+                style = MaterialTheme.typography.titleMedium,
+                color = amountColor
+            )
+        }
+    }
+}
+
+data class CostCategoryInfo(
+    val key: String,
+    val title: String,
+    val fundType: FundType
+)
+
 
 class MoneyValueFormatter : ValueFormatter() {
     private val formatter = NumberFormat.getNumberInstance(Locale.US)
     override fun getFormattedValue(value: Float): String = formatter.format(value.toDouble())
 }
+
+class MillionValueFormatter : ValueFormatter() {
+    private val formatter = NumberFormat.getNumberInstance(Locale.US)
+    override fun getFormattedValue(value: Float): String {
+        val million = value / 1_000_000f
+        return formatter.format(million.toDouble())
+    }
+}
+

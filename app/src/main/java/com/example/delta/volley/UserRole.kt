@@ -34,7 +34,7 @@ class UserRole {
                                 add(
                                     Role(
                                         roleId = o.optLong("roleId"),
-                                        roleName = Roles.valueOf(roleName),
+                                        roleName = roleName,
                                         roleDescription = o.optString("roleDescription")
                                     )
                                 )

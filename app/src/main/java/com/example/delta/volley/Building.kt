@@ -2,26 +2,41 @@ package com.example.delta.volley
 
 import android.content.Context
 import android.util.Log
+import androidx.core.net.toUri
+import com.android.volley.DefaultRetryPolicy
+import com.android.volley.NetworkError
+import com.android.volley.NoConnectionError
 import com.android.volley.Request
+import com.android.volley.TimeoutError
+import com.android.volley.VolleyError
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
-import com.example.delta.data.dao.OwnersDao
-import com.example.delta.data.dao.UnitsDao
 import com.example.delta.data.entity.*
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
+import com.example.delta.enums.Roles
+import com.example.delta.init.AppRequestQueue
 import org.json.JSONArray
 import org.json.JSONObject
-import androidx.core.net.toUri
 import java.util.Locale
 import java.util.UUID
 
 class Building {
     private val baseUrl = "http://217.144.107.231:3000/building"
+
+    data class BuildingWithResidents(
+        val building: Buildings,
+        val units: List<com.example.delta.data.entity.Units>,
+        val owners: List<User>,
+        val tenants: List<User>,
+        val ownerUnits: List<OwnersUnitsCrossRef>,
+        val tenantUnits: List<TenantsUnitsCrossRef>
+    )
+
 
     data class BuildingFullDto(
         val building: Buildings,
@@ -30,8 +45,8 @@ class Building {
         val cityComplex: CityComplexes?,
         val files: List<UploadedFileEntity>,
         val units: List<com.example.delta.data.entity.Units>,
-        val owners: List<Owners>,
-        val tenants: List<Tenants>,
+        val users: List<User>,
+        val role: List<UserRole>,
         val ownerUnits: List<OwnersUnitsCrossRef>,
         val tenantUnits: List<TenantsUnitsCrossRef>,
         val costs: List<Costs>,
@@ -39,17 +54,151 @@ class Building {
         val chargeCostsForYear: List<Costs>
     )
 
+    data class UserRole(
+        val user: User,
+        val roles: Roles
+    )
 
     data class BulkBuildingItem(
         val building: Buildings,
         val buildingType: BuildingTypes?,
         val buildingUsage: BuildingUsages?,
         val units: List<com.example.delta.data.entity.Units> = emptyList(),
-        val owners: List<Owners> = emptyList(),
-        val tenants: List<Tenants> = emptyList(),
+        val user: List<User> = emptyList(),
+        val role: List<UserRole> = emptyList(),
         val ownerUnits: List<OwnersUnitsCrossRef> = emptyList(),
         val tenantUnits: List<TenantsUnitsCrossRef> = emptyList()
     )
+
+    fun fetchBuildingsWithResidents(
+        context: Context,
+        mobileNumber: String,
+        onSuccess: (List<BuildingWithResidents>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/with-residents?mobileNumber=${mobileNumber.trim()}"
+
+        val request = JsonArrayRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { arr ->
+                try {
+                    val out = mutableListOf<BuildingWithResidents>()
+
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+
+                        val bObj = obj.getJSONObject("building")
+                        val building = Buildings(
+                            buildingId = bObj.optLong("buildingId"),
+                            complexId = if (bObj.isNull("complexId")) null else bObj.optLong("complexId"),
+                            serialNumber = bObj.optString("serialNumber", ""),
+                            name = bObj.optString("name", ""),
+                            postCode = bObj.optString("postCode", ""),
+                            street = bObj.optString("street", ""),
+                            province = bObj.optString("province", ""),
+                            state = bObj.optString("state", ""),
+                            buildingTypeId = if (bObj.isNull("buildingTypeId")) null else bObj.optLong("buildingTypeId"),
+                            buildingUsageId = if (bObj.isNull("buildingUsageId")) null else bObj.optLong("buildingUsageId"),
+                            fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
+                            userId = bObj.optLong("userId"),
+                            floorCount = bObj.optInt("floorCount")
+                        )
+
+                        val units = parseUnits(obj.optJSONArray("units") ?: JSONArray())
+                        val owners = parseUsers(obj.optJSONArray("owners") ?: JSONArray())
+                        val tenants = parseUsers(obj.optJSONArray("tenants") ?: JSONArray())
+                        val ownerUnits = parseOwnerUnits(obj.optJSONArray("ownerUnits") ?: JSONArray())
+                        val tenantUnits = parseTenantUnits(obj.optJSONArray("tenantUnits") ?: JSONArray())
+
+                        out += BuildingWithResidents(
+                            building = building,
+                            units = units,
+                            owners = owners,
+                            tenants = tenants,
+                            ownerUnits = ownerUnits,
+                            tenantUnits = tenantUnits
+                        )
+                    }
+
+                    onSuccess(out)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err -> onError(formatVolleyError("fetchBuildingsWithResidents", err)) }
+        )
+
+        queue.add(request)
+    }
+
+    private fun parseUnits(arr: JSONArray): List<com.example.delta.data.entity.Units> {
+        val list = mutableListOf<com.example.delta.data.entity.Units>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += com.example.delta.data.entity.Units(
+                unitId = o.optLong("unitId"),
+                buildingId = o.optLong("buildingId"),
+                unitNumber = o.optString("unitNumber"),
+                area = o.optDouble("area").toString(),
+                numberOfRooms = o.optInt("numberOfRooms", 0).toString(),
+                numberOfParking = o.optInt("numberOfParking", 0).toString(),
+                numberOfWarehouse = o.optInt("numberOfWarehouse", 0).toString(),
+                postCode = o.optString("postCode")
+            )
+        }
+        return list
+    }
+
+    private fun parseUsers(arr: JSONArray): List<User> {
+        val list = mutableListOf<User>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += User(
+                userId = o.optLong("userId"),
+                firstName = o.optString("firstName", ""),
+                lastName = o.optString("lastName", ""),
+                phoneNumber = o.optString("phoneNumber", ""),
+                mobileNumber = o.optString("mobileNumber", ""),
+                birthday = o.optString("birthday", ""),
+                address = o.optString("address", ""),
+                email = o.optString("email", ""),
+                password = o.optString("password", "")
+            )
+        }
+        return list
+    }
+
+    private fun parseOwnerUnits(arr: JSONArray): List<OwnersUnitsCrossRef> {
+        val list = mutableListOf<OwnersUnitsCrossRef>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += OwnersUnitsCrossRef(
+                ownerId = o.optLong("ownerId"),
+                unitId = o.optLong("unitId"),
+                dang = o.optDouble("dang")
+            )
+        }
+        return list
+    }
+
+    private fun parseTenantUnits(arr: JSONArray): List<TenantsUnitsCrossRef> {
+        val list = mutableListOf<TenantsUnitsCrossRef>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list += TenantsUnitsCrossRef(
+                tenantId = o.optLong("tenantId"),
+                unitId = o.optLong("unitId"),
+                startDate = o.optString("startDate"),
+                endDate = o.optString("endDate"),
+                numberOfTenants = o.optString("numberOfTenants"),
+                status = o.optString("status")
+            )
+        }
+        return list
+    }
 
     fun insertBuildingsBulk(
         mobileNumber: String,
@@ -59,8 +208,9 @@ class Building {
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val payload =
-            JSONArray().apply { items.forEach { put(makeBulkItemJson(mobileNumber, it)) } }
+        val payload = JSONArray().apply {
+            items.forEach { put(makeBulkItemJson(mobileNumber, it)) }
+        }
         Log.d("BuildingVolley", "Bulk payload: $payload")
 
         val req = jsonObjectRequestWithArrayBody(
@@ -78,12 +228,8 @@ class Building {
         context: Context,
         buildingJson: JSONObject,
         unitsJsonArray: JSONArray,
-        ownersJsonArray: JSONArray,
-        tenantsJsonArray: JSONArray,
-        ownerUnitsJsonArray: JSONArray,
-        tenantUnitsJsonArray: JSONArray,
         costsJsonArray: JSONArray,
-        filesJsonArray: JSONArray,                // NEW
+        filesJsonArray: JSONArray,
         onSuccess: (String) -> Unit,
         onError: (Exception) -> Unit
     ) {
@@ -92,12 +238,8 @@ class Building {
             put("building", buildingJson)
             put("mobileNumber", mobileNumber)
             put("units", unitsJsonArray)
-            put("owners", ownersJsonArray)
-            put("tenants", tenantsJsonArray)
-            put("ownerUnits", ownerUnitsJsonArray)
-            put("tenantUnits", tenantUnitsJsonArray)
             put("costs", costsJsonArray)
-            put("files", filesJsonArray)         // NEW
+            put("files", filesJsonArray)
             put("idempotencyKey", "imp-${UUID.randomUUID()}")
         }
         val payload = JSONArray().put(item)
@@ -111,101 +253,170 @@ class Building {
         queue.add(req)
     }
 
-
     fun makeBulkItemJson(mobileNumber: String, item: BulkBuildingItem): JSONObject {
-        val unitTemp = mutableMapOf<Long, String>()
-        val ownerTemp = mutableMapOf<Long, String>()
-        val tenantTemp = mutableMapOf<Long, String>()
-
-        val building =
+        val buildingJson =
             buildingToJson(mobileNumber, item.building, item.buildingType, item.buildingUsage)
 
-        val units = JSONArray().apply {
+        val unitsJson = JSONArray().apply {
             item.units.forEach { u ->
-                val unitNumber = (u.unitNumber).toString().trim()
-                val area = (u.area).toDouble()
-                val rooms = (u.numberOfRooms).toInt()
-                val park = (u.numberOfParking).toInt()
+                val unitNumber = u.unitNumber.toString().trim()
                 if (unitNumber.isEmpty()) return@forEach
-                val tid = unitTemp.getOrPut(u.unitId) { "u-${UUID.randomUUID()}" }
-                put(JSONObject().apply {
-                    put("tempId", tid)
-                    put("unitNumber", unitNumber)
-                    put("area", area)
-                    put("numberOfRooms", rooms)
-                    put("numberOfParking", park)
-                })
+                val area = u.area.toDouble()
+                val rooms = u.numberOfRooms.toInt()
+                val park = u.numberOfParking.toInt()
+                val postCode = u.postCode.toInt()
+                val floorNumber = u.floorNumber.toInt()
+                put(
+                    JSONObject().apply {
+                        put("unitNumber", unitNumber)
+                        put("area", area)
+                        put("numberOfRooms", rooms)
+                        put("numberOfParking", park)
+                        put("postCode", postCode)
+                        put("floorNumber", floorNumber)
+                    }
+                )
             }
         }
 
-        val owners = JSONArray().apply {
-            item.owners.forEach { o ->
-                val tid = ownerTemp.getOrPut(o.ownerId) { "o-${UUID.randomUUID()}" }
-                put(JSONObject().apply {
-                    put("tempId", tid)
-                    put("firstName", o.firstName)
-                    put("lastName", o.lastName)
-                    put("phoneNumber", o.phoneNumber)
-                    put("mobileNumber", o.mobileNumber)
-                    put("birthday", o.birthday)
-                    put("address", o.address)
-                    put("email", o.email)
-                })
+        val unitNumberById = mutableMapOf<Long, String>().apply {
+            item.units.forEach { u ->
+                val num = u.unitNumber.toString().trim()
+                if (num.isNotEmpty()) {
+                    put(u.unitId, num)
+                }
             }
         }
 
-        val tenants = JSONArray().apply {
-            item.tenants.forEach { t ->
-                val tid = tenantTemp.getOrPut(t.tenantId) { "t-${UUID.randomUUID()}" }
-                put(JSONObject().apply {
-                    put("tempId", tid)
-                    put("firstName", t.firstName)
-                    put("lastName", t.lastName)
-                    put("phoneNumber", t.phoneNumber)
-                    put("mobileNumber", t.mobileNumber)
-                    put("email", t.email)
-                    put("birthday", t.birthday)
-                    put("numberOfTenants", t.numberOfTenants.toInt())
-                    put("startDate", t.startDate)
-                    put("endDate", t.endDate)
-                    put("status", t.status)
-                })
+        val ownersJson = JSONArray()
+        val tenantsJson = JSONArray()
+
+        val ownersSeen = mutableSetOf<String>()
+        val tenantsSeen = mutableSetOf<String>()
+
+        item.role.forEach { r ->
+            val u = r.user
+            val mobile = (u.mobileNumber ?: "").trim()
+            if (mobile.isEmpty()) return@forEach
+
+            when (r.roles) {
+                Roles.PROPERTY_OWNER, Roles.COMPLEX_MANAGER, Roles.BUILDING_MANAGER -> {
+                    if (!ownersSeen.contains(mobile)) {
+                        ownersSeen.add(mobile)
+                        ownersJson.put(
+                            JSONObject().apply {
+                                put("tempId", u.userId)
+                                put("ownerId", u.userId)
+                                put("firstName", u.firstName)
+                                put("lastName", u.lastName)
+                                put("phoneNumber", u.phoneNumber)
+                                put("mobileNumber", mobile)
+                                put("birthday", u.birthday)
+                                put("address", u.address)
+                                put("email", u.email)
+                                put("nationalCode", u.nationalCode)
+                                put("isManager", r.roles == Roles.BUILDING_MANAGER)
+                            }
+                        )
+                    }
+                }
+                Roles.PROPERTY_TENANT -> {
+                    if (!tenantsSeen.contains(mobile)) {
+                        tenantsSeen.add(mobile)
+                        tenantsJson.put(
+                            JSONObject().apply {
+                                put("tempId", u.userId)
+                                put("tenantId", u.userId)
+                                put("firstName", u.firstName)
+                                put("lastName", u.lastName)
+                                put("phoneNumber", u.phoneNumber)
+                                put("mobileNumber", mobile)
+                                put("birthday", u.birthday)
+                                put("address", u.address)
+                                put("email", u.email)
+                                put("numberOfTenants", 1)
+                            }
+                        )
+                    }
+                }
+                else -> {}
             }
         }
 
-        val ownerUnits = JSONArray().apply {
+        val ownerMobileByOwnerId = mutableMapOf<Long, String>().apply {
+            item.role.forEach { r ->
+                val u = r.user
+                val mobile = (u.mobileNumber ?: "").trim()
+                if (mobile.isEmpty()) return@forEach
+                when (r.roles) {
+                    Roles.PROPERTY_OWNER, Roles.BUILDING_MANAGER, Roles.COMPLEX_MANAGER -> {
+                        put(u.userId, mobile)
+                    }
+                    else -> {}
+                }
+            }
+        }
+
+        val tenantMobileByTenantId = mutableMapOf<Long, String>().apply {
+            item.role.forEach { r ->
+                val u = r.user
+                val mobile = (u.mobileNumber ?: "").trim()
+                if (mobile.isEmpty()) return@forEach
+                when (r.roles) {
+                    Roles.PROPERTY_TENANT -> {
+                        put(u.userId, mobile)
+                    }
+                    else -> {}
+                }
+            }
+        }
+
+        val ownerUnitsJson = JSONArray().apply {
             item.ownerUnits.forEach { ou ->
-                val oTid = ownerTemp.getOrPut(ou.ownerId) { "o-${UUID.randomUUID()}" }
-                val uTid = unitTemp.getOrPut(ou.unitId) { "u-${UUID.randomUUID()}" }
-                put(JSONObject().apply {
-                    put("ownerTempId", oTid)
-                    put("unitTempId", uTid)
-                    put("dang", ou.dang.toInt())
-                })
+                val mobile = ownerMobileByOwnerId[ou.ownerId] ?: ""
+                if (mobile.isBlank()) return@forEach
+                val unitNumber = unitNumberById[ou.unitId]?.trim().orEmpty()
+                if (unitNumber.isBlank()) return@forEach
+                put(
+                    JSONObject().apply {
+                        put("ownerId", ou.ownerId)
+                        put("ownerMobile", mobile)
+                        put("unitId", ou.unitId)
+                        put("unitNumber", unitNumber)
+                        put("dang", ou.dang)
+                    }
+                )
             }
         }
 
-        val tenantUnits = JSONArray().apply {
+        val tenantUnitsJson = JSONArray().apply {
             item.tenantUnits.forEach { tu ->
-                val tTid = tenantTemp.getOrPut(tu.tenantId) { "t-${UUID.randomUUID()}" }
-                val uTid = unitTemp.getOrPut(tu.unitId) { "u-${UUID.randomUUID()}" }
-                put(JSONObject().apply {
-                    put("tenantTempId", tTid)
-                    put("unitTempId", uTid)
-                    put("startDate", tu.startDate)
-                    put("endDate", tu.endDate)
-                    put("status", tu.status)
-                })
+                val mobile = tenantMobileByTenantId[tu.tenantId] ?: ""
+                if (mobile.isBlank()) return@forEach
+                val unitNumber = unitNumberById[tu.unitId]?.trim().orEmpty()
+                if (unitNumber.isBlank()) return@forEach
+                put(
+                    JSONObject().apply {
+                        put("tenantId", tu.tenantId)
+                        put("tenantMobile", mobile)
+                        put("unitId", tu.unitId)
+                        put("unitNumber", unitNumber)
+                        put("startDate", tu.startDate)
+                        put("endDate", tu.endDate)
+                        put("status", tu.status)
+                    }
+                )
             }
         }
 
         return JSONObject().apply {
-            put("building", building)
-            put("units", units)
-            put("owners", owners)
-            put("tenants", tenants)
-            put("ownerUnits", ownerUnits)
-            put("tenantUnits", tenantUnits)
+            put("building", buildingJson)
+            put("mobileNumber", mobileNumber)
+            put("units", unitsJson)
+            put("owners", ownersJson)
+            put("tenants", tenantsJson)
+            put("ownerUnits", ownerUnitsJson)
+            put("tenantUnits", tenantUnitsJson)
             put("idempotencyKey", "imp-${UUID.randomUUID()}")
         }
     }
@@ -222,6 +433,8 @@ class Building {
             put("street", b.street)
             put("province", b.province)
             put("state", b.state)
+            put("floorCount", b.floorCount)
+            put("serialNumber", b.serialNumber)
 
             if (b.complexId != null) {
                 put("complexId", b.complexId)
@@ -247,32 +460,8 @@ class Building {
             put("area", unit.area)
             put("numberOfRooms", unit.numberOfRooms)
             put("numberOfParking", unit.numberOfParking)
-        }
-
-    fun ownerToJson(owner: Owners, isManager: Boolean): JSONObject =
-        JSONObject().apply {
-            put("firstName", owner.firstName)
-            put("lastName", owner.lastName)
-            put("phoneNumber", owner.phoneNumber)
-            put("mobileNumber", owner.mobileNumber)
-            put("birthday", owner.birthday)
-            put("address", owner.address)
-            put("email", owner.email)
-            put("is_manager", isManager)
-        }
-
-    fun tenantToJson(tenant: Tenants): JSONObject =
-        JSONObject().apply {
-            put("firstName", tenant.firstName)
-            put("lastName", tenant.lastName)
-            put("phoneNumber", tenant.phoneNumber)
-            put("mobileNumber", tenant.mobileNumber)
-            put("email", tenant.email)
-            put("birthday", tenant.birthday)
-            put("numberOfTenants", tenant.numberOfTenants)
-            put("startDate", tenant.startDate)
-            put("endDate", tenant.endDate)
-            put("status", tenant.status)
+            put("floorNumber", unit.floorNumber)
+            put("postCode", unit.postCode)
         }
 
     fun costToJson(cost: Costs): JSONObject =
@@ -289,66 +478,25 @@ class Building {
     fun <T> listToJsonArray(list: List<T>, toJsonFunc: (T) -> JSONObject): JSONArray =
         JSONArray().apply { list.forEach { put(toJsonFunc(it)) } }
 
-    fun tenantUnitListToJsonArray(tenantUnitMap: Map<Tenants, com.example.delta.data.entity.Units>): JSONArray {
-        val jsonArray = JSONArray()
-        tenantUnitMap.forEach { tu ->
-            val jsonObject = JSONObject().apply {
-                put("tenantMobile", tu.key.mobileNumber)
-                put("unitNumber", tu.value.unitNumber)
-                put("startDate", tu.key.startDate)
-                put("endDate", tu.key.endDate)
-                put("status", tu.key.status)
-            }
-            jsonArray.put(jsonObject)
-        }
-        Log.d("jsonArray", jsonArray.toString())
-        return jsonArray
-    }
-
-    private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {
+    private fun formatVolleyError(tag: String, error: VolleyError): Exception {
         val resp = error.networkResponse
-        if (resp != null) {
-            val charsetName = resp.headers?.get("Content-Type")
-                ?.substringAfter("charset=", "UTF-8") ?: "UTF-8"
+        return if (resp != null) {
             val body = try {
-                String(resp.data ?: ByteArray(0), charset(charsetName))
+                String(resp.data ?: ByteArray(0), Charsets.UTF_8)
             } catch (_: Exception) {
                 String(resp.data ?: ByteArray(0))
             }
-            Log.e(tag, "HTTP ${resp.statusCode}")
-            Log.e(tag, "Headers: ${resp.headers}")
-            Log.e(tag, "Body: $body")
-            return Exception("HTTP ${resp.statusCode}: $body")
+            Log.e(tag, "HTTP ${resp.statusCode}: $body")
+            Exception("HTTP ${resp.statusCode}: $body")
         } else {
-            Log.e(tag, "No networkResponse: ${error.message}", error)
-            return Exception(error.toString())
-        }
-    }
-
-    suspend fun buildOwnerUnitsJsonArray(
-        ownersList: List<Owners>,
-        ownerUnitMap: Map<Owners, List<OwnersUnitsCrossRef>>,
-        ownersDao: OwnersDao,
-        unitsDao: UnitsDao
-    ): JSONArray {
-        fun onlyDigits(s: String?): String = s?.filter { it.isDigit() } ?: ""
-
-        val arr = JSONArray()
-        for (owner in ownersList) {
-            val ownerId = ownersDao.insertOwners(owner)
-            val links = ownerUnitMap[owner] ?: emptyList()
-            for (ou in links) {
-                val unit = unitsDao.getUnit(ou.unitId)
-                arr.put(
-                    JSONObject().apply {
-                        put("ownerMobile", onlyDigits(owner.mobileNumber))
-                        put("unitNumber", unit.unitNumber)
-                        put("dang", ou.dang.toInt())
-                    }
-                )
+            val msg = when (error) {
+                is TimeoutError -> "مهلت اتصال به سرور به پایان رسید (Timeout)"
+                is NoConnectionError -> "اتصال به اینترنت یا سرور برقرار نشد"
+                is NetworkError -> "خطای شبکه (لطفاً اینترنت را بررسی کنید)"
+                else -> "خطای نامشخص شبکه: ${error.message}"
             }
+            Exception(msg, error)
         }
-        return arr
     }
 
     private fun jsonObjectRequestWithArrayBody(
@@ -357,8 +505,8 @@ class Building {
         arrayBody: JSONArray,
         onSuccess: (JSONObject) -> Unit,
         onError: (Exception) -> Unit
-    ): com.android.volley.Request<JSONObject> {
-        return object : com.android.volley.toolbox.JsonObjectRequest(
+    ): Request<JSONObject> {
+        return object : JsonObjectRequest(
             method, url, null,
             { resp -> onSuccess(resp) },
             { err -> onError(formatVolleyError("InsertBuildingsBulk", err)) }
@@ -370,6 +518,7 @@ class Building {
             )
         }
     }
+
 
     suspend fun fetchBuildingByIdSuspend(
         context: Context,
@@ -403,6 +552,7 @@ class Building {
                     val bObj = root.getJSONObject("building")
                     val building = Buildings(
                         buildingId = bObj.optLong("buildingId"),
+                        serialNumber = bObj.optString("serialNumber", ""),
                         complexId = if (bObj.isNull("complexId")) null else bObj.optLong("complexId"),
                         name = bObj.optString("name", ""),
                         postCode = bObj.optString("postCode", ""),
@@ -414,7 +564,8 @@ class Building {
                             "buildingUsageId"
                         ),
                         fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
-                        userId = bObj.optLong("userId")
+                        userId = bObj.optLong("userId"),
+                        floorCount = bObj.optInt("floorCount"),
                     )
 
                     fun parseUnits(arr: JSONArray): List<com.example.delta.data.entity.Units> {
@@ -431,49 +582,6 @@ class Building {
                                     numberOfParking = o.optInt("numberOfParking", 0).toString(),
                                     numberOfWarehouse = o.optInt("numberOfWarehouse", 0).toString(),
                                     postCode = o.optString("postCode")
-                                )
-                            )
-                        }
-                        return out
-                    }
-
-                    fun parseOwners(arr: JSONArray): List<Owners> {
-                        val out = ArrayList<Owners>(arr.length())
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
-                            out.add(
-                                Owners(
-                                    ownerId = o.optLong("ownerId"),
-                                    firstName = o.optString("firstName"),
-                                    lastName = o.optString("lastName"),
-                                    phoneNumber = o.optString("phoneNumber"),
-                                    mobileNumber = o.optString("mobileNumber"),
-                                    birthday = o.optString("birthday"),
-                                    address = o.optString("address"),
-                                    email = o.optString("email")
-                                )
-                            )
-                        }
-                        return out
-                    }
-
-                    fun parseTenants(arr: JSONArray): List<Tenants> {
-                        val out = ArrayList<Tenants>(arr.length())
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
-                            out.add(
-                                Tenants(
-                                    tenantId = o.optLong("tenantId"),
-                                    firstName = o.optString("firstName"),
-                                    lastName = o.optString("lastName"),
-                                    phoneNumber = o.optString("phoneNumber"),
-                                    mobileNumber = o.optString("mobileNumber"),
-                                    email = o.optString("email"),
-                                    birthday = o.optString("birthday"),
-                                    numberOfTenants = o.optInt("numberOfTenants", 1).toString(),
-                                    startDate = o.optString("startDate"),
-                                    endDate = o.optString("endDate"),
-                                    status = o.optString("status")
                                 )
                             )
                         }
@@ -505,6 +613,7 @@ class Building {
                                     unitId = o.optLong("unitId"),
                                     startDate = o.optString("startDate"),
                                     endDate = o.optString("endDate"),
+                                    numberOfTenants = o.optString("numberOfTenants"),
                                     status = o.optString("status")
                                 )
                             )
@@ -513,8 +622,6 @@ class Building {
                     }
 
                     val units = parseUnits(root.optJSONArray("units") ?: JSONArray())
-                    val owners = parseOwners(root.optJSONArray("owners") ?: JSONArray())
-                    val tenants = parseTenants(root.optJSONArray("tenants") ?: JSONArray())
                     val ownerUnits = parseOwnerUnits(root.optJSONArray("ownerUnits") ?: JSONArray())
                     val tenantUnits =
                         parseTenantUnits(root.optJSONArray("tenantUnits") ?: JSONArray())
@@ -525,8 +632,8 @@ class Building {
                             buildingType = null,
                             buildingUsage = null,
                             units = units,
-                            owners = owners,
-                            tenants = tenants,
+                            user = emptyList(),
+                            role = emptyList(),
                             ownerUnits = ownerUnits,
                             tenantUnits = tenantUnits
                         )
@@ -607,10 +714,15 @@ class Building {
                     onError(e)
                 }
             },
-            { err ->
-                onError(formatVolleyError("BuildingVolley(fetchBuildingsForUser)", err))
-            }
-        )
+            { err -> onError(formatVolleyError("BuildingUsage(fetch)", err)) }
+        ).apply {
+            retryPolicy = DefaultRetryPolicy(
+                10_000,
+                1,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
+
+            )
+        }
         queue.add(req)
     }
 
@@ -655,6 +767,7 @@ class Building {
                     val building = Buildings(
                         buildingId = bObj.optLong("buildingId"),
                         complexId = if (bObj.isNull("complexId")) null else bObj.optLong("complexId"),
+                        serialNumber = bObj.optString("serialNumber", ""),
                         name = bObj.optString("name", ""),
                         postCode = bObj.optString("postCode", ""),
                         street = bObj.optString("street", ""),
@@ -665,7 +778,8 @@ class Building {
                             "buildingUsageId"
                         ),
                         fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
-                        userId = bObj.optLong("userId")
+                        userId = bObj.optLong("userId"),
+                        floorCount = bObj.optInt("floorCount"),
                     )
 
                     fun parseBuildingType(obj: JSONObject?): BuildingTypes? {
@@ -756,49 +870,6 @@ class Building {
                         return out
                     }
 
-                    fun parseOwners(arr: JSONArray): List<Owners> {
-                        val out = ArrayList<Owners>(arr.length())
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
-                            out.add(
-                                Owners(
-                                    ownerId = o.optLong("ownerId"),
-                                    firstName = o.optString("firstName"),
-                                    lastName = o.optString("lastName"),
-                                    phoneNumber = o.optString("phoneNumber"),
-                                    mobileNumber = o.optString("mobileNumber"),
-                                    birthday = o.optString("birthday"),
-                                    address = o.optString("address"),
-                                    email = o.optString("email")
-                                )
-                            )
-                        }
-                        return out
-                    }
-
-                    fun parseTenants(arr: JSONArray): List<Tenants> {
-                        val out = ArrayList<Tenants>(arr.length())
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
-                            out.add(
-                                Tenants(
-                                    tenantId = o.optLong("tenantId"),
-                                    firstName = o.optString("firstName"),
-                                    lastName = o.optString("lastName"),
-                                    phoneNumber = o.optString("phoneNumber"),
-                                    mobileNumber = o.optString("mobileNumber"),
-                                    email = o.optString("email"),
-                                    birthday = o.optString("birthday"),
-                                    numberOfTenants = o.optInt("numberOfTenants", 1).toString(),
-                                    startDate = o.optString("startDate"),
-                                    endDate = o.optString("endDate"),
-                                    status = o.optString("status")
-                                )
-                            )
-                        }
-                        return out
-                    }
-
                     fun parseOwnerUnits(arr: JSONArray): List<OwnersUnitsCrossRef> {
                         val out = ArrayList<OwnersUnitsCrossRef>(arr.length())
                         for (i in 0 until arr.length()) {
@@ -824,6 +895,7 @@ class Building {
                                     unitId = o.optLong("unitId"),
                                     startDate = o.optString("startDate"),
                                     endDate = o.optString("endDate"),
+                                    numberOfTenants = o.optString("numberOfTenants"),
                                     status = o.optString("status")
                                 )
                             )
@@ -881,8 +953,6 @@ class Building {
                     val files = parseFiles(root.optJSONArray("files") ?: JSONArray())
 
                     val units = parseUnits(root.optJSONArray("units") ?: JSONArray())
-                    val owners = parseOwners(root.optJSONArray("owners") ?: JSONArray())
-                    val tenants = parseTenants(root.optJSONArray("tenants") ?: JSONArray())
                     val ownerUnits = parseOwnerUnits(root.optJSONArray("ownerUnits") ?: JSONArray())
                     val tenantUnits =
                         parseTenantUnits(root.optJSONArray("tenantUnits") ?: JSONArray())
@@ -892,6 +962,9 @@ class Building {
                     val chargeCostsForYear =
                         parseCosts(root.optJSONArray("chargeCostsForYear") ?: JSONArray())
 
+                    val users: List<User> = emptyList()
+                    val roles: List<UserRole> = emptyList()
+
                     onSuccess(
                         BuildingFullDto(
                             building = building,
@@ -900,8 +973,8 @@ class Building {
                             cityComplex = cityComplex,
                             files = files,
                             units = units,
-                            owners = owners,
-                            tenants = tenants,
+                            users = users,
+                            role = roles,
                             ownerUnits = ownerUnits,
                             tenantUnits = tenantUnits,
                             costs = costs,
@@ -917,4 +990,115 @@ class Building {
         )
         queue.add(req)
     }
+
+    fun updateBuilding(
+        context: Context,
+        building: Buildings,
+        selectedCostNames: List<String>,
+        replaceCosts: Boolean,
+        fileIds: List<Long>,
+        onSuccess: (Buildings) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/${building.buildingId}"
+
+        val body = JSONObject().apply {
+            put("name", building.name)
+            put("street", building.street)
+            put("postCode", building.postCode)
+            put("province", building.province)
+            put("state", building.state)
+            put("buildingTypeId", building.buildingTypeId)
+            put("buildingUsageId", building.buildingUsageId)
+            put("complexId", building.complexId)
+            put("serialNumber", building.serialNumber)
+            put("floorCount", building.floorCount)
+            put("costNames", JSONArray(selectedCostNames))
+            put("replaceCosts", replaceCosts)
+            put("fileIds", JSONArray(fileIds))
+        }
+
+        Log.d("BuildingApi", "PUT $url payload=$body")
+
+        val queue = Volley.newRequestQueue(context)
+        val request = JsonObjectRequest(
+            Request.Method.PUT,
+            url,
+            body,
+            { obj ->
+                try {
+                    val fundSafe = obj.optDouble("fund").let { if (it.isNaN()) 0.0 else it }
+
+                    val updated = Buildings(
+                        buildingId = obj.optLong("buildingId"),
+                        complexId = if (obj.isNull("complexId")) null else obj.optLong("complexId"),
+                        name = obj.optString("name", ""),
+                        postCode = obj.optString("postCode", ""),
+                        street = obj.optString("street", ""),
+                        province = obj.optString("province", "Tehran"),
+                        state = obj.optString("state", "Central"),
+                        buildingTypeId = if (obj.isNull("buildingTypeId")) null else obj.optLong("buildingTypeId"),
+                        buildingUsageId = if (obj.isNull("buildingUsageId")) null else obj.optLong("buildingUsageId"),
+                        fund = fundSafe,
+                        userId = obj.optLong("userId"),
+                        serialNumber = obj.optString("serialNumber", ""),
+                        floorCount = obj.optInt("floorCount"),
+                    )
+
+                    onSuccess(updated)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                onError(formatVolleyError("BuildingApi(updateBuilding)", err))
+            }
+        )
+
+        queue.add(request)
+    }
+
+    fun deleteBuilding(
+        context: Context,
+        buildingId: Long,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/$buildingId"
+        Log.d("BuildingApi", "DELETE $url")
+
+        val queue = Volley.newRequestQueue(context)
+        val req = JsonObjectRequest(
+            Request.Method.DELETE,
+            url,
+            null,
+            { _ ->
+                onSuccess()
+            },
+            { err ->
+                onError(formatVolleyError("BuildingApi(deleteBuilding)", err))
+            }
+        )
+        queue.add(req)
+    }
+
+    fun sendBulk(
+        context: Context,
+        data: List<Map<String, Any>>,
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val body = JSONArray(data)
+
+        val req = object : JsonArrayRequest(
+            Method.POST,
+            baseUrl,
+            body,
+            { onSuccess() },
+            { onError(it) }
+        ) {}
+
+        AppRequestQueue.getInstance(context).addToRequestQueue(req)
+    }
+
 }

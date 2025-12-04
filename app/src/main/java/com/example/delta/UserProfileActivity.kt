@@ -21,11 +21,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -58,6 +61,7 @@ import com.example.delta.data.entity.User
 import com.example.delta.enums.Gender
 import com.example.delta.enums.Roles
 import com.example.delta.init.Preference
+import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Users
 import org.json.JSONObject
@@ -193,7 +197,6 @@ class UserProfileActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun UserProfileScreen(
     sharedViewModel: SharedViewModel,
@@ -205,7 +208,9 @@ fun UserProfileScreen(
     val context = LocalContext.current
     val profilePhoto = userState.profilePhoto
 
-    // Helper to show text or placeholder
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var mobileError by remember { mutableStateOf<String?>(null) }
+
     fun displayValue(value: String?): String = value?.takeIf { it.isNotBlank() } ?: "--"
 
     Column(
@@ -215,59 +220,61 @@ fun UserProfileScreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Profile Image Section
-                if (!profilePhoto.isNullOrBlank()) {
-                    AsyncImage(
-                        model = profilePhoto,
-                        contentDescription = stringResource(id = R.string.profile_image),
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = stringResource(id = R.string.profile_image),
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (!profilePhoto.isNullOrBlank()) {
+                AsyncImage(
+                    model = profilePhoto,
+                    contentDescription = stringResource(id = R.string.profile_image),
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = stringResource(id = R.string.profile_image),
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-                if (!isEditing) {
-                    // Display all fields with dividers and consistent spacing
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        // Full Name
+            if (!isEditing) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    elevation = androidx.compose.material3.CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
                         UserProfileDisplayRow(
                             label = stringResource(R.string.full_name),
                             value = "${displayValue(userState.firstName)} ${displayValue(userState.lastName)}"
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.mobile_number),
                             value = displayValue(userState.mobileNumber)
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.email),
                             value = displayValue(userState.email)
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.gender),
                             value = displayValue(
@@ -275,122 +282,199 @@ fun UserProfileScreen(
                                     ?: Gender.FEMALE.getDisplayName(context)
                             )
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.role),
-                            value = roleDisplayFromId(userState.roleId, context = context)
+                            value = roleDisplayFromId(
+                                Preference().getRoleId(context),
+                                context = context
+                            )
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.national_code),
                             value = displayValue(userState.nationalCode)
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.address),
                             value = displayValue(userState.address)
                         )
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                    // Edit button at the bottom
-                    Button(
-                        onClick = { isEditing = true },
+                Button(
+                    onClick = { isEditing = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.edit_profile),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    elevation = androidx.compose.material3.CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .padding(16.dp)
                     ) {
-                        Text(text = stringResource(id = R.string.edit_profile), style = MaterialTheme.typography.bodyLarge)
-                    }
-                } else {
-                    // Editable fields (your existing implementation unchanged)
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.first_name),
-                        value = userState.firstName,
-                        onValueChange = { userState = userState.copy(firstName = it) }
-                    )
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.last_name),
-                        value = userState.lastName,
-                        onValueChange = { userState = userState.copy(lastName = it) }
-                    )
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.email),
-                        value = userState.email ?: "",
-                        onValueChange = { userState = userState.copy(email = it) }
-                    )
-                    GenderDropdown(
-                        sharedViewModel = sharedViewModel,
-                        selectedGender = userState.gender?.let {
-                            Gender.fromDisplayName(
-                                context,
-                                it.getDisplayName(context)
-                            )
-                        },
-                        onGenderSelected = { gender ->
-                            userState = userState.copy(gender = gender)
-                        },
-                        label = stringResource(id = R.string.gender),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.mobile_number),
-                        value = userState.mobileNumber,
-                        onValueChange = { userState = userState.copy(mobileNumber = it) }
-                    )
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.national_code),
-                        value = userState.nationalCode ?: "",
-                        onValueChange = { userState = userState.copy(nationalCode = it) }
-                    )
-                    UserProfileEditableField(
-                        label = stringResource(id = R.string.address),
-                        value = userState.address ?: "",
-                        onValueChange = { userState = userState.copy(address = it) }
-                    )
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.first_name),
+                            value = userState.firstName,
+                            onValueChange = { userState = userState.copy(firstName = it) }
+                        )
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.last_name),
+                            value = userState.lastName,
+                            onValueChange = { userState = userState.copy(lastName = it) }
+                        )
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                isEditing = false
-                                userState = initialUser // revert changes
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.email),
+                            value = userState.email.orEmpty(),
+                            onValueChange = { newValue ->
+                                userState = userState.copy(email = newValue)
+                                emailError = if (newValue.isBlank()) {
+                                    null
+                                } else if (!Validation().isValidEmail(newValue)) {
+                                    context.getString(R.string.invalid_email)
+                                } else {
+                                    null
+                                }
                             },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(52.dp)
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.cancel),
-                                style = MaterialTheme.typography.bodyLarge
+                            isError = emailError != null,
+                            errorText = emailError,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email
                             )
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Button(
-                            onClick = {
+                        )
+
+                        GenderDropdown(
+                            sharedViewModel = sharedViewModel,
+                            selectedGender = userState.gender?.let {
+                                Gender.fromDisplayName(
+                                    context,
+                                    it.getDisplayName(context)
+                                )
+                            },
+                            onGenderSelected = { gender ->
+                                userState = userState.copy(gender = gender)
+                            },
+                            label = stringResource(id = R.string.gender),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.mobile_number),
+                            value = userState.mobileNumber,
+                            onValueChange = { newValue ->
+                                userState = userState.copy(mobileNumber = newValue)
+                                mobileError = when {
+                                    newValue.isBlank() ->
+                                        context.getString(R.string.invalid_mobile_number)
+                                    !Validation().isValidIranMobile(newValue) ->
+                                        context.getString(R.string.invalid_mobile_number)
+                                    else -> null
+                                }
+                            },
+                            isError = mobileError != null,
+                            errorText = mobileError,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone
+                            )
+                        )
+
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.national_code),
+                            value = userState.nationalCode.orEmpty(),
+                            onValueChange = { userState = userState.copy(nationalCode = it) }
+                        )
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.address),
+                            value = userState.address.orEmpty(),
+                            onValueChange = { userState = userState.copy(address = it) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            isEditing = false
+                            userState = initialUser
+                            emailError = null
+                            mobileError = null
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.cancel),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(
+                        onClick = {
+                            val currentEmail = userState.email.orEmpty()
+                            val currentMobile = userState.mobileNumber
+
+                            emailError = if (currentEmail.isNotBlank() && !Validation().isValidEmail(currentEmail)) {
+                                context.getString(R.string.invalid_email)
+                            } else null
+
+                            mobileError = when {
+                                currentMobile.isBlank() ->
+                                    context.getString(R.string.invalid_mobile_number)
+                                !Validation().isValidIranMobile(currentMobile) ->
+                                    context.getString(R.string.invalid_mobile_number)
+                                else -> null
+                            }
+
+                            if (emailError == null && mobileError == null) {
                                 isEditing = false
                                 onSave(userState)
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(text = stringResource(id = R.string.insert), style = MaterialTheme.typography.bodyLarge)
-                        }
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.invalid_email),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.insert),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                 }
             }
+        }
     }
 }
+
 
 @Composable
 private fun UserProfileDisplayRow(
@@ -415,12 +499,14 @@ private fun UserProfileDisplayRow(
         )
     }
 }
-
 @Composable
 private fun UserProfileEditableField(
     label: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    isError: Boolean = false,
+    errorText: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     OutlinedTextField(
         value = value,
@@ -428,9 +514,21 @@ private fun UserProfileEditableField(
         label = { Text(label, style = MaterialTheme.typography.bodyLarge) },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = 6.dp),
+        isError = isError,
+        keyboardOptions = keyboardOptions,
+        supportingText = {
+            if (isError && !errorText.isNullOrBlank()) {
+                Text(
+                    text = errorText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     )
 }
+
 
 fun roleDisplayFromId(roleId: Long, context: Context): String = when (roleId) {
     1L -> Roles.ADMIN.getDisplayName(context = context)

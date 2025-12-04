@@ -35,13 +35,6 @@ interface UnitsDao {
     @Query("SELECT * FROM units where buildingId = :buildingId")
     suspend fun getUnits(buildingId: Long): List<Units>
 
-    @Query("""
-    SELECT CAST(t.number_of_tenants AS INTEGER) as totalResidents
-    FROM tenants t
-    INNER JOIN tenants_units_cross_ref tu ON t.tenantId = tu.tenantId
-    WHERE tu.unitId = :unitId
-""")
-    fun getResidentsCountByUnitId(unitId: Long): Int?
 
 
     @Query("SELECT * FROM Units WHERE unitId IN (:unitIds)")

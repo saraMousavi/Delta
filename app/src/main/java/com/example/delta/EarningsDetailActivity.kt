@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,6 +62,7 @@ class EarningDetailActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val earningId = intent.getLongExtra(EXTRA_EARNING_ID, 0L)
+        val buildingId = intent.getLongExtra(EXTRA_BUILDING_ID, 0L)
 
         setContent {
             AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
@@ -72,6 +71,7 @@ class EarningDetailActivity : ComponentActivity() {
                         EarningDetailScreen(
                             viewModel = sharedViewModel,
                             earningId = earningId,
+                            buildingId = buildingId,
                             onBack = { finish() })
                     }
                 }
@@ -81,10 +81,12 @@ class EarningDetailActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_EARNING_ID = "extra_earning_id"
+        const val EXTRA_BUILDING_ID = "extra_building_id"
 
-        fun start(context: Context, earningId: Long) {
+        fun start(context: Context, earningId: Long, buildingId : Long) {
             val intent = Intent(context, EarningDetailActivity::class.java)
             intent.putExtra(EXTRA_EARNING_ID, earningId)
+            intent.putExtra(EXTRA_BUILDING_ID, buildingId)
             context.startActivity(intent)
         }
     }
@@ -95,41 +97,28 @@ class EarningDetailActivity : ComponentActivity() {
 fun EarningDetailScreen(
     viewModel: SharedViewModel,
     earningId: Long,
+    buildingId: Long,
     onBack: () -> Unit
 ) {
-    Log.d("earningId", earningId.toString())
     val earning by viewModel.earningDetail.collectAsState()
     val credits by viewModel.earningCredits.collectAsState()
+    val selectedCredits by viewModel.selectedCredits.collectAsState()
+    val sumSelectedAmount by viewModel.sumSelectedAmount.collectAsState()
+
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(earningId) {
         viewModel.loadEarningDetail(context, earningId)
     }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(credits) {
-        viewModel.updateCredits(credits)
-    }
 
-
-
-    if (earning == null) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-    val selectedCredits by viewModel.selectedCredits.collectAsState()
-    val sumSelectedAmount by viewModel.sumSelectedAmount.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "${context.getString(R.string.earning_title)} : ${earning!!.earningsName}",
+                        text = "${context.getString(R.string.earning_title)} : ${earning?.earningsName}",
                         style = MaterialTheme.typography.bodyLarge
                     )
                 },
@@ -140,9 +129,9 @@ fun EarningDetailScreen(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             BottomAppBar {
-                SnackbarHost(hostState = snackbarHostState)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -152,31 +141,39 @@ fun EarningDetailScreen(
                 ) {
                     Text(
                         text = "${context.getString(R.string.amount)}: ${
-                            formatNumberWithCommas(
-                                sumSelectedAmount
-                            )
-                        } ${LocalContext.current.getString(R.string.toman)}",
+                            formatNumberWithCommas(sumSelectedAmount)
+                        } ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
                     )
+
                     Button(
                         enabled = selectedCredits.isNotEmpty(),
                         onClick = {
                             coroutineScope.launch {
-                                try {
-                                    viewModel.markSelectedAsReceived(context, earningId)
-                                    snackbarHostState.showSnackbar(context.getString(R.string.transfer_to_operational))
-                                } catch (e: Exception) {
-                                    Log.e("markError", e.message.toString())
-                                    snackbarHostState.showSnackbar(context.getString(R.string.failed))
-                                }
+                                viewModel.markSelectedAsReceived(
+                                    context,
+                                    earningId,
+                                    buildingId,
+                                    onSuccess = {
+                                        coroutineScope.launch {
+                                            viewModel.loadFundBalances(context, buildingId)
+                                            snackbarHostState.showSnackbar(
+                                                context.getString(R.string.transfer_to_operational)
+                                            )
+                                        }
+                                    },
+                                    onError = {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                context.getString(R.string.failed)
+                                            )
+                                        }
+                                    }
+                                )
                             }
-
                         }
                     ) {
-                        Text(
-                            text = context.getString(R.string.receipt_money),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        Text(text = context.getString(R.string.receipt_money), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -188,6 +185,37 @@ fun EarningDetailScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+
+            item {
+                val selectableCredits = credits.filter { it.receiptFlag != true }
+                val allSelected = selectedCredits.size == selectableCredits.size && selectableCredits.isNotEmpty()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = allSelected,
+                        onCheckedChange = { checked ->
+                            if (checked) {
+                                viewModel.setSelectedCredits(selectableCredits.map { it.creditsId }.toSet())
+                            } else {
+                                viewModel.setSelectedCredits(emptySet())
+                            }
+                        }
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = LocalContext.current.getString(R.string.select_all),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+
             items(credits) { credit ->
                 CreditListItem(
                     credit = credit,
@@ -197,6 +225,7 @@ fun EarningDetailScreen(
                 )
             }
         }
+
     }
 }
 
@@ -208,14 +237,20 @@ fun CreditListItem(
     onCheckedChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+
+    val cardColor =
+        if (credit.receiptFlag == true)
+            Color(0xFF4CAF50)
+        else
+            MaterialTheme.colorScheme.surface
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -228,31 +263,29 @@ fun CreditListItem(
                 onCheckedChange = if (enabled) onCheckedChange else null,
                 enabled = enabled
             )
+
             Spacer(Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = credit.description,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(text = credit.description, style = MaterialTheme.typography.bodyLarge)
                 Text(
                     text = "${context.getString(R.string.due)}: ${credit.dueDate}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
+
             Text(
                 text = "${formatNumberWithCommas(credit.amount)} ${context.getString(R.string.toman)}",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(end = 8.dp)
             )
+
             Text(
-                text = if (credit.receiptFlag == false) context.getString(R.string.not_receipt) else context.getString(
-                    R.string.receipt
-                ),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (credit.receiptFlag == false) Color(context.getColor(R.color.Red)) else Color(
-                    context.getColor(R.color.Green)
-                )
+                text = if (credit.receiptFlag == true)
+                    context.getString(R.string.receipt)
+                else
+                    context.getString(R.string.not_receipt),
+                style = MaterialTheme.typography.bodyLarge
             )
         }
     }

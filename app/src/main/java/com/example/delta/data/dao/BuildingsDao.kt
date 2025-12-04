@@ -5,7 +5,6 @@ import com.example.delta.data.entity.BuildingTypes
 import com.example.delta.data.entity.BuildingUploadedFileCrossRef
 import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithCounts
-import com.example.delta.data.entity.BuildingWithType
 import com.example.delta.data.entity.BuildingWithTypesAndUsages
 import com.example.delta.data.entity.BuildingWithUsage
 import com.example.delta.data.entity.Buildings
@@ -32,19 +31,6 @@ interface BuildingsDao {
     @Query("SELECT COUNT(1) FROM buildings WHERE buildingId = :buildingId")
     suspend fun hasBuilding(buildingId: Long): Int
 
-    @Query("""
-    SELECT b.*, r.roleName,    
-            bt.building_type_name AS buildingTypeName, 
-            bu.building_usage_name AS buildingUsageName
-        FROM buildings b
-            LEFT JOIN building_types bt ON b.buildingTypeId = bt.buildingTypeId
-                LEFT JOIN building_usages bu ON b.buildingUsageId = bu.buildingUsageId
-            INNER JOIN users_buildings_cross_ref ub ON b.buildingId = ub.buildingId
-            INNER JOIN user u ON ub.userId = u.userId
-            INNER JOIN role r ON u.roleId = r.roleId
-            WHERE u.userId = :userId
-""")
-    fun getBuildingsWithUserRole(userId: Long): List<BuildingWithTypesAndUsages>
 
 
     @Query("""
@@ -63,10 +49,6 @@ interface BuildingsDao {
     @Query("DELETE FROM buildings WHERE buildingId = :buildingId")
     suspend fun deleteBuildingById(buildingId: Long)
 
-
-    @Transaction
-    @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
-    fun getBuildingWithType(buildingId: Long): Flow<BuildingWithType>
 
     @Transaction
     @Query("SELECT * FROM buildings WHERE buildingId = :buildingId")
@@ -118,13 +100,6 @@ interface BuildingsDao {
     @Query("DELETE FROM building_uploaded_files_cross_ref WHERE fileId IN (:fileIds)")
     fun deleteCrossRefsByFileIds(fileIds: List<Long>)
 
-    @Query("""
-    SELECT SUM(CAST(number_of_tenants AS INTEGER)) 
-    FROM tenants t
-    INNER JOIN building_tenant_cross_ref b ON t.tenantId = b.tenantId
-    WHERE b.buildingId = :buildingId
-""")
-    fun getTotalResidentsInBuilding(buildingId: Long): Int
 
 
 }

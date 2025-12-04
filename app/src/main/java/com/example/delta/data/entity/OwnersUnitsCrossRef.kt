@@ -9,8 +9,8 @@ import androidx.room.Index
     tableName = "owners_units_cross_ref",
     foreignKeys = [
         ForeignKey(
-            entity = Owners::class,
-            parentColumns = ["ownerId"],
+            entity = User::class,
+            parentColumns = ["userId"],
             childColumns = ["ownerId"],
             onDelete = ForeignKey.CASCADE
         ),

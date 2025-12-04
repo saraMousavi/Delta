@@ -31,23 +31,28 @@ class Phonebook {
         }
     }
 
-    private fun parseEntries(arr: JSONArray): List<PhonebookEntry> {
+    fun parseEntries(arr: JSONArray): List<PhonebookEntry> {
         val list = mutableListOf<PhonebookEntry>()
+
         for (i in 0 until arr.length()) {
-            val obj: JSONObject = arr.getJSONObject(i)
+            val o = arr.getJSONObject(i)
+
             val entry = PhonebookEntry(
-                entryId    = obj.optLong("entryId", 0L),
-                buildingId = obj.optLong("buildingId", 0L),
-                name       = obj.optString("name", ""),
-                phoneNumber= obj.optString("phoneNumber", ""),
-                type       = obj.optString("type", "resident"),
-                unitId     = if (obj.isNull("unitId")) null else obj.optLong("unitId"),
-                isEmergency= obj.optBoolean("isEmergency", obj.optString("type") == "emergency")
+                entryId = 0,
+                buildingId = o.optLong("buildingId"),
+                name = o.optString("name", ""),
+                phoneNumber = o.optString("phoneNumber", ""),
+                type = o.optString("type", "resident"),
+                unitId = if (o.isNull("unitId")) null else o.optLong("unitId"),
+                isEmergency = o.optBoolean("isEmergency", false)
             )
-            list += entry
+
+            list.add(entry)
         }
+
         return list
     }
+
 
     fun getPhonebookForBuilding(
         context: Context,

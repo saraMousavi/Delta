@@ -1,4 +1,3 @@
-// NotificationApi.kt
 package com.example.delta.volley
 
 import android.content.Context
@@ -10,61 +9,102 @@ import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.Notification
 import com.example.delta.data.entity.UsersNotificationCrossRef
 import com.example.delta.enums.NotificationType
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+data class CreateNotificationResult(
+    val notificationId: Long,
+    val targets: Int
+)
+
+data class NotificationWithCrossRef(
+    val notification: Notification,
+    val crossRef: UsersNotificationCrossRef
+)
 
 class Notification {
+
     private val baseUrl = "http://217.144.107.231:3000/notification"
 
-    data class NotificationWithCrossRef(
-        val notification: Notification,
-        val crossRef: UsersNotificationCrossRef
-    )
-
-    fun sendNotification(
+    suspend fun createNotificationSuspend(
         context: Context,
-        notification: Notification,
-        targetUserIds: List<Long>,
-        buildingId: Long?,
-        onSuccess: (Long) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        val queue = Volley.newRequestQueue(context)
+        title: String,
+        message: String,
+        type: String? = null,
+        createdByUserId: Long? = null,
+        buildingId: Long? = null,
+        targetUserIds: List<Long>? = null,
+        targetMobiles: List<String>? = null
+    ): CreateNotificationResult =
+        suspendCancellableCoroutine { cont ->
+            val queue = Volley.newRequestQueue(context.applicationContext)
 
-        val targetsArray = JSONArray().apply {
-            targetUserIds.forEach { put(it) }
-        }
-
-        val body = JSONObject().apply {
-            put("title", notification.title)
-            put("message", notification.message)
-            put("type", notification.type.name)
-            put("createdByUserId", notification.userId ?: JSONObject.NULL)
-            put("buildingId", buildingId ?: JSONObject.NULL)
-            put("targetUserIds", targetsArray)
-        }
-
-        Log.d("NotificationApi", "POST $baseUrl body=$body")
-
-        val req = object : JsonObjectRequest(
-            Request.Method.POST,
-            baseUrl,
-            body,
-            { resp ->
-                try {
-                    val id = resp.optLong("notificationId", 0L)
-                    onSuccess(id)
-                } catch (e: Exception) {
-                    onError(e)
+            val body = JSONObject().apply {
+                put("title", title)
+                put("message", message)
+                if (!type.isNullOrBlank()) put("type", type)
+                if (createdByUserId != null) put("createdByUserId", createdByUserId)
+                if (buildingId != null) put("buildingId", buildingId)
+                targetUserIds?.takeIf { it.isNotEmpty() }?.let {
+                    put("targetUserIds", JSONArray(it))
                 }
-            },
-            { err ->
-                onError(formatVolleyError("NotificationApi(sendNotification)", err))
+                targetMobiles?.takeIf { it.isNotEmpty() }?.let {
+                    put("targetMobiles", JSONArray(it))
+                }
             }
-        ) {}
 
-        queue.add(req)
-    }
+            val request = object : JsonObjectRequest(
+                Request.Method.POST,
+                baseUrl,
+                body,
+                { resp ->
+                    try {
+                        val id = resp.optLong("notificationId", 0L)
+                        val targets = resp.optInt("targets", 0)
+                        cont.resume(CreateNotificationResult(id, targets))
+                    } catch (e: Exception) {
+                        cont.resumeWithException(e)
+                    }
+                },
+                { error ->
+                    cont.resumeWithException(error)
+                }
+            ) {}
+
+            queue.add(request)
+            cont.invokeOnCancellation { request.cancel() }
+        }
+
+    suspend fun sendNotificationPushSuspend(
+        context: Context,
+        notificationId: Long
+    ): Unit =
+        suspendCancellableCoroutine { cont ->
+            val queue = Volley.newRequestQueue(context.applicationContext)
+            val url = "$baseUrl/send-push"
+
+            val body = JSONObject().apply {
+                put("notificationId", notificationId)
+            }
+
+            val request = object : JsonObjectRequest(
+                Request.Method.POST,
+                url,
+                body,
+                {
+                    cont.resume(Unit)
+                },
+                { error ->
+                    cont.resumeWithException(error)
+                }
+            ) {}
+
+            queue.add(request)
+            cont.invokeOnCancellation { request.cancel() }
+        }
 
     fun fetchNotificationsForUser(
         context: Context,
@@ -92,7 +132,8 @@ class Notification {
                         }.getOrElse { NotificationType.MANAGER }
 
                         val notificationId = o.optLong("notificationId")
-                        val createdByUserId = if (o.isNull("createdByUserId")) null else o.optLong("createdByUserId")
+                        val createdByUserId =
+                            if (o.isNull("createdByUserId")) null else o.optLong("createdByUserId")
                         val ts = o.optLong("timestamp")
                         val isRead = o.optBoolean("isRead", false)
 
@@ -174,10 +215,7 @@ class Notification {
         queue.add(req)
     }
 
-    private fun formatVolleyError(
-        tag: String,
-        error: com.android.volley.VolleyError
-    ): Exception {
+    private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {
         val resp = error.networkResponse
         return if (resp != null) {
             val body = try {
@@ -191,5 +229,40 @@ class Notification {
             Log.e(tag, "No networkResponse: ${error.message}", error)
             Exception(error.toString())
         }
+    }
+
+    suspend fun fetchNotificationsForUserSuspend(
+        context: Context,
+        userId: Long
+    ): List<NotificationWithCrossRef> =
+        suspendCancellableCoroutine { cont ->
+            fetchNotificationsForUser(
+                context = context,
+                userId = userId,
+                onSuccess = { list ->
+                    if (cont.isActive) cont.resume(list)
+                },
+                onError = { e ->
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+            )
+        }
+
+    suspend fun markNotificationReadSuspend(
+        context: Context,
+        userId: Long,
+        notificationId: Long
+    ) = suspendCancellableCoroutine<Unit> { cont ->
+        markNotificationRead(
+            context = context,
+            userId = userId,
+            notificationId = notificationId,
+            onSuccess = {
+                if (cont.isActive) cont.resume(Unit)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+        )
     }
 }

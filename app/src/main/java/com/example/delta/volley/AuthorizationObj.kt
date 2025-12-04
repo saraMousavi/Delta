@@ -2,17 +2,22 @@ package com.example.delta.volley
 
 import android.content.Context
 import android.util.Log
+import com.android.volley.Request
 import com.android.volley.VolleyError
+import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.AuthorizationObject
 import com.example.delta.data.entity.AuthorizationField
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.collections.forEach
+import kotlin.coroutines.resumeWithException
 
 class AuthorizationObj {
     private val baseUrl = "http://217.144.107.231:3000/authorizationObject"
+
 
     fun insertAuthorizationObject(
         context: Context,
@@ -102,5 +107,73 @@ class AuthorizationObj {
         }
     }
 
+    suspend fun fetchAuthorizationObjectsSuspend(
+        context: Context
+    ): List<AuthorizationObject> = suspendCancellableCoroutine { cont ->
+        val queue = Volley.newRequestQueue(context)
+        val req = JsonArrayRequest(
+            Request.Method.GET,
+            baseUrl,
+            null,
+            { arr ->
+                try {
+                    val out = mutableListOf<AuthorizationObject>()
+                    for (i in 0 until arr.length()) {
+                        val o: JSONObject = arr.getJSONObject(i)
+                        out += AuthorizationObject(
+                            objectId = o.optLong("objectId", 0L),
+                            name = o.optString("name", ""),
+                            description = o.optString("description", "")
+                        )
+                    }
+                    if (cont.isActive) cont.resume(out, onCancellation = null)
+                } catch (e: Exception) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+            },
+            { err ->
+                val ex = formatVolleyError("AuthorizationObj(fetchAuthorizationObjects)", err)
+                if (cont.isActive) cont.resumeWithException(ex)
+            }
+        )
+        queue.add(req)
+    }
+
+    suspend fun fetchFieldsForObjectSuspend(
+        context: Context,
+        objectId: Long
+    ): List<AuthorizationField> = suspendCancellableCoroutine { cont ->
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$objectId/fields"
+
+        val req = JsonArrayRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { arr ->
+                try {
+                    val out = mutableListOf<AuthorizationField>()
+                    for (i in 0 until arr.length()) {
+                        val o: JSONObject = arr.getJSONObject(i)
+                        out += AuthorizationField(
+                            fieldId = o.optLong("fieldId", 0L),
+                            objectId = o.optLong("objectId", 0L),
+                            name = o.optString("name", ""),
+                            fieldType = o.optString("fieldType", null)
+                        )
+                    }
+                    if (cont.isActive) cont.resume(out, onCancellation = null)
+                } catch (e: Exception) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+            },
+            { err ->
+                val ex = formatVolleyError("AuthorizationObj(fetchFieldsForObject)", err)
+                if (cont.isActive) cont.resumeWithException(ex)
+            }
+        )
+
+        queue.add(req)
+    }
 
 }

@@ -12,12 +12,10 @@ import com.example.delta.data.dao.EarningsDao
 import com.example.delta.data.dao.RoleDao
 import com.example.delta.data.dao.UsersDao
 import com.example.delta.data.entity.Earnings
-import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleCrossRef
+import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.data.model.AppDatabase
 import com.example.delta.enums.Period
-import com.example.delta.enums.Roles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,10 +49,10 @@ class MyApplication : Application() {
 
         CoroutineScope(Dispatchers.IO).launch {
             AppDatabase.getDatabase(this@MyApplication).let { db ->
-                AuthDatabaseInitializer.initialize(db)
-                AuthFieldDatabaseInitializer.initializeFields(db)
+//                AuthDatabaseInitializer.initialize(db)
+//                AuthFieldDatabaseInitializer.initializeFields(db)
                 // Insert Default Values
-                insertDefaultValues()
+//                insertDefaultValues()
             }
         }
     }
@@ -62,212 +60,69 @@ class MyApplication : Application() {
     private fun insertDefaultValues() {
         CoroutineScope(Dispatchers.IO).launch {
             // Insert Default Roles
-            val existingRoles = roleDao.getRoles().firstOrNull()
-            if (existingRoles == null) {
-                val defaultRoles = listOf(
-                    Role(roleName = Roles.ADMIN, roleDescription = "System Administrator"),
-                    Role(roleName = Roles.PROPERTY_OWNER, roleDescription = "Property Owner"),
-                    Role(roleName = Roles.BUILDING_MANAGER, roleDescription = "Property Manager"),
-                    Role(roleName = Roles.PROPERTY_TENANT, roleDescription = "Building Tenant"),
-                    Role(roleName = Roles.INDEPENDENT_USER, roleDescription = "Independent User"),
-                    Role(roleName = Roles.GUEST_BUILDING_MANAGER, roleDescription = "Guest Property Manager"),
-                    Role(roleName = Roles.GUEST_PROPERTY_OWNER, roleDescription = "Guest Property Owner"),
-                    Role(roleName = Roles.GUEST_PROPERTY_TENANT, roleDescription = "Guest Building Tenant"),
-                    Role(roleName = Roles.GUEST_INDEPENDENT_USER, roleDescription = "Guest Independent User")
-                )
-                defaultRoles.forEach { role ->
-                    roleDao.insertRole(role)
-                }
 
-                Log.d("MyApplication", "Default roles inserted")
-            } else {
-                Log.d("MyApplication", "Roles already exist")
-            }
 
             // Insert Default Guest User
             val guestBuildingManager = User(
                 mobileNumber = "01111111111",
-                password = "123456",
-                roleId = 6L // guest user for building manager
+                password = "123456"
             )
             var userId = usersDao.insertUser(guestBuildingManager)
-
+            /*@TODO define valid buildingid and unitid from server*/
             usersDao.insertUserRoleCrossRef(
-                UserRoleCrossRef(
+                UserRoleBuildingUnitCrossRef(
                     roleId = 6L,
-                    userId = userId
+                    userId = userId,
+                    buildingId = 0L,
+                    unitId = 0L
                 )
             )
 
             val guestPropertyOwner = User(
                 mobileNumber = "0222222222",
                 password = "123456",
-                roleId = 7L // guest user for owner
             )
             userId = usersDao.insertUser(guestPropertyOwner)
 
             usersDao.insertUserRoleCrossRef(
-                UserRoleCrossRef(
+                UserRoleBuildingUnitCrossRef(
                     roleId = 7L,
-                    userId = userId
+                    userId = userId,
+                    buildingId = 0L,
+                    unitId = 0L
                 )
             )
 
 
             val guestPropertyTenant = User(
                 mobileNumber = "03333333333",
-                password = "123456",
-                roleId = 8L // guest user for building tenant
+                password = "123456"
             )
             userId = usersDao.insertUser(guestPropertyTenant)
 
             usersDao.insertUserRoleCrossRef(
-                UserRoleCrossRef(
+                UserRoleBuildingUnitCrossRef(
                     roleId = 8L,
-                    userId = userId
+                    userId = userId,
+                    buildingId = 0L,
+                    unitId = 0L
                 )
             )
 
             val guestIndependentUser = User(
                 mobileNumber = "04444444444",
                 password = "123456",
-                roleId = 9L // guest user for independent user
             )
             userId = usersDao.insertUser(guestIndependentUser)
 
             usersDao.insertUserRoleCrossRef(
-                UserRoleCrossRef(
+                UserRoleBuildingUnitCrossRef(
                     roleId = 9L,
-                    userId = userId
+                    userId = userId,
+                    buildingId = 0L,
+                    unitId = 0L
                 )
             )
-
-            val allUsers = usersDao.getUsers()
-            Log.d("allUsrs", allUsers.toString())
-
-            // Insert Default Building Types
-//            val buildingTypes = buildingDao.getAllBuildingTypes().firstOrNull()
-//            if (buildingTypes == null) {
-//                val defaultBuildingTypes = listOf(
-//                    BuildingTypes(buildingTypeName = getString(R.string.villa)),
-//                    BuildingTypes(buildingTypeName = getString(R.string.apartment)),
-//                    BuildingTypes(buildingTypeName = getString(R.string.city_complex))
-//                )
-//                defaultBuildingTypes.forEach {
-//                    buildingDao.insertBuildingType(it)
-//                }
-//            }
-
-            // Insert Default Building Usages
-//            val buildingUsages = buildingDao.getAllBuildingUsages().firstOrNull()
-//            if (buildingUsages == null) {
-//                val defaultBuildingUsages = listOf(
-//                    BuildingUsages(buildingUsageName = getString(R.string.residential)),
-//                    BuildingUsages(buildingUsageName = getString(R.string.commercial)),
-//                    BuildingUsages(buildingUsageName = getString(R.string.industrial))
-//                )
-//                defaultBuildingUsages.forEach {
-//                    buildingDao.insertBuildingUsage(it)
-//                }
-//            }
-
-            // Insert Default Costs
-//            val costs = costsDao.getCosts().firstOrNull()
-//            if (costs == null) {
-//                val defaultCosts = listOf(
-//                    Costs(
-//                        costName = getString(R.string.charge),
-//                        period = Period.MONTHLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.AREA,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = false,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.gas),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.AREA,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.electricity),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.AREA,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.water),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.PEOPLE,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.elevator),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.EQUAL,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.fire_protection),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.EQUAL,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.internet),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.EQUAL,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                    Costs(
-//                        costName = getString(R.string.net),
-//                        period = Period.YEARLY,
-//                        paymentLevel = PaymentLevel.UNIT,
-//                        fundType = FundType.OPERATIONAL,
-//                        calculateMethod = CalculateMethod.EQUAL,
-//                        responsible = Responsible.TENANT,
-//                        tempAmount = 0.0,
-//                        chargeFlag = true,
-//                        dueDate = ""
-//                    ),
-//                )
-//                defaultCosts.forEach {
-//                    costsDao.insertCost(it)
-//                }
-//            }
 
             Log.d("My Application", costsDao.getCosts().toString())
 

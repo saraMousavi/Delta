@@ -122,6 +122,8 @@ class Fund {
         val url = "$baseUrl//increase"
 
         val payload = JSONObject().apply {
+            Log.d("buildingId", buildingId.toString())
+            Log.d("amount", amount.toString())
             put("buildingId", buildingId)
             put("amount", amount)
             put("fundType", fundType.name) // or value to match server
@@ -209,6 +211,7 @@ class Fund {
                         )
                         list += fund
                     }
+                    Log.d("fundList", list.toString())
                     onSuccess(list)
                 } catch (e: Exception) {
                     onError(e)
@@ -315,5 +318,24 @@ class Fund {
 
         queue.add(request)
     }
+
+    fun getFundByType(
+        context: Context,
+        buildingId: Long,
+        fundType: FundType,
+        onSuccess: (Funds?) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        getFundsForBuilding(
+            context = context,
+            buildingId = buildingId,
+            onSuccess = { list ->
+                val fund = list.firstOrNull { it.fundType == fundType }
+                onSuccess(fund)
+            },
+            onError = onError
+        )
+    }
+
 
 }

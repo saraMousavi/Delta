@@ -53,16 +53,6 @@ interface AuthorizationDao {
     )
     suspend fun getFieldByName(objectId: Long, fieldName: Int): AuthorizationField?
 
-    @Query("""
-        SELECT permissionLevel FROM role_authorization_object_field_cross_ref
-        WHERE roleId = :roleId AND objectId = :objectId AND fieldId = :fieldId
-        LIMIT 1
-    """)
-    suspend fun getPermissionLevel(
-        roleId: Long,
-        objectId: Long,
-        fieldId: Long
-    ): Int?
 
     @Query("SELECT fieldId FROM authorization_fields WHERE objectId = :objectId AND name = :fieldNameRes LIMIT 1")
     suspend fun getFieldIdByName(objectId: Long, fieldNameRes: Int): Long?
@@ -126,7 +116,7 @@ WHERE urc.userId = :userId
         val crossRef: RoleAuthorizationObjectFieldCrossRef,
 
         @ColumnInfo(name = "objectName")
-        val objectName: Int
+        val objectName: String
     )
 
     @Query("SELECT COUNT(*) FROM role_authorization_object_field_cross_ref")
