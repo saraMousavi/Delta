@@ -57,7 +57,7 @@ class Notification {
             }
 
             val request = object : JsonObjectRequest(
-                Request.Method.POST,
+                Method.POST,
                 baseUrl,
                 body,
                 { resp ->
@@ -91,7 +91,7 @@ class Notification {
             }
 
             val request = object : JsonObjectRequest(
-                Request.Method.POST,
+                Method.POST,
                 url,
                 body,
                 {
@@ -113,8 +113,6 @@ class Notification {
         onError: (Exception) -> Unit
     ) {
         val url = "$baseUrl/by-user?userId=$userId"
-        Log.d("NotificationApi", "GET $url")
-
         val queue = Volley.newRequestQueue(context)
         val req = JsonArrayRequest(
             Request.Method.GET,
@@ -184,7 +182,7 @@ class Notification {
         }
 
         val req = object : JsonObjectRequest(
-            Request.Method.POST,
+            Method.POST,
             url,
             body,
             { _ -> onSuccess() },
@@ -205,7 +203,7 @@ class Notification {
         val queue = Volley.newRequestQueue(context)
 
         val req = object : JsonObjectRequest(
-            Request.Method.DELETE,
+            Method.DELETE,
             url,
             null,
             { _ -> onSuccess() },

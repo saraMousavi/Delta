@@ -42,7 +42,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +64,9 @@ import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Users
 import org.json.JSONObject
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 class UserProfileActivity : ComponentActivity() {
 
@@ -217,6 +219,7 @@ fun UserProfileScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
+            .imePadding()
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -326,7 +329,7 @@ fun UserProfileScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(8.dp)
                     ) {
                         UserProfileEditableField(
                             label = stringResource(id = R.string.first_name),
@@ -484,7 +487,7 @@ private fun UserProfileDisplayRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -500,21 +503,22 @@ private fun UserProfileDisplayRow(
     }
 }
 @Composable
-private fun UserProfileEditableField(
+fun UserProfileEditableField(
+    modifier: Modifier = Modifier,
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
     isError: Boolean = false,
     errorText: String? = null,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    required: Boolean = false
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label, style = MaterialTheme.typography.bodyLarge) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        label = { if(required) RequiredLabel(label) else Text(label, style = MaterialTheme.typography.bodyLarge) },
+        modifier = modifier
+            .fillMaxWidth(),
         isError = isError,
         keyboardOptions = keyboardOptions,
         supportingText = {
@@ -533,11 +537,14 @@ private fun UserProfileEditableField(
 fun roleDisplayFromId(roleId: Long, context: Context): String = when (roleId) {
     1L -> Roles.ADMIN.getDisplayName(context = context)
     2L -> Roles.PROPERTY_OWNER.getDisplayName(context = context)
-    3L -> Roles.PROPERTY_TENANT.getDisplayName(context = context)
-    4L -> Roles.INDEPENDENT_USER.getDisplayName(context = context)
-    5L -> Roles.GUEST_BUILDING_MANAGER.getDisplayName(context = context)
-    6L -> Roles.GUEST_PROPERTY_OWNER.getDisplayName(context = context)
-    7L -> Roles.GUEST_PROPERTY_TENANT.getDisplayName(context = context)
+    3L -> Roles.BUILDING_MANAGER.getDisplayName(context = context)
+    4L -> Roles.PROPERTY_TENANT.getDisplayName(context = context)
+    5L -> Roles.INDEPENDENT_USER.getDisplayName(context = context)
+    6L -> Roles.COMPLEX_MANAGER.getDisplayName(context = context)
+    7L -> Roles.GUEST_BUILDING_MANAGER.getDisplayName(context = context)
+    8L -> Roles.GUEST_COMPLEX_MANAGER.getDisplayName(context = context)
+    9L -> Roles.GUEST_PROPERTY_OWNER.getDisplayName(context = context)
+    10L -> Roles.GUEST_PROPERTY_TENANT.getDisplayName(context = context)
     else -> Roles.GUEST_INDEPENDENT_USER.getDisplayName(context = context)
 }
 

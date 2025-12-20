@@ -34,12 +34,9 @@ class AuthorizationObj {
             put("authorizationFieldJsonArray", authorizationFieldJsonArray)
         }
 
-        Log.d("AuthorizationObjectVolley", "Payload: $payload")
-
         val request = object : JsonObjectRequest(
             Method.POST, baseUrl, payload,
             { response ->
-                Log.d("InsertAuthorizationObjectServer", "AuthorizationObjects inserted: $response")
                 onSuccess(response.toString())
             },
             { error ->
@@ -54,38 +51,11 @@ class AuthorizationObj {
         queue.add(request)
     }
 
-    fun authorizationObjectToJson(authorizationObject: AuthorizationObject): JSONObject {
-        return JSONObject().apply {
-//            put("authorizationObjectId", authorizationObject.authorizationObjectId)
-            put("name", authorizationObject.name)
-            put("description", authorizationObject.description)
-        }
-    }
-
-    fun authorizationFieldToJson(authorizationFields: AuthorizationField, authorizationObjectTempId: String? = null): JSONObject {
-        return JSONObject().apply {
-            if (authorizationObjectTempId != null) put("authorizationObjectTempId", authorizationObjectTempId) else put("authorizationObjectId", authorizationFields.objectId)
-
-            put("authorizationObjectId", authorizationFields.objectId)
-            put("name", authorizationFields.name)
-            put("fieldType", authorizationFields.fieldType)
-        }
-    }
-
-
-    fun <T> listToJsonArray(list: List<T>, toJsonFunc: (T) -> JSONObject): JSONArray {
-        val jsonArray = JSONArray()
-        list.forEach { item ->
-            jsonArray.put(toJsonFunc(item))
-        }
-        return jsonArray
-    }
 
     private fun formatVolleyError(tag: String, error: VolleyError): Exception {
         val resp = error.networkResponse
         if (resp != null) {
             val status = resp.statusCode
-            // سعی کن charset رو از هدر بخونی، وگرنه UTF-8
             val charset = resp.headers?.get("Content-Type")
                 ?.substringAfter("charset=", "UTF-8")
                 ?: "UTF-8"
@@ -126,7 +96,7 @@ class AuthorizationObj {
                             description = o.optString("description", "")
                         )
                     }
-                    if (cont.isActive) cont.resume(out, onCancellation = null)
+                    if (cont.isActive) cont.resume(out) { cause, _, _ -> null?.let { it(cause) } }
                 } catch (e: Exception) {
                     if (cont.isActive) cont.resumeWithException(e)
                 }

@@ -9,5 +9,7 @@ import androidx.room.PrimaryKey
 data class BuildingUsages(
     @PrimaryKey(autoGenerate = true) val buildingUsageId: Long = 0,
     @ColumnInfo(name = "building_usage_name")
-    val buildingUsageName: String
+    val buildingUsageName: String,
+    @ColumnInfo(name = "for_building_id") val forBuildingId: Long?=null,
+    @ColumnInfo(name = "added_before_create_building") val addedBeforeCreateBuilding: Boolean?= false,
 )

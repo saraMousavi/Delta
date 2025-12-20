@@ -240,7 +240,6 @@ class AuthObjectFieldCross {
         onError: (Exception) -> Unit
     ) {
         val url = "$baseUrl/user-fields?userId=$userId"
-        Log.d("AuthObjectFieldCross", "GET $url")
 
         val queue = Volley.newRequestQueue(context)
         val req = JsonArrayRequest(

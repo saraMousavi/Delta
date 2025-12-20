@@ -1,11 +1,9 @@
 package com.example.delta.screens
 
-import android.util.Log
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,23 +32,22 @@ fun OnboardingScreenWithModalSheet(
     roleId: Long?,
     onFinish: () -> Unit
 ) {
-    Log.d("roleId", roleId.toString())
     val context = LocalContext.current
     val pages = listOf(
         OnboardingPage(
-            imageRes = R.drawable.banner_first,
-            title = context.getString(R.string.welcome),
-            description = context.getString(R.string.app_features)
+            imageRes = R.drawable.banner_second,
+            title = context.getString(R.string.finance),
+            description = context.getString(R.string.finance_description)
         ),
         OnboardingPage(
-            imageRes = R.drawable.banner_second,
-            title = context.getString(R.string.easy_management),
-            description = context.getString(R.string.easy_management)
+            imageRes = R.drawable.banner_first,
+            title = context.getString(R.string.easy_contact),
+            description = context.getString(R.string.contact_description)
         ),
         OnboardingPage(
             imageRes = R.drawable.banner_third,
-            title = context.getString(R.string.exact_info),
-            description = context.getString(R.string.exact_info),
+            title = context.getString(R.string.building_comfort),
+            description = context.getString(R.string.building_description),
         )
     )
 
@@ -174,6 +171,7 @@ fun OnboardingScreenWithModalSheet(
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
+                    Spacer(modifier = Modifier.height(52.dp))
                 }
             }
         }
@@ -193,7 +191,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
         Image(
             painter = painterResource(page.imageRes),
             contentDescription = null,
-            modifier = Modifier.size(250.dp),
+            modifier = Modifier.size(260.dp),
             contentScale = ContentScale.Fit
         )
 
@@ -201,7 +199,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
 
         Text(
             text = page.title,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center
         )
 
@@ -209,7 +207,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
 
         Text(
             text = page.description,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
     }

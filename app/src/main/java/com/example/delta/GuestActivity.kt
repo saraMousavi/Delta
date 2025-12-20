@@ -125,7 +125,7 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
         Roles.GUEST_BUILDING_MANAGER,
         Roles.GUEST_PROPERTY_OWNER,
         Roles.GUEST_PROPERTY_TENANT,
-        Roles.GUEST_INDEPENDENT_USER
+//        Roles.GUEST_INDEPENDENT_USER
     )
 
     var isLoading by remember { mutableStateOf(false) }
@@ -135,7 +135,6 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
             try {
                 isLoading = true
                 insertUserBasedOnRole(role, context)
-                insertingSampleBuilding(context)
 
                 val activity = context as? Activity
                 activity?.let { act ->
@@ -283,21 +282,21 @@ fun GuestScreen(modifier: Modifier, sharedViewModel: SharedViewModel) {
 private fun insertUserBasedOnRole(role: Roles, context: Context) {
     when (role) {
         Roles.GUEST_BUILDING_MANAGER -> {
-            saveLoginState(context, true, userId = 1, mobile = "01111111111", roleId = 6)
+            saveLoginState(context, true, userId = 1, mobile = "09120000001", roleId = 7L)
             saveFirstLoginState(context, true)
         }
         Roles.GUEST_PROPERTY_OWNER -> {
-            saveLoginState(context, true, userId = 2, mobile = "0222222222", roleId = 7)
+            saveLoginState(context, true, userId = 7, mobile = "09300000000", roleId = 9L)
             saveFirstLoginState(context, true)
         }
         Roles.GUEST_PROPERTY_TENANT -> {
-            saveLoginState(context, true, userId = 3, mobile = "03333333333", roleId = 8)
+            saveLoginState(context, true, userId = 3, mobile = "09123333333", roleId = 10L)
             saveFirstLoginState(context, true)
         }
-        Roles.GUEST_INDEPENDENT_USER -> {
-            saveLoginState(context, true, userId = 4, mobile = "04444444444", roleId = 9)
-            saveFirstLoginState(context, true)
-        }
+//        Roles.GUEST_INDEPENDENT_USER -> {
+//            saveLoginState(context, true, userId = 4, mobile = "04444444444", roleId = 9)
+//            saveFirstLoginState(context, true)
+//        }
         else -> Unit
     }
 }
@@ -418,114 +417,4 @@ fun RoleSelectionBottomSheet(
     }
 }
 
-suspend fun insertingSampleBuilding(context: Context) {
-    val prefs = context.getSharedPreferences("guest_prefs", Context.MODE_PRIVATE)
-    val alreadyInserted = prefs.getBoolean("excel_inserted_guest", false)
 
-    if (!alreadyInserted) {
-        try {
-            val file = File(context.cacheDir, "export_delta_template_guest.xlsx")
-
-            withContext(Dispatchers.IO) {
-                context.resources.openRawResource(R.raw.export_delta_template_guest).use { input ->
-                    FileOutputStream(file).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-
-            val fileUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-
-            context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
-                withContext(Dispatchers.IO) {
-                    FileManagement().handleExcelFile(
-                        inputStream,
-                        context as Activity,
-                        context
-                    )
-                }
-            }
-            CoroutineScope(Dispatchers.Default).launch {
-
-                prefs.edit {
-                    putBoolean("excel_inserted_guest", true)
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e("GuestScreen1", "Error inserting sample building: $e")
-            withContext(Dispatchers.Main) {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.failed_opening),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-    }
-}
-
-//private suspend fun insertDefaultAuthorizationData() {
-//    withContext(Dispatchers.IO) {
-//        val rolesList = roleDao.getRoles()
-//        val roleMap = rolesList.associateBy { it.roleName }
-//
-//        suspend fun insertCrossRefs(
-//            roleId: Long,
-//            objectId: Long,
-//            fields: List<AuthorizationField>,
-//            permission: PermissionLevel
-//        ) {
-//            fields.forEach { field ->
-//                Log.d("field", field.toString())
-//                Log.d("roleId", roleId.toString())
-//                authorizationDao.insertRoleAuthorizationFieldCrossRef(
-//                    RoleAuthorizationObjectFieldCrossRef(
-//                        roleId = roleId,
-//                        objectId = objectId,
-//                        fieldId = field.fieldId,
-//                        permissionLevel = permission
-//                    )
-//                )
-//            }
-//        }
-//
-//        val adminManagerRoles = listOf(Roles.GUEST_BUILDING_MANAGER)
-//        adminManagerRoles.forEach { roleName ->
-//            val role = roleMap[roleName] ?: return@forEach
-//            AuthObject.getAll().forEach { authObject ->
-//                val fields = authorizationDao.getFieldsForObject(authObject.id)
-//                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
-//            }
-//        }
-//
-//        roleMap[Roles.GUEST_PROPERTY_TENANT]?.let { tenantRole ->
-//            val tenantFieldNames = listOf(
-//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-//                BuildingProfileFields.TENANTS_TAB.fieldNameRes
-//            )
-//            val allFields = authorizationDao.getFieldsForObject(3L)
-//            val tenantFields = allFields.filter { it.name in tenantFieldNames }
-//            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
-//        }
-//
-//        roleMap[Roles.GUEST_PROPERTY_OWNER]?.let { ownerRole ->
-//            val ownerFieldNames = listOf(
-//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-//                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
-//                BuildingProfileFields.OWNERS_TAB.fieldNameRes
-//            )
-//            val allFields = authorizationDao.getFieldsForObject(3L)
-//            val ownerFields = allFields.filter { it.name in ownerFieldNames }
-//            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
-//        }
-//    }
-//}

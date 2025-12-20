@@ -11,7 +11,9 @@ data class PhonebookEntry(
     val phoneNumber: String,
     val type: String, // "resident" or "emergency"
     val unitId: Long? = null, // Link to units if resident
-    val isEmergency: Boolean = false
+    val isEmergency: Boolean = false,
+    val roleLabel: String? = null
+
 )
 
 

@@ -38,13 +38,14 @@ class Phonebook {
             val o = arr.getJSONObject(i)
 
             val entry = PhonebookEntry(
-                entryId = 0,
+                entryId = o.optLong("entryId", 0L),
                 buildingId = o.optLong("buildingId"),
                 name = o.optString("name", ""),
                 phoneNumber = o.optString("phoneNumber", ""),
                 type = o.optString("type", "resident"),
                 unitId = if (o.isNull("unitId")) null else o.optLong("unitId"),
-                isEmergency = o.optBoolean("isEmergency", false)
+                isEmergency = o.optBoolean("isEmergency", false),
+                roleLabel = o.optString("roleLabel", null)
             )
 
             list.add(entry)

@@ -34,9 +34,12 @@ class Units {
                             unitId = obj.optLong("unitId", 0L),
                             unitNumber = obj.optString("unitNumber", ""),
                             area = obj.optString("area", "0"),
-                            numberOfRooms = obj.optString("numberOfRooms", "0"),
-                            numberOfWarehouse = obj.optString("numberOfWarehouse", "0"),
-                            numberOfParking = obj.optString("numberOfParking", "0"),
+                            numberOfRooms = if(obj.optString("numberOfRooms", "0") == "null" || obj.optString("numberOfRooms", "0") == null)
+                                "" else obj.optString("numberOfRooms", "0"),
+                            numberOfWarehouse = if(obj.optString("numberOfWarehouse", "0") == "null" || obj.optString("numberOfWarehouse", "0") == null)
+                                "" else obj.optString("numberOfWarehouse", "0"),
+                            numberOfParking = if(obj.optString("numberOfParking", "0") == "null" || obj.optString("numberOfParking", "0") == null)
+                                "" else obj.optString("numberOfParking", "0"),
                             postCode = obj.optString("postCode", "")
                         )
                         list += item

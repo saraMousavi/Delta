@@ -98,7 +98,7 @@ class RoleApi {
                     val obj = if (resp.has("role")) resp.getJSONObject("role") else resp
 
                     val roleId = obj.optLong("roleId", 0L)
-                    val roleNameStr = obj.optString("roleName", "GUEST_INDEPENDENT_USER")
+                    val roleNameStr = obj.optString("roleName", name)
                     val roleDesc = obj.optString("roleDescription", description)
 
                     val enumRole = runCatching { Roles.valueOf(roleNameStr) }
@@ -109,7 +109,7 @@ class RoleApi {
                         roleName = roleNameStr,
                         roleDescription = roleDesc
                     )
-
+                    Log.d("role", role.toString())
                     if (cont.isActive) {
                         cont.resume(role, onCancellation = null)
                     }

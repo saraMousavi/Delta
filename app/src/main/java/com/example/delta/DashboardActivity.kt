@@ -3,6 +3,7 @@ package com.example.delta
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +52,7 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.collections.forEachIndexed
 
+
 class DashboardActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
 
@@ -81,11 +84,13 @@ fun ReportsActivityScreen(
     val context = LocalContext.current
 
     var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
+    var buildingName by remember { mutableStateOf<String>("") }
     var showNoDataChartDialog by remember { mutableStateOf(false) }
 
     var buildingsWithCosts by remember { mutableStateOf<List<BuildingWithCosts>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showDashboardReportDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         Cost().fetchBuildingsWithCosts(
@@ -139,6 +144,7 @@ fun ReportsActivityScreen(
     val capitalDetailByOwner by sharedViewModel.dashboardCapitalDetailByOwner.collectAsState()
     val chargeDetailByUnit by sharedViewModel.dashboardChargeDetailByUnit.collectAsState()
     val operationalDetailByUnit by sharedViewModel.dashboardOperationalDetailByUnit.collectAsState()
+
     var showNoRecordedData by remember { mutableStateOf(false) }
     showNoRecordedData = debtsList.isEmpty() && paysList.isEmpty()
 
@@ -235,7 +241,6 @@ fun ReportsActivityScreen(
         }
     }
 
-
     val filteredDebtsByUnit = remember(debtsList, selectedCategoryKey, unitsList, costsList) {
         if (selectedCategoryKey == null) emptyMap<String, Double>()
         else {
@@ -274,7 +279,6 @@ fun ReportsActivityScreen(
         .distinct()
         .toTypedArray()
 
-
     val numberFormatter = remember { NumberFormat.getNumberInstance(Locale.US) }
 
     fun extractYear(date: String?): String? {
@@ -288,7 +292,6 @@ fun ReportsActivityScreen(
         pc.persianYear.toString()
     }
 
-
     val totalDebtsCurrentYear: Double = remember(debtsList, currentYear) {
         debtsList
             .filter { extractYear(it.dueDate) == currentYear }
@@ -298,34 +301,42 @@ fun ReportsActivityScreen(
     val totalPaysCurrentYear: Double = remember(paysList, currentYear) {
         paysList
             .filter { extractYear(it.dueDate) == currentYear }
-            .sumOf { it.amount / 1_000_000f}
+            .sumOf { it.amount / 1_000_000f }
     }
 
     val totalReceiptCurrentYear: Double = remember(receiptList, currentYear) {
         receiptList
             .filter { extractYear(it.dueDate) == currentYear }
-            .sumOf { it.amount / 1_000_000f}
+            .sumOf { it.amount / 1_000_000f }
     }
 
     val totalPendingReceiptCurrentYear: Double = remember(pendingReceiptList, currentYear) {
         pendingReceiptList
             .filter { extractYear(it.dueDate) == currentYear }
-            .sumOf { it.amount / 1_000_000f}
+            .sumOf { it.amount / 1_000_000f }
     }
-
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onHomeClick) {
-                Icon(Icons.Default.Home, contentDescription = "Home")
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FloatingActionButton(
+                    onClick = { showDashboardReportDialog = true }
+                ) {
+                    Icon(Icons.Default.Print, contentDescription = "Print")
+                }
+
+                FloatingActionButton(onClick = onHomeClick) {
+                    Icon(Icons.Default.Home, contentDescription = "Home")
+                }
             }
-        },
+        }
+        ,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = context.getString(R.string.title_dashboard),
-                        style = MaterialTheme.typography.bodyLarge
+                        text = context.getString(R.string.bilan_report),
+                        style = MaterialTheme.typography.headlineSmall
                     )
                 }
             )
@@ -341,7 +352,7 @@ fun ReportsActivityScreen(
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
+                        .padding(4.dp)
                 ) {
                     items(buildings) { building ->
                         FilterChip(
@@ -355,15 +366,11 @@ fun ReportsActivityScreen(
                             },
                             modifier = Modifier.padding(end = 8.dp)
                         )
+                        if (building.buildingId == selectedBuildingId) {
+                            buildingName = building.name
+                        }
                     }
                 }
-                Text(
-                    text = context.getString(R.string.bilan_report),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -372,7 +379,7 @@ fun ReportsActivityScreen(
                 ) {
                     SummaryCard(
                         title = context.getString(R.string.current_year_debt),
-                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        subtitle = "سال $currentYear",
                         amount = totalDebtsCurrentYear,
                         formatter = numberFormatter,
                         modifier = Modifier.weight(1f),
@@ -380,7 +387,7 @@ fun ReportsActivityScreen(
                     )
                     SummaryCard(
                         title = context.getString(R.string.current_year_pays),
-                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        subtitle = "سال $currentYear",
                         amount = totalPaysCurrentYear,
                         formatter = numberFormatter,
                         modifier = Modifier.weight(1f),
@@ -398,7 +405,7 @@ fun ReportsActivityScreen(
                 ) {
                     SummaryCard(
                         title = context.getString(R.string.current_year_pending_receipt),
-                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        subtitle = "سال $currentYear",
                         amount = totalPendingReceiptCurrentYear,
                         formatter = numberFormatter,
                         modifier = Modifier.weight(1f),
@@ -406,7 +413,7 @@ fun ReportsActivityScreen(
                     )
                     SummaryCard(
                         title = context.getString(R.string.current_year_receipt),
-                        subtitle = currentYear?.let { "سال $it" } ?: "",
+                        subtitle = "سال $currentYear",
                         amount = totalReceiptCurrentYear,
                         formatter = numberFormatter,
                         modifier = Modifier.weight(1f),
@@ -461,26 +468,21 @@ fun ReportsActivityScreen(
                             }
                         },
                         update = { chart ->
-                            val labels = arrayOf("هزینه های عمرانی", "هزینه های جاری", "شارژ")
+                            val labels = arrayOf("شارژ عمرانی", "شارژ جاری")
 
                             val debtsEntries = mutableListOf<BarEntry>()
                             val paysEntries = mutableListOf<BarEntry>()
 
                             val capitalDebt = capitalSummary!!.unpaid.toFloat()
                             val capitalPay = capitalSummary!!.paid.toFloat()
-                            val operationalDebt = operationalSummary!!.unpaid.toFloat()
-                            val operationalPay = operationalSummary!!.paid.toFloat()
                             val chargeDebt = chargeSummary!!.unpaid.toFloat()
                             val chargePay = chargeSummary!!.paid.toFloat()
 
                             debtsEntries.add(BarEntry(0f, capitalDebt))
                             paysEntries.add(BarEntry(0f, capitalPay))
 
-                            debtsEntries.add(BarEntry(1f, operationalDebt))
-                            paysEntries.add(BarEntry(1f, operationalPay))
-
-                            debtsEntries.add(BarEntry(2f, chargeDebt))
-                            paysEntries.add(BarEntry(2f, chargePay))
+                            debtsEntries.add(BarEntry(1f, chargeDebt))
+                            paysEntries.add(BarEntry(1f, chargePay))
 
                             val hasData = debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
 
@@ -526,9 +528,8 @@ fun ReportsActivityScreen(
                                     if (e == null) return
                                     val xIndex = e.x.toInt()
                                     selectedCategoryKey = when (xIndex) {
-                                        0 -> "هزینه های عمرانی"
-                                        1 -> "هزینه های جاری"
-                                        2 -> "شارژ"
+                                        0 -> "شارژ عمرانی"
+                                        1 -> "شارژ جاری"
                                         else -> null
                                     }
                                 }
@@ -544,9 +545,6 @@ fun ReportsActivityScreen(
                             .padding(horizontal = 16.dp)
                     )
 
-
-                    Spacer(Modifier.height(16.dp))
-
                     Spacer(Modifier.height(16.dp))
 
                     if (selectedCategoryKey == null) {
@@ -560,27 +558,18 @@ fun ReportsActivityScreen(
                         )
                     } else {
                         when (selectedCategoryKey) {
-                            "هزینه های عمرانی" -> {
+                            "شارژ عمرانی" -> {
                                 CategoryDetailChartByOwner(
-                                    category = "هزینه های عمرانی",
+                                    category = "شارژ عمرانی",
                                     items = capitalDetailByOwner,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(16.dp)
                                 )
                             }
-                            "هزینه های جاری" -> {
+                            "شارژ جاری" -> {
                                 CategoryDetailChartByUnit(
-                                    category = "هزینه های جاری",
-                                    items = operationalDetailByUnit,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                )
-                            }
-                            "شارژ" -> {
-                                CategoryDetailChartByUnit(
-                                    category = "شارژ",
+                                    category = "شارژ جاری",
                                     items = chargeDetailByUnit,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -589,7 +578,7 @@ fun ReportsActivityScreen(
                             }
                         }
                     }
-
+                    Spacer(modifier = Modifier.height(56.dp))
                 }
             }
         }
@@ -625,6 +614,30 @@ fun ReportsActivityScreen(
             }
         )
     }
+
+    if (showDashboardReportDialog) {
+        FinancialReportDialog(
+            sharedViewModel = sharedViewModel,
+            onDismiss = { showDashboardReportDialog = false },
+            onSubmit = { startDate, endDate ->
+                showDashboardReportDialog = false
+                val bId = selectedBuildingId
+                if (bId == null || bId <= 0L) return@FinancialReportDialog
+
+                sharedViewModel.requestDashboardFinancialReportPdf(
+                    context = context,
+                    buildingId = bId,
+                    buildingName = buildingName,
+                    startDate = startDate,
+                    endDate = endDate,
+                    onError = { e ->
+                        Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+        )
+    }
+
 }
 
 fun formatMillionLabel(value: Double): String {

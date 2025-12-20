@@ -2,8 +2,8 @@ package com.example.delta
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -23,15 +23,26 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apartment
+import androidx.compose.material.icons.filled.Domain
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -49,40 +60,50 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.edit
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.delta.data.entity.BuildingWithCounts
-import com.example.delta.viewmodel.SharedViewModel
+import com.example.delta.data.entity.User
+import com.example.delta.enums.Gender
+import com.example.delta.enums.PermissionLevel
+import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
+import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
+import com.example.delta.init.AuthUtils.AuthorizationObjects
 import com.example.delta.init.FileManagement
 import com.example.delta.init.Preference
+import com.example.delta.init.Validation
 import com.example.delta.permission.Notification
+import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apartment
-import androidx.compose.material.icons.filled.Domain
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Button
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import com.example.delta.volley.Users
+import kotlinx.coroutines.delay
+import org.json.JSONObject
 
 class HomePageActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
     private val REQUEST_CODE_PICK_EXCEL = 1001
 
-    private lateinit var notifHelper: Notification
+    private lateinit var notificationHelper: Notification
 
     @Deprecated("Use Activity Result API instead")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -111,21 +132,42 @@ class HomePageActivity : ComponentActivity() {
     @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val roleId: Long? = intent.getLongExtra("role_id", 0L).let { if (it == 0L) null else it }
+        val roleIdExtra: Long? = intent.getLongExtra("role_id", 0L).let { if (it == 0L) null else it }
 
-        // Build the permission helper BEFORE the Activity reaches STARTED/RESUMED
-        notifHelper = Notification(
+        notificationHelper = Notification(
             caller = this,
             context = this,
             onGranted = { ensureGeneralChannel() },
-            onDenied = { /* no-op */ }
+            onDenied = { }
         )
-        // You can request immediately (or from UI later)
-        notifHelper.ensurePermission()
+        notificationHelper.ensurePermission()
 
         enableEdgeToEdge()
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+                val context = LocalContext.current
+                val userId = remember { Preference().getUserId(context) }
+
+                var user by remember { mutableStateOf<User?>(null) }
+                var isLoadingUser by remember { mutableStateOf(true) }
+                var showMandatoryDialog by remember { mutableStateOf(false) }
+
+                LaunchedEffect(userId) {
+                    isLoadingUser = true
+                    Users().fetchUserById(
+                        context = context,
+                        userId = userId,
+                        onSuccess = { fetched ->
+                            user = fetched
+                            isLoadingUser = false
+                            showMandatoryDialog =
+                                fetched.firstName.isNullOrBlank() || fetched.lastName.isNullOrBlank()
+                        },
+                        onError = {
+                            isLoadingUser = false
+                        }
+                    )
+                }
                 DetailDrawer(
                     title = getString(R.string.menu_title),
                     sharedViewModel = sharedViewModel,
@@ -144,10 +186,19 @@ class HomePageActivity : ComponentActivity() {
                             .padding(innerPadding)
                     ) {
                         val navController = rememberNavController()
+                        val context = LocalContext.current
+
+                        val effectiveRoleId = roleIdExtra ?: Preference().getRoleId(context)
+                        LaunchedEffect(effectiveRoleId) {
+                            if (effectiveRoleId != 0L) {
+                                sharedViewModel.loadRolePermissions(context, effectiveRoleId)
+                            }
+                        }
 
                         Scaffold(
                             bottomBar = {
                                 CurvedBottomNavigation(
+                                    currentRoleId = effectiveRoleId,
                                     navController = navController,
                                     items = Screen.items,
                                     sharedViewModel = sharedViewModel
@@ -160,14 +211,81 @@ class HomePageActivity : ComponentActivity() {
                             ) {
                                 composable(Screen.Home.route) {
                                     BuildingList(
-                                        roleId = roleId
+                                        roleId = effectiveRoleId,
+                                        sharedViewModel = sharedViewModel
                                     )
                                 }
                                 composable(Screen.Settings.route) {
-                                    SettingsScreen(LocalContext.current)
+                                    val perms = sharedViewModel.rolePermissions
+                                    val perm = perms.permissionFor(
+                                        AuthorizationObjects.HOME,
+                                        AuthorizationFieldsHome.SETTINGS_BUTTON
+                                    )
+                                    if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                        SettingsScreen(LocalContext.current)
+                                    } else {
+                                        LaunchedEffect(Unit) {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.auth_cancel),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(24.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text =  context.getString(R.string.auth_cancel),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                        }
+                                    }
                                 }
-                                composable(Screen.Chat.route) { ChatScreen(sharedViewModel) }
                             }
+                        }
+
+                        if (!isLoadingUser && showMandatoryDialog && user != null) {
+                            MandatoryNameDialogInHome(
+                                sharedViewModel = sharedViewModel,
+                                initialUser = user!!,
+                                onSubmit = { updatedUser ->
+                                    val payload = JSONObject().apply {
+                                        put("firstName", updatedUser.firstName)
+                                        put("lastName", updatedUser.lastName)
+                                        put("email", updatedUser.email)
+                                        put("gender", updatedUser.gender)
+                                        put("nationalCode", updatedUser.nationalCode)
+                                        put("address", updatedUser.address)
+                                    }
+
+                                    Users().updateUser(
+                                        context = context,
+                                        userId = userId,
+                                        payload = payload,
+                                        onSuccess = {
+                                            user = updatedUser
+                                            showMandatoryDialog = false
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.success_update),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        },
+                                        onError = { e ->
+                                            Log.e("UserEditError", e.toString())
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.failed),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            showMandatoryDialog = false
+                                        }
+                                    )
+                                }
+                            )
                         }
                     }
                 }
@@ -184,13 +302,177 @@ class HomePageActivity : ComponentActivity() {
         nm.createNotificationChannel(channel)
     }
 }
+
+@Composable
+private fun MandatoryNameDialogInHome(
+    sharedViewModel: SharedViewModel,
+    initialUser: User,
+    onSubmit: (User) -> Unit
+) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    var firstName by remember { mutableStateOf(initialUser.firstName) }
+    var lastName by remember { mutableStateOf(initialUser.lastName) }
+    var email by remember { mutableStateOf(initialUser.email.orEmpty()) }
+    var nationalCode by remember { mutableStateOf(initialUser.nationalCode.orEmpty()) }
+    var address by remember { mutableStateOf(initialUser.address.orEmpty()) }
+    var gender by remember { mutableStateOf(initialUser.gender ?: Gender.FEMALE) }
+
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var userState by remember { mutableStateOf(initialUser) }
+
+    val canSubmit = remember(userState.firstName, userState.lastName) {
+        userState.firstName.trim().isNotEmpty() && userState.lastName.trim().isNotEmpty()
+    }
+
+    AlertDialog(
+        onDismissRequest = { },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = true
+        ),
+        title = {
+            Text(
+                text = context.getString(R.string.complete_user_info),
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(scrollState)
+            ) {
+                UserProfileEditableField(
+                    label = stringResource(id = R.string.first_name),
+                    value = userState.firstName,
+                    onValueChange = { v ->
+                        userState = userState.copy(firstName = v)
+                        firstName = v
+                    },
+                    required = true,
+                    modifier = Modifier.focusRequester(focusRequester)
+                )
+
+                UserProfileEditableField(
+                    label = stringResource(id = R.string.last_name),
+                    value = userState.lastName,
+                    onValueChange = { v ->
+                        userState = userState.copy(lastName = v)
+                        lastName = v
+                    },
+                    required = true
+                )
+
+                UserProfileEditableField(
+                    label = stringResource(id = R.string.email),
+                    value = userState.email.orEmpty(),
+                    onValueChange = { newValue ->
+                        userState = userState.copy(email = newValue)
+                        email = newValue
+                        emailError = if (newValue.isBlank()) {
+                            null
+                        } else if (!Validation().isValidEmail(newValue)) {
+                            context.getString(R.string.invalid_email)
+                        } else {
+                            null
+                        }
+                    },
+                    isError = emailError != null,
+                    errorText = emailError,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    )
+                )
+
+                GenderDropdown(
+                    sharedViewModel = sharedViewModel,
+                    selectedGender = userState.gender?.let {
+                        Gender.fromDisplayName(
+                            context,
+                            it.getDisplayName(context)
+                        )
+                    },
+                    onGenderSelected = { g ->
+                        userState = userState.copy(gender = g)
+                        gender = g
+                    },
+                    label = stringResource(id = R.string.gender),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                UserProfileEditableField(
+                    label = stringResource(id = R.string.national_code),
+                    value = userState.nationalCode.orEmpty(),
+                    onValueChange = { v ->
+                        userState = userState.copy(nationalCode = v)
+                        nationalCode = v
+                    }
+                )
+
+                UserProfileEditableField(
+                    label = stringResource(id = R.string.address),
+                    value = userState.address.orEmpty(),
+                    onValueChange = { v ->
+                        userState = userState.copy(address = v)
+                        address = v
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = canSubmit,
+                onClick = {
+                    keyboardController?.hide()
+
+                    val updated = userState.copy(
+                        firstName = userState.firstName.trim(),
+                        lastName = userState.lastName.trim(),
+                        email = userState.email?.trim()?.ifBlank { null },
+                        gender = userState.gender ?: Gender.FEMALE,
+                        nationalCode = userState.nationalCode?.trim()?.ifBlank { null },
+                        address = userState.address?.trim()?.ifBlank { null }
+                    )
+
+                    onSubmit(updated)
+                }
+            ) {
+                Text(
+                    text = context.getString(R.string.insert),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {}
+    )
+
+    LaunchedEffect(Unit) {
+        delay(200)
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildingList(
-    roleId: Long?
+    roleId: Long?,
+    sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
     val userId = Preference().getUserId(context)
+    val effectiveRoleId = roleId ?: Preference().getRoleId(context)
 
     var showGuestDialog by remember { mutableStateOf(false) }
     var buildingUserList by remember { mutableStateOf<List<BuildingWithCounts>>(emptyList()) }
@@ -198,8 +480,11 @@ fun BuildingList(
 
     Log.d("userId", userId.toString())
 
-    LaunchedEffect(userId) {
-        // guest logic if needed
+    LaunchedEffect(effectiveRoleId) {
+        if (effectiveRoleId == 7L || effectiveRoleId == 10L || effectiveRoleId == 9L) {
+            showGuestDialog = true
+        }
+        sharedViewModel.refreshUnreadCount()
     }
 
     if (showGuestDialog) {
@@ -220,6 +505,8 @@ fun BuildingList(
             confirmButton = {
                 TextButton(onClick = {
                     showGuestDialog = false
+                    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                    prefs.edit { putBoolean("is_logged_in", false) }
                     context.startActivity(Intent(context, LoginPage::class.java))
                 }) {
                     Text(
@@ -241,12 +528,12 @@ fun BuildingList(
 
     val mobile = Preference().getUserMobile(context)
 
-    LaunchedEffect(mobile, roleId) {
+    LaunchedEffect(mobile, effectiveRoleId) {
         if (mobile == null) return@LaunchedEffect
         Building().fetchBuildingsForUser(
             context = context,
             mobileNumber = mobile,
-            roleId = roleId,
+            roleId = effectiveRoleId,
             onSuccess = { list ->
                 buildingUserList = list
                 loadError = null
@@ -257,6 +544,8 @@ fun BuildingList(
             }
         )
     }
+
+    val perms = sharedViewModel.rolePermissions
 
     when {
         loadError != null -> {
@@ -303,9 +592,22 @@ fun BuildingList(
                 Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = {
-                        context.startActivity(
-                            Intent(context, BuildingFormActivity::class.java)
+                        val perm = perms.permissionFor(
+                            AuthorizationObjects.HOME,
+                            AuthorizationFieldsHome.CREATE_BUILDING_BUTTON
                         )
+                        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                            context.startActivity(
+                                Intent(context, BuildingFormActivity::class.java)
+                            )
+                        } else {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.auth_cancel),
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                        }
                     },
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -331,6 +633,7 @@ fun BuildingList(
                 items(buildingUserList) { buildingWithTypesAndUsages ->
                     BuildingCard(
                         building = buildingWithTypesAndUsages,
+                        sharedViewModel = sharedViewModel,
                         onClick = {
                             val intent = Intent(context, BuildingProfileActivity::class.java).apply {
                                 putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
@@ -377,6 +680,7 @@ fun BuildingList(
 
 @Composable
 fun BuildingCard(
+    sharedViewModel: SharedViewModel,
     building: BuildingWithCounts,
     onClick: () -> Unit,
     onDelete: (Long) -> Unit
@@ -388,7 +692,10 @@ fun BuildingCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable {
+                showMenu = false
+                onClick()
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
@@ -423,12 +730,12 @@ fun BuildingCard(
                         )
                 )
                 IconButton(
-                    onClick = { showMenu = true },
+                    onClick = { showMenu = !showMenu },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                        .padding(4.dp)
                         .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
                             shape = CircleShape
                         )
                 ) {
@@ -438,6 +745,48 @@ fun BuildingCard(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
+
+                if (showMenu) {
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 40.dp, end = 8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Column {
+                            Text(
+                                text = context.getString(R.string.delete_building),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .clickable {
+                                        showMenu = false
+                                        val perms = sharedViewModel.rolePermissions
+                                        val perm = perms.permissionFor(
+                                            AuthorizationObjects.HOME,
+                                            AuthorizationFieldsHome.DELETE_BUILDING_BUTTON
+                                        )
+                                        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                            showDeleteDialog = true
+                                        } else {
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    context.getString(R.string.auth_cancel),
+                                                    Toast.LENGTH_SHORT
+                                                )
+                                                .show()
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                            )
+                        }
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -488,7 +837,8 @@ fun BuildingCard(
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
-                            }
+                            },
+                            colors = AssistChipDefaults.assistChipColors()
                         )
                     }
 
@@ -500,7 +850,8 @@ fun BuildingCard(
                                     text = it,
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                            }
+                            },
+                            colors = AssistChipDefaults.assistChipColors()
                         )
                     }
                 }
@@ -548,24 +899,6 @@ fun BuildingCard(
             }
         }
 
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        context.getString(R.string.delete),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                },
-                onClick = {
-                    showMenu = false
-                    showDeleteDialog = true
-                }
-            )
-        }
-
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
@@ -604,4 +937,3 @@ fun BuildingCard(
         }
     }
 }
-

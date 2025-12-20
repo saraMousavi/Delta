@@ -6,6 +6,7 @@ import com.android.volley.Request
 import com.android.volley.VolleyError
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
+import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.CityComplexes
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -56,7 +57,9 @@ class CityComplex(
                         val item = CityComplexes(
                             complexId = obj.optLong("complexId"),
                             name = obj.optString("name", ""),
-                            address = if (obj.isNull("address")) null else obj.optString("address", null)
+                            address = if (obj.isNull("address")) null else obj.optString("address", null),
+                            forBuildingId = obj.optLong("forBuildingId", 0L),
+                            addedBeforeCreateBuilding = obj.optBoolean("addedBeforeCreateBuilding", false)
                         )
                         list += item
                     }
@@ -85,19 +88,40 @@ class CityComplex(
         )
     }
 
+
+    fun deleteCityComplex(
+        context: Context,
+        cityComplexId: Long,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$cityComplexId"
+
+        val request = StringRequest(
+            Request.Method.DELETE,
+            url,
+            { onSuccess() },
+            { error -> onError(formatVolleyError("BuildingType(delete)", error)) }
+        )
+
+        queue.add(request)
+    }
+
     fun createCityComplex(
         context: Context,
-        name: String,
-        address: String?,
+        cityComplex: CityComplexes,
         onSuccess: (CityComplexes?) -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
 
         val body = JSONObject().apply {
-            put("name", name)
-            if (!address.isNullOrBlank()) {
-                put("address", address)
+            put("name", cityComplex.name)
+            put("addedBeforeCreateBuilding", cityComplex.addedBeforeCreateBuilding)
+            put("forBuildingId", cityComplex.forBuildingId)
+            if (!cityComplex.address.isNullOrBlank()) {
+                put("address", cityComplex.address)
             }
         }
 
@@ -115,12 +139,9 @@ class CityComplex(
 
                     val item = CityComplexes(
                         complexId = complexId,
-                        name = response.optString("name", name),
-                        address = if (response.isNull("address")) {
-                            address
-                        } else {
-                            response.optString("address", address)
-                        }
+                        name = response.optString("name", cityComplex.name),
+                        address = response.optString("address", cityComplex.address),
+                        addedBeforeCreateBuilding = cityComplex.addedBeforeCreateBuilding
                     )
 
                     onSuccess(item)
@@ -139,13 +160,11 @@ class CityComplex(
 
     suspend fun createCityComplexSuspend(
                 context: Context,
-                name: String,
-                address: String?
+                cityComplex: CityComplexes,
             ): CityComplexes? = suspendCancellableCoroutine { cont ->
                 createCityComplex(
                     context = context,
-                    name = name,
-                    address = address,
+                    cityComplex = cityComplex,
                     onSuccess = { item ->
                         if (cont.isActive) cont.resume(item)
                     },

@@ -3,6 +3,7 @@ package com.example.delta
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,8 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
@@ -68,9 +71,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,19 +83,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.example.delta.data.entity.Notification
 import com.example.delta.enums.NotificationType
-import com.example.delta.enums.UserWithUnit
+import com.example.delta.enums.PermissionLevel
+import com.example.delta.extentions.findActivity
+import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
+import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
+import com.example.delta.init.AuthUtils.AuthorizationObjects
+import com.example.delta.init.FileManagement
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
+import com.example.delta.screens.OnboardingScreenWithModalSheet
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
 import com.example.delta.volley.Building.BuildingWithResidents
-import com.example.delta.volley.Cost
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -119,7 +128,9 @@ fun DetailDrawer(
         val isDarkModeEnabled = sharedViewModel.isDarkModeEnabled
         val unreadCount = notificationsWithRead.count { !it.crossRef.isRead }
         var showSheet by remember { mutableStateOf(false) }
+        var showOnboarding by remember { mutableStateOf(false) }
         var showWalletSheet by remember { mutableStateOf(false) }
+        var showPasswordSheet by remember { mutableStateOf(false) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val sheetWalletState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val userId = Preference().getUserId(context)
@@ -128,6 +139,36 @@ fun DetailDrawer(
             ModalNavigationDrawer(
                 drawerContent = {
                     ModalDrawerSheet {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Spacer(modifier = Modifier.size(48.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = context.getString(R.string.notifications),
+                                    style = MaterialTheme.typography.headlineSmall
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { scope.launch { notificationsDrawerState.close() } }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Close"
+                                )
+                            }
+                        }
+
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         NotificationsDrawerContent(
                             sharedViewModel = sharedViewModel,
@@ -152,22 +193,47 @@ fun DetailDrawer(
                 drawerState = notificationsDrawerState,
             ) {
                 // *** Right drawer: Main Menu drawer wrapped in RTL to open from Right ***
+                val currentRoleId = Preference().getRoleId(context)
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     ModalNavigationDrawer(
                         drawerContent = {
                             ModalDrawerSheet {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { scope.launch { drawerState.close() } }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Close"
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.headlineSmall
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.size(48.dp))
+                                }
+
+
                                 Column(
                                     modifier = Modifier
                                         .padding(horizontal = 16.dp)
                                         .verticalScroll(rememberScrollState()),
                                     horizontalAlignment = Alignment.Start
                                 ) {
-                                    Text(
-                                        text = title,
-                                        modifier = Modifier.padding(16.dp),
-                                        style = MaterialTheme.typography.headlineMedium
-                                    )
-                                    Spacer(Modifier.height(12.dp))
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center
@@ -188,7 +254,20 @@ fun DetailDrawer(
                                         label = { Text(context.getString(R.string.account)) },
                                         selected = false,
                                         onClick = {
-                                            context.startActivity(Intent(context, UserProfileActivity::class.java))
+                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.auth_cancel),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                context.startActivity(
+                                                    Intent(
+                                                        context,
+                                                        UserProfileActivity::class.java
+                                                    )
+                                                )
+                                            }
                                         },
                                         icon = {
                                             Icon(
@@ -197,14 +276,44 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
+
+                                    NavigationDrawerItem(
+                                        label = { Text(context.getString(R.string.edit_password)) },
+                                        selected = false,
+                                        onClick = {
+                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.auth_cancel),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                showPasswordSheet = true
+                                            }
+                                        },
+                                        icon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Password,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    )
+                                    Spacer(Modifier.height(4.dp))
                                     // Your NavigationDrawerItems below
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.wallet)) },
                                         selected = false,
                                         onClick = {
+                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.auth_cancel),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
                                             showWalletSheet = true
-//                                            context.startActivity(Intent(context, DashboardActivity::class.java))
+                                                }
                                         },
                                         icon = {
                                             Icon(
@@ -213,7 +322,7 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
 //                                    NavigationDrawerItem(
 //                                        label = { Text(context.getString(R.string.customizing)) },
 //                                        selected = false,
@@ -226,20 +335,27 @@ fun DetailDrawer(
 //                                        onClick = {}
 //                                    )
 //                                    Spacer(Modifier.height(12.dp))
-                                    NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.import_from_excel)) },
-                                        selected = false,
-                                        onClick = {
-                                            showSheet = true
-                                        },
-                                        icon = {
-                                            Icon(
-                                                imageVector = Icons.Default.FileUpload,
-                                                contentDescription = null
-                                            )
-                                        }
+                                    val perms = sharedViewModel.rolePermissions
+                                    val perm = perms.permissionFor(
+                                        AuthorizationObjects.HOME,
+                                        AuthorizationFieldsHome.CREATE_BUILDING_BUTTON
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL ) {
+                                        NavigationDrawerItem(
+                                            label = { Text(context.getString(R.string.import_from_excel)) },
+                                            selected = false,
+                                            onClick = {
+                                                showSheet = true
+                                            },
+                                            icon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.FileUpload,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                    }
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.dark_mode)) },
                                         selected = false,
@@ -258,7 +374,7 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.sharing)) },
                                         selected = false,
@@ -270,11 +386,16 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.app_info)) },
                                         selected = false,
-                                        onClick = {},
+                                        onClick = {
+                                            scope.launch {
+                                                drawerState.close()
+                                            }
+                                            showOnboarding = true
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = Icons.Default.Info,
@@ -289,13 +410,15 @@ fun DetailDrawer(
 //                                        onClick = {}
 //                                    )
 
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.logout)) },
                                         selected = false,
                                         onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
                                             prefs.edit { putBoolean("is_logged_in", false) }
                                             context.startActivity(Intent(context, LoginPage::class.java))
+                                            context.findActivity()?.finish()
+
                                         },
                                         icon = {
                                             Icon(
@@ -304,14 +427,14 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(4.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.app_version)) },
                                         selected = false,
                                         onClick = {
                                         }
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(10.dp))
                                 }
                             }
                         },
@@ -432,6 +555,195 @@ fun DetailDrawer(
                                     }
                                 }
                             }
+
+                            if (showPasswordSheet) {
+                                val context = LocalContext.current
+                                val scope = rememberCoroutineScope()
+
+                                var oldPass by rememberSaveable { mutableStateOf("") }
+                                var newPass by rememberSaveable { mutableStateOf("") }
+                                var repeatPass by rememberSaveable { mutableStateOf("") }
+
+                                var isSubmitting by remember { mutableStateOf(false) }
+                                var uiMessage by remember { mutableStateOf<String?>(null) }
+
+                                val allFilled = oldPass.isNotBlank() && newPass.isNotBlank() && repeatPass.isNotBlank()
+                                val matches = newPass == repeatPass
+                                val canSubmit = allFilled && matches && !isSubmitting
+
+                                var passwordError by remember { mutableStateOf(false) }
+                                ModalBottomSheet(
+                                    onDismissRequest = { showPasswordSheet = false },
+                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+
+                                        OutlinedTextField(
+                                            value = oldPass,
+                                            onValueChange = { v ->
+                                                oldPass = v
+                                                uiMessage = null
+                                            },
+                                            label = { RequiredLabel(text = context.getString(R.string.old_password)) },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        OutlinedTextField(
+                                            value = newPass,
+                                            onValueChange = { v ->
+                                                newPass = v
+                                                uiMessage = null
+                                                passwordError = v.length < 6
+                                            },
+                                            label = { RequiredLabel(text = context.getString(R.string.new_password)) },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        if (passwordError) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.password_too_short),
+                                                color = MaterialTheme.colorScheme.error,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                modifier = Modifier.align(Alignment.Start)
+                                            )
+                                        }
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        OutlinedTextField(
+                                            value = repeatPass,
+                                            onValueChange = { v ->
+                                                repeatPass = v
+                                                uiMessage = null
+                                            },
+                                            label = { RequiredLabel(text = context.getString(R.string.repeat_new_password)) },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        if (allFilled && !matches) {
+                                            Text(
+                                                text = context.getString(R.string.passwords_not_match),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                        }
+
+                                        uiMessage?.let {
+                                            Text(
+                                                text = it,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val mobile = Preference().getUserMobile(context).orEmpty().trim()
+
+                                                if (mobile.isBlank()) {
+                                                    uiMessage = context.getString(R.string.invalid_mobile_number)
+                                                    return@Button
+                                                }
+
+                                                isSubmitting = true
+                                                uiMessage = null
+
+                                                com.example.delta.volley.Users().changePassword(
+                                                    context = context,
+                                                    mobileNumber = mobile,
+                                                    oldPassword = oldPass,
+                                                    newPassword = newPass,
+                                                    onSuccess = {
+                                                        isSubmitting = false
+                                                        Toast.makeText(context, context.getString(R.string.password_changed_success), Toast.LENGTH_SHORT).show()
+                                                        showPasswordSheet = false
+                                                        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                                                        prefs.edit { putBoolean("is_logged_in", false) }
+                                                        context.startActivity(Intent(context, LoginPage::class.java))
+                                                        context.findActivity()?.finish()
+                                                    },
+                                                    onInvalidOldPassword = {
+                                                        isSubmitting = false
+                                                        uiMessage = context.getString(R.string.invalid_old_password)
+                                                    },
+                                                    onNotFound = {
+                                                        isSubmitting = false
+                                                        uiMessage = context.getString(R.string.login_user_not_found)
+                                                    },
+                                                    onError = { e ->
+                                                        isSubmitting = false
+                                                        val raw = e.message ?: ""
+                                                        uiMessage = when {
+
+                                                            raw.contains("Invalid old password") ->
+                                                                context.getString(R.string.invalid_old_password)
+
+                                                            else ->
+                                                                context.getString(R.string.failed)
+                                                        }
+
+                                                    }
+                                                )
+                                            },
+                                            enabled = canSubmit,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(52.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            if (isSubmitting) {
+                                                CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                                            } else {
+                                                Text(text = context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(16.dp))
+                                    }
+                                }
+                            }
+
+                            if (showOnboarding) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.White),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    OnboardingScreenWithModalSheet(
+                                        onManualEntry = {
+                                        },
+                                        onImportExcel = {
+                                        },
+                                        roleId = 0L,
+                                        onFinish = {
+                                            showOnboarding = false
+                                        }
+                                    )
+                                }
+                            }
+
                             if (showSheet) {
                                 ModalBottomSheet(
                                     onDismissRequest = { showSheet = false },
@@ -450,11 +762,17 @@ fun DetailDrawer(
                                             text = context.getString(R.string.template_download),
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.clickable {
-                                                // Handle template download here
+                                                val fileManager = FileManagement()
+                                                fileManager.openTemplateExcel(
+                                                    activity = context.findActivity()!!,
+                                                    rawResourceId = R.raw.export_delta_template,
+                                                    fileName = "export_delta_template.xlsx",
+                                                    authority = "${context.findActivity()!!.packageName}.fileprovider"
+                                                )
                                             },
-                                            style = MaterialTheme.typography.bodyLarge
+                                            style = MaterialTheme.typography.headlineSmall
                                         )
-                                        Spacer(Modifier.height(12.dp))
+                                        Spacer(Modifier.height(16.dp))
                                         Button(
                                             onClick = {
                                                 showSheet = false
@@ -528,21 +846,28 @@ fun NotificationsDrawerContent(
             .padding(8.dp)
     ) {
         Spacer(Modifier.height(24.dp))
-
-        Row {
-            Button(
-                onClick = { showDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = context.getString(R.string.create_notification),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+        val perms = sharedViewModel.rolePermissions
+        val perm = perms.permissionFor(
+            AuthorizationObjects.HOME,
+            AuthorizationFieldsHome.NOTIFICATION_BUTTON
+        )
+        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL ) {
+            Row {
+                Button(
+                    onClick = { showDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        text = context.getString(R.string.create_notification),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
+
         Spacer(Modifier.height(12.dp))
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -837,7 +1162,7 @@ fun NotificationCreationDialog(
     val isFormValid = isTitleValid && isMessageValid && isBuildingSelected && isUserSelected
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {},
         confirmButton = {
             Button(
                 onClick = { onCreate(notification, selectedOwnerIds.toList(), selectedTenantIds.toList()) },

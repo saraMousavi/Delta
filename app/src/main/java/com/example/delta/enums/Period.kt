@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.example.delta.R
 
 enum class Period(@StringRes val resId: Int) {
+    DAILY(R.string.daily),
     MONTHLY(R.string.monthly),
     YEARLY(R.string.yearly),
     NONE(R.string.doesnt_have);

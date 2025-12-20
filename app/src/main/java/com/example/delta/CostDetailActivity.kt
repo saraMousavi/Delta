@@ -246,7 +246,7 @@ fun CostDetailScreen(
     if (showFundDialog) {
         FundUsageBottomSheetDialog(
             onConfirm = {
-                sharedViewModel.invoiceCostIfEnoughFund(context = context, cost = cost)
+                sharedViewModel.invoiceCostIfEnoughFund(context = context, cost = cost, onSuccess = {}, onError = {})
                 showFundDialog = false
             },
             onCancel = { showFundDialog = false }

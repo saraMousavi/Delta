@@ -6,25 +6,50 @@ data class ChatManagerDto(
     val userId: Long,
     val firstName: String?,
     val lastName: String?,
-    val mobileNumber: String?
+    val mobileNumber: String?,
+    val buildingId: Long?,
+    val buildingName: String?
 ) {
     val fullName: String
-        get() = listOfNotNull(firstName, lastName)
-            .joinToString(" ")
-            .ifBlank { mobileNumber ?: "Manager $userId" }
+        get() {
+            val name = listOfNotNull(firstName, lastName).joinToString(" ").trim()
+            return if (name.isNotEmpty()) name else (mobileNumber ?: "")
+        }
+
+    val displaySubtitle: String
+        get() {
+            val phone = mobileNumber ?: ""
+            val b = buildingName ?: ""
+            return listOf(phone, b).filter { it.isNotBlank() }.joinToString(" - ")
+        }
 }
 
 data class ChatThreadDto(
     val threadId: Long,
     val buildingId: Long?,
-    val participants: List<Long> = emptyList(),
-    val userId: Long? = null,
-    val managerId: Long? = null,
-    val lastMessageAt: Long? = null,
-    val lastMessageText: String? = null,
-    val unreadCount: Int = 0,
-    val partner: ChatManagerDto? = null
-)
+    val buildingName: String?,
+    val participants: List<Long>,
+    val lastMessageAt: Long?,
+    val lastMessageText: String?,
+    val partnerId: Long?,
+    val partnerFirstName: String?,
+    val partnerLastName: String?,
+    val partnerMobileNumber: String?,
+    val unreadCount: Int
+) {
+    val partnerFullName: String
+        get() {
+            val name = listOfNotNull(partnerFirstName, partnerLastName).joinToString(" ").trim()
+            return if (name.isNotEmpty()) name else (partnerMobileNumber ?: "")
+        }
+
+    val partnerSubtitle: String
+        get() {
+            val phone = partnerMobileNumber ?: ""
+            val b = buildingName ?: ""
+            return listOf(phone, b).filter { it.isNotBlank() }.joinToString(" - ")
+        }
+}
 
 data class ChatMessageDto(
     val messageId: Long,

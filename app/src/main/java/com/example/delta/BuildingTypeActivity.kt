@@ -75,12 +75,12 @@ class BuildingTypeActivity : ComponentActivity() {
 
                                 scope.launch {
                                     try {
-                                        val created = BuildingType()
-                                            .createBuildingTypeSuspend(context, name)
-
-                                        if (created != null) {
-                                            viewModel.insertBuildingType(created)
-                                        }
+//                                        val created = BuildingType()
+//                                            .createBuildingTypeSuspend(context, name)
+//
+//                                        if (created != null) {
+//                                            viewModel.insertBuildingType(created)
+//                                        }
                                     } catch (_: Exception) {}
                                 }
                             },

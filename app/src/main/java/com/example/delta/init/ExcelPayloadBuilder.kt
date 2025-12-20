@@ -13,7 +13,8 @@ data class ExcelOwner(
     val excelUnitsNumber: String,
     val excelBuildingName: String,
     val excelIsManager: Boolean,
-    val excelDang: Double
+    val excelDang: Double,
+    val excelIsResident: Boolean
 )
 
 data class ExcelTenant(
@@ -27,7 +28,8 @@ data class ExcelTenant(
     val endDate: String,
     val status: String,
     val excelUnitsNumber: String,
-    val excelBuildingName: String
+    val excelBuildingName: String,
+    val excelPostCode: String
 )
 
 object ExcelPayloadBuilder {
@@ -46,11 +48,22 @@ object ExcelPayloadBuilder {
             val buildingOwners = owners.filter { it.excelBuildingName == buildingName }
             val buildingTenants = tenants.filter { it.excelBuildingName == buildingName }
 
+            val managerOwner = buildingOwners.firstOrNull { it.excelIsManager }
+            val creatorMobile = when {
+                managerOwner != null && managerOwner.mobileNumber.isNotBlank() ->
+                    managerOwner.mobileNumber
+                buildingOwners.firstOrNull()?.mobileNumber?.isNotBlank() == true ->
+                    buildingOwners.first().mobileNumber
+                else ->
+                    b.userId.toString()
+            }
+
             val ownerUnits = buildingOwners.map {
                 mapOf(
                     "ownerMobile" to it.mobileNumber,
                     "unitNumber" to it.excelUnitsNumber,
-                    "dang" to it.excelDang
+                    "dang" to it.excelDang,
+                    "isResident" to it.excelIsResident
                 )
             }
 
@@ -65,7 +78,7 @@ object ExcelPayloadBuilder {
             }
 
             mapOf(
-                "mobileNumber" to b.userId.toString(),
+                "mobileNumber" to creatorMobile,
                 "building" to mapOf(
                     "name" to b.name,
                     "postCode" to b.postCode,
@@ -94,7 +107,9 @@ object ExcelPayloadBuilder {
                         "phoneNumber" to it.phoneNumber,
                         "address" to it.address,
                         "email" to it.email,
-                        "isManager" to it.excelIsManager
+                        "isManager" to it.excelIsManager,
+                        "excelIsManager" to it.excelIsManager,
+                        "excelIsResident" to it.excelIsResident
                     )
                 },
                 "tenants" to buildingTenants.map {
@@ -107,7 +122,8 @@ object ExcelPayloadBuilder {
                         "startDate" to it.startDate,
                         "endDate" to it.endDate,
                         "status" to it.status,
-                        "numberOfTenants" to it.numberOfTenants
+                        "numberOfTenants" to it.numberOfTenants,
+                        "postCode" to it.excelPostCode
                     )
                 },
                 "ownerUnits" to ownerUnits,

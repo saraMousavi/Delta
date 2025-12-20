@@ -31,9 +31,20 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import com.example.delta.volley.Users
+
+enum class OtpPurpose {
+    SIGN_UP,
+    FORGET_PASSWORD
+}
+
 @Composable
 fun OtpScreen(
     phone: String,
+    purpose: OtpPurpose,
     onVerified: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -42,7 +53,7 @@ fun OtpScreen(
     var sending by remember { mutableStateOf(false) }
     var verifying by remember { mutableStateOf(false) }
     var secondsLeft by remember { mutableIntStateOf(0) }
-
+    val scrollState = rememberScrollState()
     fun send() {
         sending = true
         OTPApi().sendOtp(
@@ -64,8 +75,6 @@ fun OtpScreen(
     fun verifyNow(codeToUse: String) {
         if (codeToUse.length != 6 || verifying) return
         verifying = true
-        Log.d("code", codeToUse)
-
         OTPApi().verifyOtp(
             context = ctx,
             phone = phone,
@@ -73,7 +82,26 @@ fun OtpScreen(
             onSuccess = {
                 verifying = false
                 Toast.makeText(ctx, ctx.getString(R.string.confirmed), Toast.LENGTH_SHORT).show()
-                onVerified()
+                when (purpose) {
+                    OtpPurpose.SIGN_UP -> {
+                        onVerified()
+                    }
+                    OtpPurpose.FORGET_PASSWORD -> {
+                        Users().sendForgetPassword(
+                            context = ctx,
+                            mobileNumber = phone,
+                            onSuccess = {
+                                Log.d("onSuccess", "onSuccess")
+                                onVerified()
+                            },
+                            onError = { e ->
+                                Log.d("onError", e.toString())
+                                onVerified()
+                            }
+                        )
+                    }
+                }
+
             },
             onError = {
                 verifying = false
@@ -93,7 +121,8 @@ fun OtpScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().imePadding()
+            .verticalScroll(scrollState)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

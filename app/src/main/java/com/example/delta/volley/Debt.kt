@@ -94,26 +94,6 @@ class Debt {
         return list
     }
 
-    fun fetchDebts(context: Context, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
-        val queue = Volley.newRequestQueue(context)
-        val request = JsonArrayRequest(
-            Request.Method.GET, baseUrl, null,
-            { response -> onSuccess(response.toString()) },
-            { error -> onError(Exception(error.message)) }
-        )
-        queue.add(request)
-    }
-
-    fun insertDebt(context: Context, debtJson: JSONObject, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
-        val queue = Volley.newRequestQueue(context)
-        Log.d("DebtVolley", "Insert debt JSON: $debtJson")
-        val request = JsonObjectRequest(
-            Request.Method.POST, baseUrl, debtJson,
-            { response -> onSuccess(response.toString()) },
-            { error -> onError(Exception(error.message)) }
-        )
-        queue.add(request)
-    }
 
     suspend fun updateDebtSuspend(
         context: Context,

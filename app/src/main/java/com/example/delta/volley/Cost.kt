@@ -3,6 +3,8 @@ package com.example.delta.volley
 import android.content.Context
 import android.util.Log
 import com.android.volley.Request
+import com.android.volley.Response
+import com.android.volley.toolbox.HttpHeaderParser
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
@@ -14,6 +16,7 @@ import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
+import com.example.delta.init.FinancialReportRow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,14 +39,12 @@ class Cost{
         // Build full JSON payload
         val payload = JSONObject().apply {
             put("cost", costsJsonArray)
-            Log.d("debtsJsonArray", debtsJsonArray.toString())
             put("debts", debtsJsonArray)
         }
 
-        Log.d("CostVolley", "Payload: $payload")
 
         val request = object : JsonObjectRequest(
-            Request.Method.POST, baseUrl, payload,
+            Method.POST, baseUrl, payload,
             { response ->
                 Log.d("InsertCostServer", "Costs inserted: $response")
                 onSuccess(response.toString())
@@ -77,8 +78,13 @@ class Cost{
             put("capitalFlag", cost.capitalFlag)
             put("invoiceFlag", cost.invoiceFlag)
             put("dueDate", cost.dueDate)
+            put("documentNumber", cost.documentNumber)
+            put("costFor", cost.costFor)
+            put("forBuildingId", cost.forBuildingId)
+            put("addedBeforeCreateBuilding", cost.addedBeforeCreateBuilding)
         }
     }
+
 
     fun debtToJson(debts: Debts, costTempId: String? = null): JSONObject {
         return JSONObject().apply {
@@ -87,6 +93,7 @@ class Cost{
             } else {
                 put("costId", debts.costId)
             }
+
 
             put("buildingId", debts.buildingId)
 
@@ -103,6 +110,7 @@ class Cost{
             put("paymentFlag", debts.paymentFlag)
         }
     }
+
 
 
 
@@ -128,7 +136,11 @@ class Cost{
                 capitalFlag = obj.optBoolean("capitalFlag", false),
                 invoiceFlag = obj.optBoolean("invoiceFlag", false),
 
-                dueDate = obj.optString("dueDate", "")
+                dueDate = obj.optString("dueDate", ""),
+                        costFor = obj.optString("costFor"),
+                documentNumber = obj.optString("documentNumber"),
+                addedBeforeCreateBuilding = obj.optBoolean("addedBeforeCreateBuilding", false),
+                forBuildingId = obj.optLong("forBuildingId", 0),
             )
 
             list.add(cost)
@@ -190,6 +202,10 @@ class Cost{
                             userId = bObj.optLong("userId"),
                             serialNumber = bObj.optString("serialNumber"),
                             floorCount = bObj.optInt("floorCount"),
+                            unitCount = bObj.optInt("unitCount"),
+                            parkingCount = bObj.optInt("parkingCount"),
+                            phone = bObj.optString("phone"),
+                            mobileNumber = bObj.optString("mobileNumber")
                         )
 
                         val costsArray = bObj.optJSONArray("costs") ?: JSONArray()
@@ -245,8 +261,7 @@ class Cost{
             ""
         }
 
-        val url = "$baseUrl/full$query"   // GET /costs/full?ownerId=...&unitId=...
-
+        val url = "$baseUrl/full$query"
         val request = object : JsonObjectRequest(
             Method.GET,
             url,
@@ -291,7 +306,6 @@ class Cost{
         val resp = error.networkResponse
         if (resp != null) {
             val status = resp.statusCode
-            // سعی کن charset رو از هدر بخونی، وگرنه UTF-8
             val charset = resp.headers?.get("Content-Type")
                 ?.substringAfter("charset=", "UTF-8")
                 ?: "UTF-8"
@@ -307,7 +321,6 @@ class Cost{
 
             return Exception("HTTP $status: $body")
         } else {
-            // خطاهایی مثل Timeout / NoConnection / DNS
             val klass = error::class.java.simpleName
             Log.e(tag, "No networkResponse ($klass): ${error.message}", error)
             return Exception("$klass: ${error.message ?: error.toString()}")
@@ -378,21 +391,6 @@ class Cost{
         queue.add(req)
     }
 
-    suspend fun invoiceCostIfEnoughFundSuspend(
-        context: Context,
-        costId: Long
-    ): Boolean = suspendCancellableCoroutine { cont ->
-        invoiceCostIfEnoughFund(
-            context = context,
-            costId = costId,
-            onSuccess = { ok ->
-                if (cont.isActive) cont.resume(ok, onCancellation = null)
-            },
-            onError = { e ->
-                if (cont.isActive) cont.resumeWith(Result.failure(e))
-            }
-        )
-    }
 
     private fun formatError(tag: String, e: com.android.volley.VolleyError): Exception {
         val r = e.networkResponse
@@ -411,11 +409,17 @@ class Cost{
 
     fun fetchGlobalCosts(
         context: Context,
+        buildingId: Long? = null,
         onSuccess: (List<Costs>) -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl?page=1&limit=100"
+
+        val url = if (buildingId != null && buildingId > 0) {
+            "$baseUrl?page=1&limit=100&buildingId=$buildingId"
+        } else {
+            "$baseUrl?page=1&limit=100"
+        }
 
         val req = JsonArrayRequest(
             Request.Method.GET,
@@ -429,6 +433,7 @@ class Cost{
                         out += Costs(
                             costId = o.optLong("costId", 0L),
                             costName = o.optString("costName", ""),
+                            buildingId = o.optLong("buildingId", 0L),
                             period = Period.valueOf(o.optString("period", "YEARLY")),
                             paymentLevel = PaymentLevel.valueOf(o.optString("paymentLevel", "UNIT")),
                             fundType = FundType.valueOf(o.optString("fundType", "OPERATIONAL")),
@@ -436,9 +441,14 @@ class Cost{
                             responsible = Responsible.valueOf(o.optString("responsible", "TENANT")),
                             tempAmount = o.optDouble("tempAmount", 0.0),
                             chargeFlag = o.optBoolean("chargeFlag", true),
-                            dueDate = o.optString("dueDate", "")
+                            dueDate = o.optString("dueDate", ""),
+                            costFor = o.optString("costFor"),
+                            documentNumber = o.optString("documentNumber"),
+                            addedBeforeCreateBuilding = o.optBoolean("addedBeforeCreateBuilding", false),
+                            forBuildingId = o.optLong("forBuildingId", 0)
                         )
                     }
+                    Log.d("outCost", out.toString())
                     onSuccess(out)
                 } catch (e: Exception) {
                     onError(e)
@@ -471,9 +481,12 @@ class Cost{
             put("chargeFlag", cost.chargeFlag)
             put("capitalFlag", false)
             put("invoiceFlag", false)
+            put("costFor", cost.costFor)
             put("dueDate", cost.dueDate)
+            put("addedBeforeCreateBuilding", cost.addedBeforeCreateBuilding)
+            put("forBuildingId", cost.forBuildingId)
         }
-
+        Log.d("costJson", costJson.toString())
         val body = JSONObject().apply {
             put("cost", costJson)
             put("debts", JSONArray())
@@ -498,10 +511,12 @@ class Cost{
     }
 
     suspend fun fetchGlobalCostsSuspend(
-        context: Context
+        context: Context,
+        buildingId: Long? = null,
     ): List<Costs> = suspendCancellableCoroutine { cont ->
         fetchGlobalCosts(
             context = context,
+            buildingId = buildingId,
             onSuccess = { list ->
                 if (cont.isActive) cont.resume(list, onCancellation = null)
             },
@@ -540,6 +555,128 @@ class Cost{
         queue.add(req)
     }
 
+
+
+    fun buildUpdatePayload(cost: Costs): JSONObject {
+        return JSONObject().apply {
+            put("buildingId", cost.buildingId)
+            put("costName", cost.costName)
+            put("tempAmount", cost.tempAmount)
+            put("period", cost.period.name)
+            put("calculateMethod", cost.calculateMethod.name)
+            put("paymentLevel", cost.paymentLevel.name)
+            put("responsible", cost.responsible.name)
+            put("fundType", cost.fundType.name)
+            put("chargeFlag", cost.chargeFlag)
+            put("capitalFlag", cost.capitalFlag)
+            put("invoiceFlag", cost.invoiceFlag)
+            put("dueDate", cost.dueDate)
+            put("costFor", cost.costFor)
+            put("documentNumber", cost.documentNumber)
+        }
+    }
+
+    fun updateCost(
+        context: Context,
+        costId: Long,
+        payload: JSONObject,
+        onSuccess: (JSONObject) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$costId"
+
+        val req = object : JsonObjectRequest(
+            Method.PUT,
+            url,
+            payload,
+            { resp -> onSuccess(resp) },
+            { err -> onError(formatVolleyError("UpdateCost", err)) }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    fun deleteCost(
+        context: Context,
+        costId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/$costId"
+        val queue = Volley.newRequestQueue(context.applicationContext)
+
+        val req = object : JsonObjectRequest(
+            Request.Method.DELETE,
+            url,
+            null,
+            { resp -> onSuccess(resp.optBoolean("ok", true)) },
+            { err -> onError(formatVolleyError("CostApi(deleteCost)", err)) }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    fun deleteCostWithLinked(
+        context: Context,
+        buildingId: Long,
+        costId: Long,
+        onSuccess: () -> Unit,
+        onNotFound: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/cost/$buildingId/$costId/with-linked"
+
+        val req = JsonObjectRequest(
+            Request.Method.DELETE,
+            url,
+            null,
+            { _ -> onSuccess() },
+            { err ->
+                val code = err.networkResponse?.statusCode
+                when (code) {
+                    404 -> onNotFound()
+                    else -> onError(err)
+                }
+            }
+        )
+
+        Volley.newRequestQueue(context).add(req)
+    }
+
+
+
+    suspend fun updateCostSuspend(
+        context: Context,
+        cost: Costs
+    ): Unit = suspendCancellableCoroutine { cont ->
+        val id = cost.costId
+        if (id <= 0L) {
+            if (cont.isActive) {
+                cont.resumeWithException(IllegalArgumentException("Invalid costId"))
+            }
+            return@suspendCancellableCoroutine
+        }
+
+        val payload = buildUpdatePayload(cost)
+
+        updateCost(
+            context = context,
+            costId = id,
+            payload = payload,
+            onSuccess = {
+                if (cont.isActive) cont.resume(Unit, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+        )
+    }
+
     fun insertDebtForCapitalCostOnServer(
         context: Context,
         buildingId: Long,
@@ -563,7 +700,9 @@ class Cost{
             put("fundType", cost.fundType.name)
             put("chargeFlag", cost.chargeFlag)
             put("capitalFlag", cost.capitalFlag)
+            put("costFor", cost.costFor)
             put("invoiceFlag", cost.invoiceFlag)
+            put("documentNumber", cost.documentNumber)
         }
 
         val payload = JSONObject().apply {
@@ -649,6 +788,63 @@ class Cost{
         val building: Buildings,
         val costs: List<Costs>
     )
+
+    suspend fun fetchAllCostsWithDebtsSuspend(
+        context: Context
+    ): Pair<List<Costs>, List<Debts>> = suspendCancellableCoroutine { cont ->
+        fetchCostsWithDebts(
+            context = context,
+            ownerId = null,
+            unitId = null,
+            userId = null,
+            onSuccess = { costs, debts ->
+                if (cont.isActive) cont.resume(costs to debts, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+        )
+    }
+
+    fun fetchOwnerFinancialReportRows(
+        context: Context,
+        ownerId: Long,
+        startDate: String,
+        endDate: String,
+        onSuccess: (List<FinancialReportRow>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/report/pdf?ownerId=$ownerId&startDate=$startDate&endDate=$endDate"
+
+        val req = object : JsonArrayRequest(
+            Method.GET, url, null,
+            { arr ->
+                try {
+                    val out = mutableListOf<FinancialReportRow>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        out += FinancialReportRow(
+                            description = o.optString("description", ""),
+                            dueDate = o.optString("dueDate", ""),
+                            paymentDate = if (o.isNull("paymentDate")) null else o.optString("paymentDate"),
+                            isPaid = o.optBoolean("paymentFlag", false),
+                            amount = o.optDouble("amount", 0.0)
+                        )
+                    }
+                    onSuccess(out)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err -> onError(formatVolleyError("fetchOwnerFinancialReportRows", err)) }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
 
 }
 

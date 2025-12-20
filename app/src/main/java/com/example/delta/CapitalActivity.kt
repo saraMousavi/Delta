@@ -2,41 +2,39 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,25 +44,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import com.example.delta.R.string.first_compete_units
+import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Debts
+import com.example.delta.data.entity.Units
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundType
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
+import com.example.delta.init.Calculation
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
 import com.example.delta.volley.Cost
 import com.example.delta.volley.Cost.BuildingWithCosts
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 
 class CapitalActivity : ComponentActivity() {
 
@@ -97,402 +101,1036 @@ class CapitalActivity : ComponentActivity() {
                             )
                         }
                     ) { innerPadding ->
-                        CapitalInfoList(sharedViewModel)
+                        CapitalChargeCalculationScreen(sharedViewModel)
                     }
                 }
             }
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
+
+@SuppressLint("DefaultLocale")
 @Composable
-fun CapitalInfoList(
+fun CalculationScreen(
     sharedViewModel: SharedViewModel,
-    modifier: Modifier = Modifier
+    fundType: FundType
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
+    var amountInputs by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    var buildingsWithCosts by remember { mutableStateOf<List<BuildingWithCosts>>(emptyList()) }
-    var selectedBuilding by remember { mutableStateOf<Buildings?>(null) }
+    var selectedBuilding by remember { mutableStateOf<BuildingWithCounts?>(null) }
+    var isEditMode by remember { mutableStateOf(true) }
     var costItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
+    var showAddCostDialog by remember { mutableStateOf(false) }
+    var showChargeResultDialog by remember { mutableStateOf(false) }
+    var calculatedCharges by remember { mutableStateOf<Map<Units, Double>?>(null) }
 
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var buildings by remember { mutableStateOf<List<BuildingWithCounts>>(emptyList()) }
+    var buildingFull by remember { mutableStateOf<Building.BuildingFullDto?>(null) }
+    var unitsForSelectedBuilding by remember { mutableStateOf<List<Units>>(emptyList()) }
 
-    var showDialog by remember { mutableStateOf(false) }
+    val fiscalYears = (1404..1415).map { it.toString() }
+    var selectedYear by remember { mutableStateOf(fiscalYears.first()) }
+
+    var chargeAlreadyCalculated by remember { mutableStateOf(false) }
+    var lastCalculatedCharges by remember { mutableStateOf<Map<Units, Double>?>(null) }
+
+    val coroutineScope = remember {
+        (context as? ComponentActivity)?.lifecycleScope
+            ?: CoroutineScope(SupervisorJob())
+    }
     val snackBarHostState = remember { SnackbarHostState() }
+    var selectedCalculation by remember {
+        mutableStateOf(CalculateMethod.AUTOMATIC.getDisplayName(context))
+    }
+    val isCalculateEnabled by remember(costItems, amountInputs) {
+        derivedStateOf {
+            if (costItems.isEmpty()) {
+                return@derivedStateOf false
+            }
 
-    var selectedYear by remember { mutableStateOf<String?>(null) }
+            costItems.indices.all { idx ->
+                val raw = amountInputs
+                    .getOrNull(idx)
+                    ?.replace(",", "")
+                    ?.trim()
+                    .orEmpty()
 
-    LaunchedEffect(Unit) {
-        Cost().fetchBuildingsWithCosts(
+                val value = raw.toDoubleOrNull() ?: return@derivedStateOf false
+                value > 0.0
+            }
+        }
+    }
+
+    var lastSavedCostItems by remember { mutableStateOf<List<Costs>>(emptyList()) }
+    val transformation = remember { NumberCommaTransformation() }
+
+    val mobileNumber = remember { Preference().getUserMobile(context) }
+    var allUnitsHaveOwner by remember { mutableStateOf(true) }
+
+    val totalAmountForYear by remember(costItems) {
+        mutableStateOf(
+            costItems.sumOf { it.tempAmount }.toLong().coerceAtLeast(0L)
+        )
+    }
+    val totalAmountForYearString = totalAmountForYear.toString()
+
+    var validationMessage by remember { mutableStateOf<String?>(null) }
+
+    var showDeleteCostDialog by remember { mutableStateOf(false) }
+    var pendingDeleteCost by remember { mutableStateOf<Costs?>(null) }
+    fun fiscalYearOf(cost: Costs): String? {
+        val raw = cost.dueDate
+        if (raw.isBlank()) return null
+        val parts = raw.split("/")
+        return parts.firstOrNull()
+    }
+
+
+    fun canDeleteCost(
+        dto: Building.BuildingFullDto,
+        buildingId: Long,
+        currentYear: String,
+        fundType: FundType,
+        cost: Costs
+    ): Boolean {
+        val forBuildingId = cost.forBuildingId ?: cost.buildingId
+        if (forBuildingId != buildingId) return false
+
+        val sameFund = cost.fundType == fundType
+        if (!sameFund) return false
+
+        val anyOtherYearCalculated = dto.costs.any { c ->
+            val fb = c.forBuildingId ?: c.buildingId
+            fb == buildingId &&
+                    c.fundType == fundType &&
+                    c.costName == cost.costName &&
+                    (c.tempAmount != 0.0) &&
+                    (fiscalYearOf(c) != null) &&
+                    (fiscalYearOf(c) != currentYear)
+        }
+
+        return !anyOtherYearCalculated
+    }
+    LaunchedEffect(mobileNumber) {
+        if (mobileNumber.isNullOrBlank()) return@LaunchedEffect
+        Building().fetchBuildingsForUser(
             context = context,
-            mobileNumber = Preference().getUserMobile(context) ?: "",
+            mobileNumber = mobileNumber,
             onSuccess = { list ->
-                buildingsWithCosts = list
-                isLoading = false
-
-                if (list.isNotEmpty()) {
-                    val first = list.first()
-                    selectedBuilding = first.building
-                    costItems = first.costs.filter { it.capitalFlag == true }
+                buildings = list
+                if (list.size == 1 && selectedBuilding == null) {
+                    selectedBuilding = list.first()
                 }
             },
-            onError = { e ->
-                errorMessage = e.message
-                isLoading = false
-            }
+            onError = { }
         )
     }
 
-    LaunchedEffect(selectedBuilding, buildingsWithCosts) {
-        selectedBuilding?.let { b ->
-            val match = buildingsWithCosts.find { it.building.buildingId == b.buildingId }
-            costItems = (match?.costs ?: emptyList()).filter { it.capitalFlag == true && it.costName == context.getString(R.string.capital_costs) }
-            selectedYear = null
+    LaunchedEffect(selectedBuilding, selectedYear, fundType) {
+        if (selectedBuilding == null) {
+            buildingFull = null
+            unitsForSelectedBuilding = emptyList()
+            costItems = emptyList()
+            amountInputs = emptyList()
+            lastSavedCostItems = emptyList()
+            sharedViewModel.chargeCostsList.value = emptyList()
+            chargeAlreadyCalculated = false
+            isEditMode = true
+            lastCalculatedCharges = null
+            allUnitsHaveOwner = true
+            return@LaunchedEffect
         }
-    }
 
-    val availableYears = remember(costItems) {
-        costItems
-            .mapNotNull { c ->
-                val d = c.dueDate
-                if (d.length >= 4) d.substring(0, 4) else null
+        try {
+            val dto = Building().fetchBuildingFullSuspend(
+                context = context,
+                buildingId = selectedBuilding!!.buildingId,
+                fiscalYear = selectedYear
+            )
+            buildingFull = dto
+            unitsForSelectedBuilding = dto.units
+
+            val unitIdsWithOwner = dto.ownerUnits.map { it.unitId }.toSet()
+            val hasOwnerForAllUnits = dto.units.all { it.unitId in unitIdsWithOwner }
+            allUnitsHaveOwner = hasOwnerForAllUnits
+            coroutineScope.launch {
+                validationMessage = when {
+                    unitsForSelectedBuilding.isEmpty() -> context.getString(first_compete_units)
+                    !hasOwnerForAllUnits -> context.getString(R.string.first_compete_owners)
+                    else -> null
+                }
+                if(unitsForSelectedBuilding.isEmpty()){
+                    Toast.makeText(
+                        context, context.getString(first_compete_units),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                } else {
+                    if (!hasOwnerForAllUnits) {
+                        Toast.makeText(
+                            context, context.getString(R.string.first_compete_owners),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@launch
+                    }
+                }
+
+
             }
-            .distinct()
-            .sorted()
-    }
 
-    val visibleCosts = remember(costItems, selectedYear) {
-        if (selectedYear.isNullOrBlank()) {
-            costItems
-        } else {
-            costItems.filter { it.dueDate.startsWith(selectedYear!!) }
+
+
+
+
+
+            val allCostsForFundType = dto.costs.filter { c ->
+                val matchesFundFlag = when (fundType) {
+                    FundType.OPERATIONAL -> c.chargeFlag == true
+                    FundType.CAPITAL     -> c.capitalFlag == true
+                    else                 -> false
+                }
+                c.fundType == fundType &&
+                        matchesFundFlag &&
+                        (c.buildingId == selectedBuilding!!.buildingId || c.buildingId == null)
+                        && c.tempAmount != 0.0
+            }
+            val buildingYearCosts = allCostsForFundType.filter { c ->
+                c.buildingId == selectedBuilding!!.buildingId &&
+                        fiscalYearOf(c) == selectedYear
+            }
+            val baseCosts: List<Costs> =
+                if (buildingYearCosts.isNotEmpty()) {
+                    buildingYearCosts
+                } else {
+                    when (fundType) {
+                        FundType.OPERATIONAL -> {
+                            dto.costs.filter { c ->
+                                val matchesFundFlag = c.chargeFlag == true
+                                c.fundType == FundType.OPERATIONAL &&
+                                        matchesFundFlag &&
+                                        c.buildingId == selectedBuilding!!.buildingId &&
+                                        c.tempAmount == 0.0 &&
+                                        c.dueDate.isBlank()
+                            }
+                        }
+
+                        FundType.CAPITAL -> {
+                            val globalCosts = Cost().fetchGlobalCostsSuspend(context)
+                            globalCosts.filter { c ->
+                                c.fundType == FundType.CAPITAL &&
+                                        fiscalYearOf(c) == null
+                            }.filter {
+                                it.forBuildingId == selectedBuilding!!.buildingId ||
+                                        (it.buildingId == selectedBuilding!!.buildingId
+                                                || it.buildingId == 0L || it.buildingId == null)
+                            }
+                        }
+
+                        else -> emptyList()
+                    }
+                }
+
+            costItems = baseCosts
+            amountInputs = baseCosts.map { cost ->
+                val v = cost.tempAmount
+                if (v == 0.0) "" else v.toLong().toString()
+            }
+            lastSavedCostItems = baseCosts
+            sharedViewModel.chargeCostsList.value = baseCosts
+
+            chargeAlreadyCalculated =
+                buildingYearCosts.isNotEmpty() && baseCosts.any { it.tempAmount > 0.0 }
+
+            isEditMode = !chargeAlreadyCalculated
+            lastCalculatedCharges = null
+
+        } catch (_: Exception) {
+            buildingFull = null
+            unitsForSelectedBuilding = emptyList()
+            costItems = emptyList()
+            amountInputs = emptyList()
+            lastSavedCostItems = emptyList()
+            sharedViewModel.chargeCostsList.value = emptyList()
+            chargeAlreadyCalculated = false
+            isEditMode = true
+            lastCalculatedCharges = null
         }
     }
 
-    Box(
-        modifier = modifier
+    Column(
+        modifier = Modifier
             .fillMaxSize()
             .padding(top = 75.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .imePadding()
     ) {
-        when {
-            isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
+                items = buildings,
+                selectedItem = selectedBuilding,
+                onItemSelected = { selectedBuilding = it },
+                label = context.getString(R.string.building),
+                itemLabel = { it.name },
+                modifier = Modifier
+                    .weight(0.5f),
+                required = true
+            )
+            ExposedDropdownMenuBoxExample(
+                sharedViewModel = sharedViewModel,
+                items = fiscalYears,
+                selectedItem = selectedYear,
+                onItemSelected = { selectedYear = it },
+                label = context.getString(R.string.fiscal_year),
+                itemLabel = { it },
+                modifier = Modifier
+                    .weight(0.5f)
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        if (!validationMessage.isNullOrBlank()) {
+            Text(
+                text = validationMessage!!,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        }
 
-            errorMessage != null -> {
-                Text(
-                    text = errorMessage ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
+        val dto = buildingFull
+        val buildingId = selectedBuilding?.buildingId
 
-            else -> {
-                val buildings = buildingsWithCosts.map { it.building }
 
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+
+        when (selectedCalculation) {
+            CalculateMethod.AUTOMATIC.getDisplayName(context) -> {
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+
                     item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ExposedDropdownMenuBoxExample(
-                                sharedViewModel = sharedViewModel,
-                                items = buildings,
-                                selectedItem = selectedBuilding,
-                                onItemSelected = { building ->
-                                    selectedBuilding = building
-                                },
-                                label = context.getString(R.string.building),
-                                itemLabel = { it.name },
-                                modifier = Modifier.weight(0.5f)
-                            )
+                        ChipGroupShared(
+                            selectedItems = listOf(selectedCalculation),
+                            onSelectionChange = { newSelection ->
+                                if (newSelection.isNotEmpty()) {
+                                    selectedCalculation = newSelection.first()
+                                }
+                            },
+                            items = listOf(
+                                CalculateMethod.AUTOMATIC.getDisplayName(context),
+                                CalculateMethod.EQUAL.getDisplayName(context)
+                            ),
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            label = context.getString(R.string.charge_method),
+                            singleSelection = true
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
 
-                            ExposedDropdownMenuBoxExample(
-                                sharedViewModel = sharedViewModel,
-                                items = availableYears,
-                                selectedItem = selectedYear,
-                                onItemSelected = { year ->
-                                    selectedYear = year
-                                },
-                                label = context.getString(R.string.fiscal_year),
-                                itemLabel = { it },
-                                modifier = Modifier.weight(0.5f)
+                        if (totalAmountForYear > 0L) {
+                            SumChargeRow(totalAmountForYearString)
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 16.dp)
                             )
                         }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
 
-                    item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                context.getString(R.string.fiscal_year),
+                                text = context.getString(R.string.title),
                                 style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(0.5f)
+                                modifier = Modifier.weight(0.4f)
                             )
+                            Spacer(Modifier.height(8.dp))
                             Text(
                                 text = context.getString(R.string.amount),
                                 style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(0.5f),
-                                textAlign = TextAlign.End
+                                modifier = Modifier.weight(0.3f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = context.getString(R.string.calculate_method),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.3f)
                             )
                         }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
-
-                    items(visibleCosts.size) { index ->
-                        CapitalCostRow(
-                            costInput = visibleCosts[index]
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
+                    }
+                    val costList = costItems
+
+                    items(costList.size) { index ->
+                        val showDelete = dto != null && buildingId != null &&
+                                isEditMode &&
+                                canDeleteCost(
+                                    dto = dto,
+                                    buildingId = buildingId,
+                                    currentYear = selectedYear,
+                                    fundType = fundType,
+                                    cost = costList[index]
+                                )
+                        CostInputRow(
+                            sharedViewModel = sharedViewModel,
+                            costInput = costList[index],
+                            amount = amountInputs.getOrElse(index) { "0" },
+                            calculateMethod = costItems[index].calculateMethod,
+                            isAuto = true,
+                            isEditMode = isEditMode,
+                            onAmountChange = { newAmount ->
+                                amountInputs = amountInputs.toMutableList().also {
+                                    if (index < it.size) it[index] = newAmount else it.add(
+                                        newAmount
+                                    )
+                                }
+                                costItems = costItems.toMutableList().also {
+                                    val numeric = newAmount.replace(",", "")
+                                    it[index] = it[index].copy(
+                                        tempAmount = numeric.toDoubleOrNull() ?: 0.0
+                                    )
+                                }
+                            },
+                            onCalculateMethodChange = { newMethod ->
+                                costItems = costItems.toMutableList().also {
+                                    it[index] = it[index].copy(calculateMethod = newMethod)
+                                }
+                            },
+                            showDeleteIcon = showDelete,
+                            onDeleteClick = {
+                                pendingDeleteCost = costList[index]
+                                showDeleteCostDialog = true
+                            }
+                        )
+
                         Spacer(Modifier.height(8.dp))
                     }
                 }
 
-                FloatingActionButton(
-                    onClick = { showDialog = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(24.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add capital cost")
+                if (isEditMode) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            modifier = Modifier
+                                .weight(0.4f)
+                                .padding(),
+                            onClick = { showAddCostDialog = true },
+                            enabled = selectedBuilding != null
+                        ) {
+                            Text(
+                                context.getString(R.string.add_new_parameter),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Button(
+                            modifier = Modifier.weight(0.25f),
+                            onClick = {
+                                costItems = lastSavedCostItems.map { it.copy() }
+                                isEditMode = false
+                            }
+                        ) {
+                            Text(
+                                text = context.getString(R.string.display),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.weight(0.35f),
+                            onClick = {
+                                isEditMode = false
+                                coroutineScope.launch {
+                                    Log.d("buildingFull", buildingFull.toString())
+                                    val dto = buildingFull ?: return@launch
+                                    val units = unitsForSelectedBuilding
+                                    if (units.isEmpty()) return@launch
+
+                                    val tenantsById =
+                                        dto.tenantUnits.associateBy { it.tenantId }
+                                    val tenantUnits = dto.tenantUnits
+                                    Log.d("tenantUnits", tenantUnits.toString())
+                                    val tenantCountsByUnitId: Map<Long, Int> =
+                                        tenantUnits.groupBy { it.unitId }.mapValues { (_, list) ->
+                                            val sum = list.sumOf { tu ->
+                                                val t = tenantsById[tu.tenantId]
+                                                t?.numberOfTenants?.toIntOrNull() ?: 1
+                                            }
+                                            if (sum <= 0) 1 else sum
+                                        }
+
+                                    val getTenantCountForUnit: (Long) -> Int = { unitId ->
+                                        tenantCountsByUnitId[unitId] ?: 1
+                                    }
+
+                                    data class CostInfo(
+                                        val amount: Double,
+                                        val method: CalculateMethod
+                                    )
+
+                                    val costsInfoMap: Map<String, CostInfo> =
+                                        costItems.associate { cost ->
+                                            cost.costName to CostInfo(
+                                                cost.tempAmount,
+                                                cost.calculateMethod
+                                            )
+                                        }
+
+                                    val calculation = Calculation()
+
+                                    val chargeMap = units.associateWith { unit ->
+                                        costsInfoMap.entries.sumOf { (_, costInfo) ->
+                                            calculation.calculateAmountByMethod(
+                                                costAmount = if (fundType == FundType.OPERATIONAL) (costInfo.amount) / 12 else if (fundType == FundType.CAPITAL) (costInfo.amount) else (costInfo.amount),
+                                                unit = unit,
+                                                allUnits = units,
+                                                calculationMethod = costInfo.method,
+                                                getTenantCountForUnit = getTenantCountForUnit
+                                            )
+                                        }
+                                    }
+
+                                    calculatedCharges = chargeMap
+                                    showChargeResultDialog = true
+                                }
+                            },
+                            enabled = isCalculateEnabled && selectedBuilding != null && allUnitsHaveOwner && unitsForSelectedBuilding.isNotEmpty()
+                        ) {
+                            Text(
+                                text = context.getString(R.string.calculate),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(onClick = {
+                            isEditMode = true
+                        }) {
+                            Text(
+                                context.getString(R.string.edit),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
                 }
             }
-        }
 
-        SnackbarHost(
-            hostState = snackBarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            CalculateMethod.EQUAL.getDisplayName(context) -> {
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+
+                    item {
+                        ChipGroupShared(
+                            selectedItems = listOf(selectedCalculation),
+                            onSelectionChange = { newSelection ->
+                                if (newSelection.isNotEmpty()) {
+                                    selectedCalculation = newSelection.first()
+                                }
+                            },
+                            items = listOf(
+                                CalculateMethod.AUTOMATIC.getDisplayName(context),
+                                CalculateMethod.EQUAL.getDisplayName(context)
+                            ),
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            label = context.getString(R.string.charge_method),
+                            singleSelection = true
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
+                        if (totalAmountForYear > 0L) {
+                            SumChargeRow(totalAmountForYearString)
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = context.getString(R.string.title),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.4f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = context.getString(R.string.amount),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(0.3f)
+                            )
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                    val costList = costItems
+
+                    items(costList.size) { index ->
+                        val showDelete = dto != null && buildingId != null &&
+                                isEditMode &&
+                                canDeleteCost(
+                                    dto = dto,
+                                    buildingId = buildingId,
+                                    currentYear = selectedYear,
+                                    fundType = fundType,
+                                    cost = costList[index]
+                                )
+                        CostInputRow(
+                            sharedViewModel = sharedViewModel,
+                            costInput = costList[index],
+                            amount = amountInputs.getOrElse(index) { "0" },
+                            calculateMethod = costItems[index].calculateMethod,
+                            isEditMode = isEditMode,
+                            onAmountChange = { newAmount ->
+                                amountInputs = amountInputs.toMutableList().also {
+                                    if (index < it.size) it[index] = newAmount else it.add(
+                                        newAmount
+                                    )
+                                }
+                                costItems = costItems.toMutableList().also {
+                                    val numeric = newAmount.replace(",", "").trim()
+                                    it[index] = it[index].copy(
+                                        tempAmount = numeric.toDoubleOrNull() ?: 0.0
+                                    )
+                                }
+                            },
+                            isAuto = false,
+                            onCalculateMethodChange = { newMethod ->
+                                costItems = costItems.toMutableList().also {
+                                    it[index] = it[index].copy(calculateMethod = newMethod)
+                                }
+                            },
+                            showDeleteIcon = showDelete,
+                            onDeleteClick = {
+                                pendingDeleteCost = costList[index]
+                                showDeleteCostDialog = true
+                            }
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+
+                if (isEditMode) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            modifier = Modifier
+                                .weight(0.4f)
+                                .padding(),
+                            onClick = { showAddCostDialog = true },
+                            enabled = selectedBuilding != null
+                        ) {
+                            Text(
+                                context.getString(R.string.add_new_parameter),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Button(
+                            modifier = Modifier.weight(0.25f),
+                            onClick = {
+                                costItems = lastSavedCostItems.map { it.copy() }
+                                isEditMode = false
+                            }
+                        ) {
+                            Text(
+                                text = context.getString(R.string.display),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.weight(0.35f),
+                            onClick = {
+                                isEditMode = false
+                                coroutineScope.launch {
+                                    val dto = buildingFull ?: return@launch
+                                    val units = unitsForSelectedBuilding
+                                    if (units.isEmpty()) return@launch
+
+                                    val tenantsById =
+                                        dto.tenantUnits.associateBy { it.tenantId }
+                                    val tenantUnits = dto.tenantUnits
+                                    Log.d("tenantUnits", tenantUnits.toString())
+                                    val tenantCountsByUnitId: Map<Long, Int> =
+                                        tenantUnits.groupBy { it.unitId }.mapValues { (_, list) ->
+                                            val sum = list.sumOf { tu ->
+                                                val t = tenantsById[tu.tenantId]
+                                                t?.numberOfTenants?.toIntOrNull() ?: 1
+                                            }
+                                            if (sum <= 0) 1 else sum
+                                        }
+
+                                    val getTenantCountForUnit: (Long) -> Int = { unitId ->
+                                        tenantCountsByUnitId[unitId] ?: 1
+                                    }
+
+                                    data class CostInfo(
+                                        val amount: Double,
+                                        val method: CalculateMethod
+                                    )
+
+                                    val costsInfoMap: Map<String, CostInfo> =
+                                        costItems.associate { cost ->
+                                            cost.costName to CostInfo(
+                                                cost.tempAmount,
+                                                cost.calculateMethod
+                                            )
+                                        }
+
+                                    val calculation = Calculation()
+
+                                    val chargeMap = units.associateWith { unit ->
+                                        costsInfoMap.entries.sumOf { (_, costInfo) ->
+                                            calculation.calculateAmountByMethod(
+                                                costAmount = costInfo.amount,
+                                                unit = unit,
+                                                allUnits = units,
+                                                calculationMethod = CalculateMethod.EQUAL,
+                                                getTenantCountForUnit = getTenantCountForUnit
+                                            )
+                                        }
+                                    }
+
+                                    calculatedCharges = chargeMap
+                                    showChargeResultDialog = true
+                                }
+                            },
+                            enabled = isCalculateEnabled && selectedBuilding != null && allUnitsHaveOwner && unitsForSelectedBuilding.isNotEmpty()
+                        ) {
+                            Text(
+                                text = context.getString(R.string.calculate),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(onClick = {
+                            isEditMode = true
+                        }) {
+                            Text(
+                                context.getString(R.string.edit),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+
+            }
+
+            else -> Unit
+        }
+    }
+
+    if (showDeleteCostDialog) {
+        val cost = pendingDeleteCost
+        AlertDialog(
+            onDismissRequest = { showDeleteCostDialog = false },
+            title = {
+                Text(
+                    text = context.getString(R.string.delete),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = context.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (cost != null) {
+                            val idx = costItems.indexOfFirst { it.costId == cost.costId }
+                            if (idx != -1) {
+                                costItems = costItems.toMutableList().also { it.removeAt(idx) }
+                                amountInputs = amountInputs.toMutableList().also {
+                                    if (idx < it.size) it.removeAt(idx)
+                                }
+                                lastSavedCostItems = costItems
+                                sharedViewModel.chargeCostsList.value = costItems
+                            }
+
+                             Cost().deleteCost(context, cost.costId,
+                                 onSuccess = {
+                                     Toast.makeText(
+                                         context,
+                                         context.getString(R.string.success_delete),
+                                         Toast.LENGTH_LONG
+                                     ).show()
+                                 },
+                                 onError = {
+                                     Toast.makeText(
+                                         context,
+                                         context.getString(R.string.failed),
+                                         Toast.LENGTH_LONG
+                                     ).show()
+                                 })
+                        }
+
+                        pendingDeleteCost = null
+                        showDeleteCostDialog = false
+                    }
+                ) { Text(
+                    context.getString(R.string.delete),
+                    style = MaterialTheme.typography.bodyLarge
+                ) }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        pendingDeleteCost = null
+                        showDeleteCostDialog = false
+                    }
+                ) { Text(
+                    context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                ) }
+            }
         )
     }
 
-    if (showDialog) {
-        AddNewCapitalDialog(
-            sharedViewModel = sharedViewModel,
-            onDismiss = { showDialog = false },
-            onConfirm = { fiscalYear, amountStr ->
+
+    if (showAddCostDialog) {
+        val notChargesCost: List<Costs> =
+            buildingFull?.defaultChargeCosts
+                ?.filter { defaultCost ->
+                    costItems.none { it.costName == defaultCost.costName }
+                }
+                ?: emptyList()
+
+        AddNewCostDialog(
+            onDismiss = { showAddCostDialog = false },
+            onChargeConfirm = { costNames ->
                 coroutineScope.launch {
-                    val building = selectedBuilding
-                    if (building == null) {
-                        showDialog = false
-                        return@launch
-                    }
+                    val building = selectedBuilding ?: return@launch
+                    val api = Cost()
 
-                    val amount = amountStr.toDoubleOrNull() ?: 0.0
-                    if (amount <= 0.0) {
-                        snackBarHostState.showSnackbar(
-                            context.getString(R.string.invalid_amount)
-                        )
-                        return@launch
-                    }
-
-                    try {
-                        val dto = Building().fetchBuildingFullSuspend(
-                            context = context,
-                            buildingId = building.buildingId,
-                            fiscalYear = fiscalYear
-                        )
-
-                        val unitIdsWithOwner = dto.ownerUnits.map { it.unitId }.toSet()
-                        val allUnitsHaveOwner = dto.units.all { it.unitId in unitIdsWithOwner }
-
-                        if (!allUnitsHaveOwner) {
-                            snackBarHostState.showSnackbar(
-                                context.getString(R.string.first_compete_owners)
-                            )
-                            return@launch
-                        }
-
-                        val ownerUnits = dto.ownerUnits
-
-                        val ownerDangMap: Map<Long, Double> =
-                            ownerUnits.groupBy { it.ownerId }
-                                .mapValues { (_, list) -> list.sumOf { it.dang } }
-
-                        if (ownerDangMap.isEmpty()) {
-                            snackBarHostState.showSnackbar(
-                                context.getString(R.string.first_compete_owners)
-                            )
-                            return@launch
-                        }
-
-                        val totalDang = ownerDangMap.values.sum()
-
-                        val dueDate = "$fiscalYear/01/01"
-
-                        val newCost = Costs(
-                            buildingId = building.buildingId,
-                            costName = context.getString(R.string.capital_costs),
-                            chargeFlag = false,
-                            capitalFlag = true,
-                            fundType = FundType.CAPITAL,
-                            responsible = Responsible.OWNER,
+                    val newCosts = costNames.map { costName ->
+                        Costs(
+                            buildingId = null,
+                            costName = costName,
+                            chargeFlag = fundType == FundType.OPERATIONAL,
+                            capitalFlag = fundType == FundType.CAPITAL,
+                            fundType = fundType,
+                            responsible = if (fundType == FundType.OPERATIONAL) Responsible.TENANT else Responsible.OWNER,
                             paymentLevel = PaymentLevel.UNIT,
                             calculateMethod = CalculateMethod.EQUAL,
-                            period = Period.YEARLY,
-                            tempAmount = amount,
-                            dueDate = dueDate
+                            period = Period.MONTHLY,
+                            tempAmount = 0.0,
+                            dueDate = "",
+                            costFor = costName,
+                            documentNumber = "",
+                            forBuildingId = building.buildingId,
                         )
+                    }
 
-                        val ownerCount = ownerDangMap.size.coerceAtLeast(1)
-                        val debtsToSave = ownerDangMap.map { (ownerId, ownerDang) ->
-                            val share = if (totalDang > 0.0) {
-                                amount * (ownerDang / totalDang)
-                            } else {
-                                amount / ownerCount
-                            }
+                    val costsJsonArray = api.listToJsonArray(newCosts, api::costToJson)
+                    val debtsJsonArray = JSONArray()
 
-                            Debts(
-                                debtId = 0L,
-                                unitId = 0L,
-                                costId = 0L,
-                                ownerId = ownerId,
+                    api.insertCost(
+                        context = context,
+                        costsJsonArray = costsJsonArray,
+                        debtsJsonArray = debtsJsonArray,
+                        onSuccess = {
+                            costItems = costItems + newCosts
+                            lastSavedCostItems = costItems
+                            sharedViewModel.chargeCostsList.value = costItems
+                            showAddCostDialog = false
+                        },
+                        onError = { e ->
+                            Log.e("ChargeCalculation", "insertCost failed", e)
+                        }
+                    )
+                }
+            },
+            costs = notChargesCost
+        )
+    }
+
+    if (showChargeResultDialog) {
+        ChargeResultDialog(
+            results = calculatedCharges,
+            fundType = fundType,
+            onSave = {
+                val building = selectedBuilding ?: return@ChargeResultDialog
+                val results = calculatedCharges ?: return@ChargeResultDialog
+                val fiscalYearInt = selectedYear.toIntOrNull() ?: return@ChargeResultDialog
+
+                val api = Cost()
+                val fiscalYearStart = "$selectedYear/01/01"
+                val description = if (fundType == FundType.OPERATIONAL) "شارژ جاری" else "شارژ عمرانی"
+                Log.d("fundType", fundType.toString())
+                coroutineScope.launch {
+                    try {
+                        val (_, allDebts) = api.fetchAllCostsWithDebtsSuspend(context)
+                        Log.d("----------", "true")
+                        val debtsForYearAndBuilding = allDebts.filter { d ->
+                            d.buildingId == building.buildingId &&
+                                    d.dueDate.take(4) == selectedYear &&
+                                    d.description == description
+                        }
+
+                        val hasPaid = debtsForYearAndBuilding.any { it.paymentFlag }
+                        Log.d("hasPaid", hasPaid.toString())
+                        if (hasPaid) {
+                            showChargeResultDialog = false
+                            Toast.makeText(context, context.getString(R.string.cannot_edit_charge_with_paid_debts),
+                                Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+                        Log.d("chargeAlreadyCalculated", chargeAlreadyCalculated.toString())
+                        Log.d(
+                            "debtsForYearAndBuilding.isNotEmpty()",
+                            debtsForYearAndBuilding.isNotEmpty().toString()
+                        )
+                        if (chargeAlreadyCalculated && debtsForYearAndBuilding.isNotEmpty()) {
+                            Toast.makeText(context, context.getString(R.string.charge_will_replace_previous),
+                                Toast.LENGTH_LONG).show()
+                        }
+
+                        val existingDebtsIndex = debtsForYearAndBuilding.associateBy {
+                            Triple(it.unitId, it.dueDate, it.description)
+                        }
+                        Log.d("existingDebtsIndex", existingDebtsIndex.toString())
+
+                        val costsToSave: List<Costs> = costItems.mapIndexed { index, c ->
+                            val raw = amountInputs
+                                .getOrNull(index)
+                                ?.replace(",", "")
+                                ?.trim()
+                            val amount = raw?.toDoubleOrNull() ?: c.tempAmount
+                            Log.d("amount", amount.toString())
+                            c.copy(
                                 buildingId = building.buildingId,
-                                description = context.getString(R.string.capital_info),
-                                dueDate = dueDate,
-                                amount = share,
-                                paymentFlag = false
+                                tempAmount = amount,
+                                dueDate = fiscalYearStart,
+                                chargeFlag = fundType == FundType.OPERATIONAL,
+                                capitalFlag = fundType == FundType.CAPITAL
                             )
                         }
 
-                        sharedViewModel.insertCostToServer(
+                        val costsJsonArray = api.listToJsonArray(costsToSave, api::costToJson)
+
+                        val debtsToSave = mutableListOf<Debts>()
+                        Log.d("results", results.toString())
+
+                        for ((unit, yearlyAmount) in results) {
+                            if (yearlyAmount <= 0.0) continue
+                            Log.d("fundType", fundType.toString())
+                            Log.d("debtsToSave", debtsToSave.toString())
+                            if (fundType == FundType.OPERATIONAL) {
+                                for (month in 1..12) {
+                                    val dueDate = String.format(
+                                        "%04d/%02d/01",
+                                        fiscalYearInt,
+                                        month
+                                    )
+                                    val key = Triple(unit.unitId, dueDate, description)
+                                    val existing = existingDebtsIndex[key]
+
+                                    debtsToSave += Debts(
+                                        debtId = existing?.debtId ?: 0L,
+                                        unitId = unit.unitId,
+                                        costId = existing?.costId ?: 1L,
+                                        ownerId = existing?.ownerId ?: 0L,
+                                        buildingId = building.buildingId,
+                                        description = description,
+                                        dueDate = dueDate,
+                                        amount = yearlyAmount,
+                                        paymentFlag = existing?.paymentFlag ?: false
+                                    )
+                                }
+                            } else if (fundType == FundType.CAPITAL) {
+                                val dueDate = fiscalYearStart
+                                val key = Triple(unit.unitId, dueDate, description)
+                                val existing = existingDebtsIndex[key]
+                                val baseCostId = existing?.costId
+                                    ?: costsToSave.firstOrNull()?.costId
+                                    ?: 0L
+                                Log.d("debtsToSaveCapital", debtsToSave.toString())
+                                debtsToSave += Debts(
+                                    debtId = existing?.debtId ?: 0L,
+                                    unitId = unit.unitId,
+                                    costId = baseCostId,
+                                    ownerId = existing?.ownerId ?: 0L,
+                                    buildingId = building.buildingId,
+                                    description = description,
+                                    dueDate = dueDate,
+                                    amount = yearlyAmount,
+                                    paymentFlag = existing?.paymentFlag == true
+                                )
+                            }
+                        }
+
+                        val debtsJsonArray = JSONArray().apply {
+                            debtsToSave.forEach { d ->
+                                put(api.debtToJson(d))
+                            }
+                        }
+                        Log.d("debtsToSave", debtsToSave.toString())
+                        api.insertCost(
                             context = context,
-                            costs = listOf(newCost),
-                            debts = debtsToSave,
+                            costsJsonArray = costsJsonArray,
+                            debtsJsonArray = debtsJsonArray,
                             onSuccess = {
                                 coroutineScope.launch {
-                                    snackBarHostState.showSnackbar(
-                                        context.getString(R.string.capital_calcualted_successfully)
-                                    )
-                                }
+                                    lastCalculatedCharges = calculatedCharges
+                                    isEditMode = false
+                                    chargeAlreadyCalculated = true
 
-                                Cost().fetchBuildingsWithCosts(
-                                    context = context,
-                                    mobileNumber = Preference().getUserMobile(context) ?: "",
-                                    onSuccess = { list ->
-                                        buildingsWithCosts = list
-                                        selectedBuilding?.let { sb ->
-                                            val match =
-                                                list.find { it.building.buildingId == sb.buildingId }
-                                            costItems =
-                                                (match?.costs ?: emptyList()).filter { it.capitalFlag == true }
-                                        }
-                                    },
-                                    onError = { }
-                                )
-                            },
-                            onError = {
-                                coroutineScope.launch {
-                                    snackBarHostState.showSnackbar(
-                                        context.getString(R.string.failed)
-                                    )
+                                    showChargeResultDialog = false
+                                    Toast.makeText(context, context.getString(R.string.charge_calcualted_successfully),
+                                        Toast.LENGTH_LONG).show()
                                 }
+                            },
+                            onError = { e ->
+                                Log.e("ChargeCalculation", "insertCost failed", e)
+                                Toast.makeText(context, context.getString(R.string.failed),
+                                    Toast.LENGTH_LONG).show()
+                                showChargeResultDialog = false
+
                             }
                         )
                     } catch (e: Exception) {
-                        snackBarHostState.showSnackbar(
-                            context.getString(R.string.failed)
-                        )
-                    } finally {
-                        showDialog = false
+                        Log.e("ChargeCalculation", "save failed", e)
+                        Toast.makeText(context, context.getString(R.string.failed),
+                            Toast.LENGTH_LONG).show()
+                        showChargeResultDialog = false
                     }
                 }
-            }
-
+            },
+            onDismiss = { showChargeResultDialog = false }
         )
     }
 }
 
-
-
 @Composable
-fun CapitalCostRow(
-    costInput: Costs
-) {
-    val context = LocalContext.current
-    val transformation = remember { NumberCommaTransformation() }
-    val amountInWords = transformation.numberToWords(context, costInput.tempAmount.toLong())
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(costInput.dueDate.take(4), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.5f))
-        Text(
-            text = "$amountInWords ${context.getString(R.string.toman)}",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(0.5f),
-            textAlign = TextAlign.End
-        )
-    }
-    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-}
-
-@Composable
-fun AddNewCapitalDialog(
-    sharedViewModel: SharedViewModel,
-    onDismiss: () -> Unit,
-    onConfirm: (fiscalYear: String, amount: String) -> Unit
-) {
-    val context = LocalContext.current
-    val fiscalYears = remember { (1404..1415).map { it.toString() } }
-    var selectedFiscalYear by remember { mutableStateOf(fiscalYears.first()) }
-    var amount by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = context.getString(R.string.capital_info_insert)) },
-        text = {
-            Column {
-                ExposedDropdownMenuBoxExample(
-                    sharedViewModel = sharedViewModel,
-                    items = fiscalYears,
-                    selectedItem = selectedFiscalYear,
-                    onItemSelected = { selectedFiscalYear = it },
-                    label = context.getString(R.string.fiscal_year),
-                    itemLabel = { it },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { newVal -> amount = newVal.filter { it.isDigit() } },
-                    label = {
-                        Text(
-                            context.getString(R.string.amount),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-
-                val amountVal = amount.toLongOrNull() ?: 0L
-                val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
-                Text(
-                    text = "$amountInWords ${context.getString(R.string.toman)}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(selectedFiscalYear, amount) }) {
-                Text(context.getString(R.string.confirm))
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(context.getString(R.string.cancel))
-            }
-        }
+fun CapitalChargeCalculationScreen(sharedViewModel: SharedViewModel) {
+    CalculationScreen(
+        sharedViewModel = sharedViewModel,
+        fundType = FundType.CAPITAL
     )
 }

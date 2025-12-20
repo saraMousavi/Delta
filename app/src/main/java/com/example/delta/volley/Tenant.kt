@@ -29,10 +29,17 @@ class Tenant {
     fun getTenantWithUnit(
         context: Context,
         tenantId: Long,
+        buildingId: Long?,
         onSuccess: (TenantWithUnitDto) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/$tenantId/with-units"
+        val base = "$baseUrl/$tenantId/with-units"
+        val url = if (buildingId != null && buildingId > 0) {
+            "$base?buildingId=$buildingId"
+        } else {
+            base
+        }
+
         Log.d("TenantApi", "GET $url")
 
         val queue = Volley.newRequestQueue(context)
@@ -245,11 +252,12 @@ class Tenant {
     fun deleteTenant(
         context: Context,
         tenantId: Long,
+        buildingId: Long,
         onSuccess: () -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl/$tenantId"
+        val url = "$baseUrl/$tenantId?buildingId=$buildingId"
 
         val req = JsonObjectRequest(
             Request.Method.DELETE,
@@ -310,7 +318,7 @@ class Tenant {
             put("rentAmount", rentDebt)
             put("depositAmount", mortgageDebt)
         }
-
+        Log.d("body-tenant", body.toString())
         val req = object : JsonObjectRequest(
             Request.Method.PUT,
             url,

@@ -17,12 +17,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -106,11 +108,9 @@ import com.example.delta.enums.FundType
 import com.example.delta.enums.Gender
 import com.example.delta.enums.PaymentLevel
 import com.example.delta.enums.Period
-import com.example.delta.enums.PermissionLevel
 import com.example.delta.enums.Responsible
 import com.example.delta.enums.Roles
 import com.example.delta.factory.SharedViewModelFactory
-import com.example.delta.init.AuthUtils
 import com.example.delta.init.FloorFormatter
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
@@ -124,6 +124,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.round
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import com.example.delta.enums.PermissionLevel
+import com.example.delta.init.AuthUtils
+import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
+import com.example.delta.init.AuthUtils.AuthorizationFieldsBuildingProfile
+import com.example.delta.init.AuthUtils.AuthorizationObjects
+import com.example.delta.volley.BuildingType
+import com.example.delta.volley.BuildingUsage
+import com.example.delta.volley.CityComplex
 
 
 class BuildingFormActivity : ComponentActivity() {
@@ -156,11 +168,18 @@ class BuildingFormActivity : ComponentActivity() {
                     val remoteCityComplexes by sharedViewModel.cityComplexes
                         .collectAsState(initial = emptyList())
 
+
                     BuildingFormScreen(
                         unitsViewModel = unitsViewModel,
-                        buildingTypes = remoteBuildingTypes,
-                        buildingUsages = remoteBuildingUsages,
-                        cityComplexes = remoteCityComplexes,
+                        buildingTypes = remoteBuildingTypes.filter {
+                            (it.forBuildingId == null || it.forBuildingId == 0L )
+                        },
+                        buildingUsages = remoteBuildingUsages.filter {
+                            it.forBuildingId == null || it.forBuildingId == 0L
+                        },
+                        cityComplexes = remoteCityComplexes.filter {
+                            it.forBuildingId == null || it.forBuildingId == 0L
+                        },
                         sharedViewModel = sharedViewModel
                     )
                 }
@@ -181,6 +200,7 @@ fun BuildingFormScreen(
     cityComplexes: List<CityComplexes>,
     sharedViewModel: SharedViewModel,
 ) {
+
     var currentPage by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -251,7 +271,6 @@ fun ChargesChipGroup(
     val addNewLabel = context.getString(R.string.addNew)
 
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    Log.d("costs", costs.toString())
     val chipItems = costs.filter { it.chargeFlag == true } + Costs(
         costName = addNewLabel,
         chargeFlag = true,
@@ -261,7 +280,9 @@ fun ChargesChipGroup(
         calculateMethod = CalculateMethod.EQUAL,
         period = Period.YEARLY,
         dueDate = "",
-        tempAmount = 0.0
+        tempAmount = 0.0,
+        costFor = "",
+        documentNumber = ""
     )
 
     var showChargeCostDialog by remember { mutableStateOf(false) }
@@ -299,7 +320,21 @@ fun ChargesChipGroup(
         items = chipItems.map { it.costName },
         modifier = modifier,
         label = context.getString(R.string.charges_parameter),
-        singleSelection = false
+        singleSelection = false,
+        showDeleteFor = { costName ->
+            val c = chipItems.firstOrNull { it.costName == costName }
+            val bId = c?.forBuildingId ?: 0L
+            val tempCost = c?.addedBeforeCreateBuilding
+            bId != 0L || tempCost == true
+        },
+        onDeleteRequest = { costName ->
+            val c = chipItems.firstOrNull { it.costName == costName }
+            Cost().deleteCost(context, c!!.costId, onSuccess = {
+                val updated = costs - c
+                sharedViewModel.updateCosts(updated)
+            },
+                onError = {})
+        }
     )
 
     if (showChargeCostDialog) {
@@ -318,17 +353,22 @@ fun ChargesChipGroup(
                         calculateMethod = CalculateMethod.EQUAL,
                         period = Period.YEARLY,
                         tempAmount = 0.0,
-                        dueDate = ""
+                        dueDate = "",
+                        costFor = newCostName,
+                        documentNumber = "",
+                        addedBeforeCreateBuilding = true
                     )
 
                     costApi.createGlobalCost(
                         context = context,
                         cost = newCost,
                         onSuccess = { created ->
-                            val updated = costs + created
+                            val updated = costs + created.copy(tempAmount = 1.0, addedBeforeCreateBuilding = true)
                             sharedViewModel.updateCosts(updated)
+                            selectedCostNames = selectedCostNames + created.costName
                             showChargeCostDialog = false
-                        },
+                        }
+                        ,
                         onError = {
                             showChargeCostDialog = false
                         }
@@ -338,7 +378,6 @@ fun ChargesChipGroup(
         )
     }
 }
-
 
 @Composable
 fun AddNewCostDialog(
@@ -359,7 +398,7 @@ fun AddNewCostDialog(
     var showInputField by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {},
         title = {
             Text(
                 text = context.getString(R.string.add_new_cost),
@@ -368,7 +407,7 @@ fun AddNewCostDialog(
         },
         text = {
             LazyColumn {
-                if (chipItems.isNotEmpty()) {
+                if (costs.isNotEmpty()) {
                     item {
                         ChipGroupShared(
                             selectedItems = selectedCostNames,
@@ -413,9 +452,10 @@ fun AddNewCostDialog(
         },
         confirmButton = {
             Button(
-                enabled = (showInputField && costName.isNotBlank()) || (!showInputField && selectedCostNames.isNotEmpty()),
+                enabled = (showInputField && costName.isNotBlank()) || (!showInputField && selectedCostNames.isNotEmpty())
+                        || (costs.isEmpty() && costName.isNotBlank()),
                 onClick = {
-                    if (showInputField && costName.isNotBlank()) {
+                    if (showInputField && costName.isNotBlank() || (costs.isEmpty() && costName.isNotBlank())) {
                         val trimmedName = costName.trim()
                         // Add new cost name to chipItems (just before "Add New")
                         if (!chipItems.contains(trimmedName)) {
@@ -453,6 +493,7 @@ fun AddNewCostDialog(
         }
     )
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildingInfoPage(
@@ -474,7 +515,10 @@ fun BuildingInfoPage(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
 
+    var phoneError by remember { mutableStateOf(false) }
+    var mobileError by remember { mutableStateOf(false) }
     fun scrollToBottom() {
         scope.launch {
             val lastIndex = listState.layoutInfo.totalItemsCount - 1
@@ -486,6 +530,8 @@ fun BuildingInfoPage(
 
     Column(
         modifier = Modifier.fillMaxSize()
+            .imePadding()
+            .verticalScroll(scrollState)
     ) {
         CenterAlignedTopAppBar(
             title = {
@@ -511,7 +557,7 @@ fun BuildingInfoPage(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(8.dp)
         ) {
             item {
                 OutlinedTextField(
@@ -525,7 +571,57 @@ fun BuildingInfoPage(
             }
 
             item { Spacer(modifier = Modifier.height(8.dp)) }
+            item{
+                OutlinedTextField(
+                    value = sharedViewModel.phone,
+                    onValueChange = {
+                        sharedViewModel.phone = it
+                        phoneError = !validation.isValidPhone(it)
+                    },
+                    label = { RequiredLabel(context.getString(R.string.phone_number)) },
+                    isError = phoneError,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
 
+            item{
+                Spacer(modifier = Modifier.height(8.dp))
+                if (phoneError) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = context.getString(R.string.invalid_phone_number),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+            }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+            item{
+                OutlinedTextField(
+                    value = sharedViewModel.mobileNumber,
+                    onValueChange = {
+                        sharedViewModel.mobileNumber = it
+                        mobileError = !validation.isValidIranMobile(it)
+                    },
+                    label = { RequiredLabel(context.getString(R.string.mobile_number)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = mobileError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+            item{
+            if (mobileError) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = context.getString(R.string.invalid_mobile_number),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
+                }
             item {
                 val serialError =
                     sharedViewModel.serialNumber.isNotBlank() &&
@@ -537,19 +633,19 @@ fun BuildingInfoPage(
                         onValueChange = {
                             sharedViewModel.serialNumber = it
                         },
-                        label = { RequiredLabel(context.getString(R.string.building_serial_number)) },
-                        isError = serialError,
+                        label = { Text(context.getString(R.string.building_serial_number)) },
+//                        isError = serialError,
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = MaterialTheme.typography.bodyLarge
                     )
-                    if (serialError) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_serial_number),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
+//                    if (serialError) {
+//                        Spacer(modifier = Modifier.height(4.dp))
+//                        Text(
+//                            text = context.getString(R.string.invalid_serial_number),
+//                            color = MaterialTheme.colorScheme.error,
+//                            style = MaterialTheme.typography.bodyMedium
+//                        )
+//                    }
                 }
             }
 
@@ -593,7 +689,19 @@ fun BuildingInfoPage(
                             },
                             label = context.getString(R.string.building_type),
                             modifier = Modifier.fillMaxWidth(),
-                            itemLabel = { it.buildingTypeName }
+                            itemLabel = { it.buildingTypeName },
+                            showDeleteFor = { type ->
+                                val c = buildingTypes.firstOrNull { it.buildingTypeName == type.buildingTypeName }
+                                val bId = c?.forBuildingId ?: 0L
+                                val tempBuildingType = c?.addedBeforeCreateBuilding
+                                bId != 0L || tempBuildingType == true
+                            },
+                            onDeleteRequest = { type ->
+                                BuildingType().deleteBuildingType(context, type.buildingTypeId, onSuccess = {
+                                    sharedViewModel.updateBuildingType(buildingTypes - type)
+                                    sharedViewModel.selectedBuildingTypes = null
+                                }, onError = {})
+                            }
                         )
                     }
 
@@ -616,7 +724,19 @@ fun BuildingInfoPage(
                             },
                             label = context.getString(R.string.building_usage),
                             modifier = Modifier.fillMaxWidth(),
-                            itemLabel = { it.buildingUsageName }
+                            itemLabel = { it.buildingUsageName },
+                            showDeleteFor = { usage ->
+                                val c = buildingUsages.firstOrNull { it.buildingUsageName == usage.buildingUsageName }
+                                val bId = c?.forBuildingId ?: 0L
+                                val tempBuildingUsage = c?.addedBeforeCreateBuilding
+                                bId != 0L || tempBuildingUsage == true
+                            },
+                            onDeleteRequest = { usage ->
+                                BuildingUsage().deleteBuildingUsage(context, usage.buildingUsageId, onSuccess = {
+                                    sharedViewModel.updateBuildingUsage(buildingUsages - usage)
+                                    sharedViewModel.selectedBuildingUsages = null
+                                }, onError = {})
+                            }
                         )
                     }
                 }
@@ -644,7 +764,19 @@ fun BuildingInfoPage(
                         },
                         label = context.getString(R.string.city_complex),
                         modifier = Modifier.fillMaxWidth(),
-                        itemLabel = { it.name }
+                        itemLabel = { it.name },
+                        showDeleteFor = { complex ->
+                            val c = cityComplexes.firstOrNull { it.name == complex.name }
+                            val bId = c?.forBuildingId ?: 0L
+                            val tempCityComplex = c?.addedBeforeCreateBuilding
+                            bId != 0L || tempCityComplex == true
+                        },
+                        onDeleteRequest = { cityComplex ->
+                            CityComplex().deleteCityComplex(context, cityComplex.complexId, onSuccess = {
+                                sharedViewModel.updateCityComplex(cityComplexes - cityComplex)
+                                sharedViewModel.selectedCityComplexes = null
+                            }, onError = {})
+                        }
                     )
                 }
             }
@@ -681,11 +813,12 @@ fun BuildingInfoPage(
                         value = sharedViewModel.postCode,
                         onValueChange = {
                             sharedViewModel.postCode = it
-                            scrollToBottom()
+//                            scrollToBottom()
                         },
                         label = { RequiredLabel(context.getString(R.string.post_code)) },
                         isError = postCodeError,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                     if (postCodeError) {
 
@@ -761,7 +894,7 @@ fun BuildingInfoPage(
                 UploadFile(
                     sharedViewModel = sharedViewModel,
                     context = context,
-                    isEditing = false
+                    isEditing = true
                 ) { uploaded ->
                     sharedViewModel.addFileList(uploaded)
                 }
@@ -772,7 +905,7 @@ fun BuildingInfoPage(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(start = 4.dp, end = 4.dp),
             horizontalArrangement = Arrangement.End
         ) {
             Button(
@@ -787,16 +920,19 @@ fun BuildingInfoPage(
             }
         }
 
-        Spacer(Modifier.height(32.dp))
 
         if (showAddCityComplexDialog) {
             AddCityComplexDialog(
                 onDismiss = { showAddCityComplexDialog = false },
                 onInsert = { newName, newAddress ->
+                    val newCityComplex = CityComplexes(
+                        name = newName,
+                        address = newAddress,
+                        addedBeforeCreateBuilding = true
+                    )
                     sharedViewModel.insertCityComplexRemote(
                         context = context,
-                        name = newName,
-                        address = newAddress
+                        cityComplexes = newCityComplex
                     ) { created ->
                         if (created != null) {
                             sharedViewModel.selectedCityComplexes = created
@@ -812,9 +948,13 @@ fun BuildingInfoPage(
                 sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingTypeDialog = false },
                 onInsert = { newItem ->
+                    var newBuildingType = BuildingTypes(
+                        buildingTypeName = newItem,
+                        addedBeforeCreateBuilding = true
+                    )
                     sharedViewModel.insertBuildingTypeRemote(
                         context = context,
-                        name = newItem
+                        buildingTypes = newBuildingType
                     ) { created ->
                         if (created != null) {
                             sharedViewModel.selectedBuildingTypes = created
@@ -830,9 +970,13 @@ fun BuildingInfoPage(
                 sharedViewModel = sharedViewModel,
                 onDismiss = { showBuildingUsageDialog = false },
                 onInsert = { name ->
+                    var newBuildingUsage = BuildingUsages(
+                        buildingUsageName = name,
+                        addedBeforeCreateBuilding = true
+                    )
                     sharedViewModel.insertBuildingUsageRemote(
                         context = context,
-                        name = name
+                        buildingUsages = newBuildingUsage
                     ) { created ->
                         if (created != null) {
                             sharedViewModel.selectedBuildingUsages = created
@@ -851,7 +995,7 @@ fun BuildingInfoPage(
                         sharedViewModel.sameArea = false
                     }
                 },
-                onAddUnits = { count, area, rooms, parking, warehouse, postCode ->
+                onAddUnits = { count, area, rooms, parking, warehouse ->
                     lifecycleOwner.lifecycleScope.launch {
                         for (i in 1..count) {
                             val newUnit = Units(
@@ -861,7 +1005,7 @@ fun BuildingInfoPage(
                                 numberOfParking = parking,
                                 numberOfWarehouse = warehouse,
                                 floorNumber = 0,
-                                postCode = postCode
+                                postCode = ""
                             )
                             try {
                                 val unitId = unitsViewModel.insertUnit(newUnit)
@@ -882,7 +1026,6 @@ fun BuildingInfoPage(
 }
 
 
-@SuppressLint("SuspiciousIndentation")
 @Composable
 fun SameAreaUnitDialog(
     onDismiss: () -> Unit,
@@ -891,8 +1034,7 @@ fun SameAreaUnitDialog(
         area: String,
         numberOfRooms: String,
         numberOfParking: String,
-        numberOfWarehouse: String,
-        postCode: String
+        numberOfWarehouse: String
     ) -> Unit
 ) {
     var unitCount by remember { mutableStateOf("") }
@@ -900,28 +1042,31 @@ fun SameAreaUnitDialog(
     var numberOfRooms by remember { mutableStateOf("") }
     var numberOfParking by remember { mutableStateOf("") }
     var numberOfWarehouse by remember { mutableStateOf("") }
-    var postCode by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val validation = remember { Validation() }
-
-//    val floorOptions = remember { buildFloorOptions(context) }
-    var selectedFloor by remember { mutableStateOf<FloorOption?>(null) }
-    var floorExpanded by remember { mutableStateOf(false) }
-
-    Dialog(onDismissRequest = {}) {
-        BackHandler(onBack = onDismiss)
-
+    val scrollState = rememberScrollState()
+    val configuration = LocalConfiguration.current
+    val maxHeight = configuration.screenHeightDp.dp * 0.9f
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false   // Allow the dialog to handle window insets (IME, status/nav bars)
+        )
+    ) {
         Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp
+            shape = MaterialTheme.shapes.medium,
+            tonalElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()  // Dialog takes full width of screen
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())  // Make content scrollable
+                    .imePadding()                           // Apply padding for the on-screen keyboard
+                    .padding(16.dp)                         // Content padding inside dialog
             ) {
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = context.getString(R.string.add_new_unit),
                     style = MaterialTheme.typography.bodyLarge
@@ -934,7 +1079,7 @@ fun SameAreaUnitDialog(
                     onValueChange = { unitCount = it },
                     label = { RequiredLabel(context.getString(R.string.number_of_units)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -945,7 +1090,7 @@ fun SameAreaUnitDialog(
                     onValueChange = { area = it },
                     label = { RequiredLabel(context.getString(R.string.area)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -956,7 +1101,7 @@ fun SameAreaUnitDialog(
                     onValueChange = { numberOfRooms = it },
                     label = { RequiredLabel(context.getString(R.string.number_of_rooms)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -965,9 +1110,9 @@ fun SameAreaUnitDialog(
                 OutlinedTextField(
                     value = numberOfParking,
                     onValueChange = { numberOfParking = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_parking)) },
+                    label = { RequiredLabel(context.getString(R.string.number_of_parking_for_each_unit)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -976,75 +1121,12 @@ fun SameAreaUnitDialog(
                 OutlinedTextField(
                     value = numberOfWarehouse,
                     onValueChange = { numberOfWarehouse = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_warehouse)) },
+                    label = { RequiredLabel(context.getString(R.string.number_of_warehouse_of_each_unit)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val postCodeError =
-                    postCode.isNotBlank() && !validation.isValidPostalCode(postCode)
-
-                OutlinedTextField(
-                    value = postCode,
-                    onValueChange = { postCode = it },
-                    label = {
-                        Text(
-                            text = context.getString(R.string.post_code),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
-                    isError = postCodeError,
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-//                Spacer(modifier = Modifier.height(8.dp))
-
-//                Box(
-//                    modifier = Modifier.fillMaxWidth()
-//                ) {
-//                    OutlinedTextField(
-//                        value = selectedFloor?.label ?: "",
-//                        onValueChange = { },
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .clickable { floorExpanded = true },
-//                        label = {
-//                            RequiredLabel(text = context.getString(R.string.floor))
-//                        },
-//                        readOnly = true,
-//                        textStyle = MaterialTheme.typography.bodyLarge,
-//                        trailingIcon = {
-//                            Icon(
-//                                imageVector = if (floorExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-//                                contentDescription = null
-//                            )
-//                        }
-//                    )
-//
-//                    DropdownMenu(
-//                        expanded = floorExpanded,
-//                        onDismissRequest = { floorExpanded = false }
-//                    ) {
-//                        floorOptions.forEach { option ->
-//                            DropdownMenuItem(
-//                                text = {
-//                                    Text(
-//                                        text = option.label,
-//                                        style = MaterialTheme.typography.bodyLarge
-//                                    )
-//                                },
-//                                onClick = {
-//                                    selectedFloor = option
-//                                    floorExpanded = false
-//                                }
-//                            )
-//                        }
-//                    }
-//                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -1084,24 +1166,13 @@ fun SameAreaUnitDialog(
                                 ).show()
                                 return@Button
                             }
-                            if (postCode.isNotEmpty()) {
-                                if (!validation.isValidPostalCode(postCode)) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.invalid_post_code),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    return@Button
-                                }
-                            }
 
                             onAddUnits(
                                 countInt,
                                 area,
                                 numberOfRooms,
                                 numberOfParking,
-                                numberOfWarehouse,
-                                postCode
+                                numberOfWarehouse
                             )
                         }
                     ) {
@@ -1117,6 +1188,7 @@ fun SameAreaUnitDialog(
 }
 
 
+
 @Composable
 fun OwnerItem(
     buildingId: Long,
@@ -1127,6 +1199,7 @@ fun OwnerItem(
     activity: Activity?
 ) {
     val context = LocalContext.current
+    val mobile = Preference().getUserMobile(context)
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -1140,21 +1213,16 @@ fun OwnerItem(
             .mapValues { (_, list) -> list.sumOf { it.dang } }
     }
 
-    val userId = Preference().getUserId(context = context)
-    val mobile = Preference().getUserMobile(context = context)
+    val perms = sharedViewModel.rolePermissions
 
-//    val permissionLevelOwnersTab = AuthUtils.checkFieldPermission(
-//        userId = userId,
-//        targetFieldNameRes = context.getString(BuildingProfileFields.USERS_OWNERS.fieldNameRes),
-//        sharedViewModel = sharedViewModel
-//    )
-
-
-//    val permissionLevelAllOwnersTab = AuthUtils.checkFieldPermission(
-//        userId,
-//        context.getString(BuildingProfileFields.ALL_OWNERS.fieldNameRes),
-//        sharedViewModel
-//    )
+    val perm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.CREATE_OWNER_BUTTON
+    )
+    val ownerPerm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.OWNERS_TAB
+    )
 
     Card(
         modifier = modifier
@@ -1166,23 +1234,25 @@ fun OwnerItem(
                     }
 
                     is BuildingProfileActivity -> {
-//                        if (permissionLevelAllOwnersTab == PermissionLevel.FULL ||
-//                            permissionLevelAllOwnersTab == PermissionLevel.WRITE
-//                        ) {
+                        if( ownerPerm != PermissionLevel.FULL) {
+                            if (ownerUnit.user!!.mobileNumber == mobile) {
+                                val intent = Intent(context, OwnerDetailsActivity::class.java)
+                                intent.putExtra("ownerId", ownerUnit.user.userId)
+                                intent.putExtra("buildingId", buildingId)
+                                context.startActivity(intent)
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.auth_profile_cancel),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
                             val intent = Intent(context, OwnerDetailsActivity::class.java)
                             intent.putExtra("ownerId", ownerUnit.user!!.userId)
                             intent.putExtra("buildingId", buildingId)
                             context.startActivity(intent)
-//                        } else if (
-//                            ownerUnit.user!!.mobileNumber == mobile &&
-//                            (permissionLevelOwnersTab == PermissionLevel.FULL ||
-//                                    permissionLevelOwnersTab == PermissionLevel.WRITE)
-//                        ) {
-//                            val intent = Intent(context, OwnerDetailsActivity::class.java)
-//                            intent.putExtra("ownerId", ownerUnit.user.userId)
-//                            intent.putExtra("buildingId", buildingId)
-//                            context.startActivity(intent)
-//                        }
+                        }
                     }
                 }
             }
@@ -1302,7 +1372,15 @@ fun OwnerItem(
                     },
                     onClick = {
                         showMenu = false
-                        showDeleteDialog = true
+                        if (perm == PermissionLevel.READ) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.auth_cancel),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            showDeleteDialog = true
+                        }
                     }
                 )
             }
@@ -1392,11 +1470,7 @@ fun OwnerItem(
 }
 
 
-fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MutableCollectionMutableState", "StringFormatInvalid")
@@ -1438,7 +1512,6 @@ fun OwnerDialog(
     val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
     var showUnitsSheet by remember { mutableStateOf(false) }
     var unitsError by remember { mutableStateOf(false) }
-    var selectedUnit by remember { mutableStateOf<Units?>(null) }
     val noUnits = units.isEmpty()
 
     var isCheckingUser by remember { mutableStateOf(false) }
@@ -1480,8 +1553,6 @@ fun OwnerDialog(
                     !mobileError &&
                     selectedUnitsList.isNotEmpty() &&
                     allSelectedDangValid &&
-                    units.isNotEmpty() &&
-                    (!isResident || residentUnitId != null) &&
                     if (userExists == true) {
                         true
                     } else {
@@ -1504,12 +1575,6 @@ fun OwnerDialog(
         }
     }
 
-    val residentUnitLabel by remember {
-        derivedStateOf {
-            val u = units.firstOrNull { it.unitId == residentUnitId }
-            u?.unitNumber?.toString() ?: ""
-        }
-    }
 
     val dialogScrollState = rememberScrollState()
 
@@ -1535,6 +1600,15 @@ fun OwnerDialog(
                     if (noUnits) {
                         Text(
                             text = context.getString(R.string.first_compete_units),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    if(selectableUnits.isEmpty()){
+                        Text(
+                            text = context.getString(R.string.units_are_finished),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -1699,8 +1773,8 @@ fun OwnerDialog(
                     ) {
                         Checkbox(
                             checked = isManager,
-                            onCheckedChange = { if (controlsEnabled) isManager = it },
-                            enabled = controlsEnabled
+                            onCheckedChange = { isManager = it },
+                            enabled = !noUnits
                         )
                         Text(
                             text = context.getString(R.string.manager_teams),
@@ -1730,23 +1804,6 @@ fun OwnerDialog(
                         )
                     }
 
-                    if (isResident) {
-                        Spacer(Modifier.height(8.dp))
-                        ExposedDropdownMenuBoxExample(
-                            sharedViewModel = sharedViewModel,
-                            items = units,
-                            selectedItem = selectedUnit,
-                            onItemSelected = { unit ->
-                                selectedUnit = unit
-                                residentUnitId = unit.unitId
-                            },
-                            label = context.getString(R.string.unit_number),
-                            modifier = Modifier.fillMaxWidth(),
-                            itemLabel = { it.unitNumber }
-                        )
-                    }
-
-
                     Spacer(Modifier.height(8.dp))
 
                     Column {
@@ -1763,7 +1820,7 @@ fun OwnerDialog(
                         ) {
                             Text(
                                 text = if (selectedUnitsText.isBlank()) {
-                                    context.getString(R.string.select_units_and_dang)
+                                    "انتخاب واحدها (${selectedUnitsList.size})"
                                 } else {
                                     selectedUnitsText
                                 },
@@ -1826,7 +1883,7 @@ fun OwnerDialog(
             val scrollState = rememberLazyListState()
 
             Text(
-                text = context.getString(R.string.select_units_and_dang),
+                text = context.getString(R.string.select_units),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1870,14 +1927,14 @@ fun OwnerDialog(
                             checked = isChecked,
                             onCheckedChange = { checked ->
                                 if (checked) {
-                                    val v = localDangText.toDoubleOrNull() ?: 0.0
-                                    val clamped = v.coerceIn(0.0, maxAllowed)
+//                                    val v = localDangText.toDoubleOrNull() ?: 0.0
+//                                    val clamped = v.coerceIn(0.0, maxAllowed)
                                     selectedUnitsList.removeAll { it.unitId == unit.unitId }
                                     selectedUnitsList.add(
                                         OwnersUnitsCrossRef(
                                             ownerId = 0L,
                                             unitId = unit.unitId,
-                                            dang = clamped
+                                            dang = 6.0
                                         )
                                     )
                                 } else {
@@ -1886,7 +1943,8 @@ fun OwnerDialog(
                             }
                         )
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(
                                 text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
                                 style = MaterialTheme.typography.bodyLarge
@@ -1896,34 +1954,34 @@ fun OwnerDialog(
                                 style = MaterialTheme.typography.bodyLarge
                             )
 
-                            if (isChecked) {
-                                OutlinedTextField(
-                                    value = localDangText,
-                                    onValueChange = { text ->
-                                        localDangText = text
-
-                                        val v = text.toDoubleOrNull()
-                                        if (v != null) {
-                                            val clamped = v.coerceIn(0.0, maxAllowed)
-                                            val idx = selectedUnitsList.indexOfFirst {
-                                                it.unitId == unit.unitId
-                                            }
-                                            if (idx >= 0) {
-                                                selectedUnitsList[idx] =
-                                                    selectedUnitsList[idx].copy(dang = clamped)
-                                            }
-                                        }
-                                    },
-                                    label = {
-                                        Text(
-                                            text = context.getString(R.string.dang),
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
-                                    },
-                                    textStyle = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
+//                            if (isChecked) {
+//                                OutlinedTextField(
+//                                    value = localDangText,
+//                                    onValueChange = { text ->
+//                                        localDangText = text
+//
+//                                        val v = text.toDoubleOrNull()
+//                                        if (v != null) {
+//                                            val clamped = v.coerceIn(0.0, maxAllowed)
+//                                            val idx = selectedUnitsList.indexOfFirst {
+//                                                it.unitId == unit.unitId
+//                                            }
+//                                            if (idx >= 0) {
+//                                                selectedUnitsList[idx] =
+//                                                    selectedUnitsList[idx].copy(dang = clamped)
+//                                            }
+//                                        }
+//                                    },
+//                                    label = {
+//                                        Text(
+//                                            text = context.getString(R.string.dang),
+//                                            style = MaterialTheme.typography.bodyLarge
+//                                        )
+//                                    },
+//                                    textStyle = MaterialTheme.typography.bodyLarge,
+//                                    modifier = Modifier.fillMaxWidth()
+//                                )
+//                            }
                         }
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1951,7 +2009,6 @@ fun OwnerDialog(
 @Composable
 fun TenantItem(
     user: User?,
-    buildingId: Long,
     unit: Units,
     relation: TenantsUnitsCrossRef?,
     sharedViewModel: SharedViewModel,
@@ -1967,29 +2024,24 @@ fun TenantItem(
 
     val userIdPref = Preference().getUserId(context = context)
     val userMobile = Preference().getUserMobile(context = context)
+    val perms = sharedViewModel.rolePermissions
 
-    val permissionLevelTenantsTab = AuthUtils.checkFieldPermission(
-        userIdPref,
-        context.getString(BuildingProfileFields.USERS_TENANTS.fieldNameRes),
-        sharedViewModel
+    val deletePerm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.CREATE_TENANT_BUTTON
     )
 
-    val permissionLevelAllTenantsTab = AuthUtils.checkFieldPermission(
-        userIdPref,
-        context.getString(BuildingProfileFields.ALL_TENANTS.fieldNameRes),
-        sharedViewModel
+    val clickPerm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.TENANTS_TAB
     )
 
-//    val canOpenAll =
-//        permissionLevelAllTenantsTab == PermissionLevel.FULL ||
-//                permissionLevelAllTenantsTab == PermissionLevel.WRITE
+    val canOpenAll =
+        clickPerm == PermissionLevel.FULL ||
+                clickPerm == PermissionLevel.WRITE
 
     val isCurrentTenant = user?.mobileNumber == userMobile
 
-//    val canOpenSelf =
-//        isCurrentTenant &&
-//                (permissionLevelTenantsTab == PermissionLevel.FULL ||
-//                        permissionLevelTenantsTab == PermissionLevel.WRITE)
 
     val firstName = user?.firstName ?: ""
     val lastName = user?.lastName ?: ""
@@ -2010,18 +2062,19 @@ fun TenantItem(
                     }
 
                     is BuildingProfileActivity -> {
-//                        val hasAccess = canOpenAll || canOpenSelf
-//                        if (hasAccess) {
+                        if( clickPerm != PermissionLevel.FULL) {
+                            if (user!!.mobileNumber == userMobile) {
+                                onClick()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.auth_profile_cancel),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
                             onClick()
-//                        } else {
-//                            Toast
-//                                .makeText(
-//                                    context,
-//                                    context.getString(R.string.auth_cancel),
-//                                    Toast.LENGTH_LONG
-//                                )
-//                                .show()
-//                        }
+                        }
                     }
 
                     else -> {
@@ -2063,11 +2116,6 @@ fun TenantItem(
                 }
 
                 if (user != null) {
-//                    Text(
-//                        text = "${context.getString(R.string.phone_number)}: ${user.phoneNumber}",
-//                        style = MaterialTheme.typography.bodyLarge,
-//                        color = MaterialTheme.colorScheme.onSurfaceVariant
-//                    )
                     Text(
                         text = "${context.getString(R.string.mobile_number)}: ${user.mobileNumber}",
                         style = MaterialTheme.typography.bodyLarge,
@@ -2123,17 +2171,17 @@ fun TenantItem(
                     },
                     onClick = {
                         showMenu = false
-//                        if (canOpenAll || canOpenSelf) {
+                        if (deletePerm == PermissionLevel.FULL || deletePerm == PermissionLevel.WRITE) {
                             showDeleteDialog = true
-//                        } else {
-//                            Toast
-//                                .makeText(
-//                                    context,
-//                                    context.getString(R.string.auth_cancel),
-//                                    Toast.LENGTH_SHORT
-//                                )
-//                                .show()
-//                        }
+                        } else {
+                            Toast
+                                .makeText(
+                                    context,
+                                    context.getString(R.string.auth_cancel),
+                                    Toast.LENGTH_SHORT
+                                )
+                                .show()
+                        }
                     }
                 )
             }
@@ -2226,7 +2274,7 @@ fun TenantDialog(
     var numberOfTenants by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf(context.getString(R.string.active)) }
     var selectedUnit by remember { mutableStateOf<Units?>(null) }
-
+    var activeDateField by remember { mutableStateOf<DateField?>(null) }
     var emailError by remember { mutableStateOf(false) }
     var phoneError by remember { mutableStateOf(false) }
     var mobileError by remember { mutableStateOf(false) }
@@ -2235,19 +2283,12 @@ fun TenantDialog(
     var isCheckingUser by remember { mutableStateOf(false) }
     var existingUser by remember { mutableStateOf<User?>(null) }
 
-    var showStartDatePicker by remember { mutableStateOf(false) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
-
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     val noOwnerUnits = units.isEmpty()
     val controlsEnabled = !noOwnerUnits
-
-    val dismissDatePicker: () -> Unit = {
-        showStartDatePicker = false
-        showEndDatePicker = false
-    }
 
     LaunchedEffect(startDate) {
         if (startDate.isNotEmpty()) {
@@ -2333,7 +2374,7 @@ fun TenantDialog(
                     !isCheckingUser &&
                     !mobileError &&
                     mobileNumber.isNotBlank() &&
-                    numberOfTenants.isNotBlank() &&
+                    numberOfTenants.isNotBlank() && numberOfTenants != "0" &&
                     startDate.isNotBlank() &&
                     endDate.isNotBlank() &&
                     selectedUnit != null &&
@@ -2510,32 +2551,52 @@ fun TenantDialog(
 
                     OutlinedTextField(
                         value = startDate,
-                        onValueChange = { if (controlsEnabled) startDate = it },
+                        onValueChange = { },
                         label = { RequiredLabel(context.getString(R.string.start_date)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged {
-                                if (controlsEnabled && it.isFocused) {
-                                    showStartDatePicker = true
-                                }
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                         readOnly = true,
-                        enabled = controlsEnabled
+                        enabled = controlsEnabled,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (controlsEnabled) {
+                                        focusManager.clearFocus()
+                                        activeDateField = DateField.START
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null
+                                )
+                            }
+                        }
                     )
+
+                    Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = endDate,
-                        onValueChange = { if (controlsEnabled) endDate = it },
+                        onValueChange = { },
                         label = { RequiredLabel(context.getString(R.string.end_date)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged {
-                                if (controlsEnabled && it.isFocused) {
-                                    showEndDatePicker = true
-                                }
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                         readOnly = true,
-                        enabled = controlsEnabled
+                        enabled = controlsEnabled,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (controlsEnabled) {
+                                        focusManager.clearFocus()
+                                        activeDateField = DateField.END
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null
+                                )
+                            }
+                        }
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -2564,27 +2625,18 @@ fun TenantDialog(
                 }
             }
 
-            if (controlsEnabled && showStartDatePicker) {
+            if (controlsEnabled && activeDateField != null) {
                 PersianDatePickerDialogContent(
                     sharedViewModel = sharedViewModel,
-                    onDateSelected = {
-                        startDate = it
-                        dismissDatePicker()
+                    onDateSelected = { selected ->
+                        when (activeDateField) {
+                            DateField.START -> startDate = selected
+                            DateField.END   -> endDate = selected
+                            null -> {}
+                        }
+                        activeDateField = null
                     },
-                    onDismiss = dismissDatePicker,
-                    context = context
-                )
-            }
-
-            if (controlsEnabled && showEndDatePicker) {
-                PersianDatePickerDialogContent(
-                    sharedViewModel = sharedViewModel,
-                    onDateSelected = {
-                        endDate = it
-                        dismissDatePicker()
-                    },
-                    onDismiss = dismissDatePicker,
-                    context = context
+                    onDismiss = { activeDateField = null }
                 )
             }
         },
@@ -2663,6 +2715,7 @@ fun TenantDialog(
 
 
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit, enabled : Boolean = true) {
@@ -2719,21 +2772,29 @@ fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit, e
     }
 }
 
-
 @SuppressLint("SuspiciousIndentation")
 @Composable
 fun UnitDialog(
+    units: List<Units>,
     floorCount: Int,
     onDismiss: () -> Unit,
     onAddUnit: (Units) -> Unit
 ) {
-    var unitNumber by remember { mutableStateOf("") }
+    val nextUnitNumber = remember(units) {
+        val max = units
+            .mapNotNull { it.unitNumber.toIntOrNull() }
+            .maxOrNull()
+        ((max ?: 0) + 1).toString()
+    }
+
+    var unitNumber by remember { mutableStateOf(nextUnitNumber) }
     var area by remember { mutableStateOf("") }
     var numberOfRooms by remember { mutableStateOf("") }
     var numberOfParking by remember { mutableStateOf("") }
     var numberOfWarehouse by remember { mutableStateOf("") }
     var postCode by remember { mutableStateOf("") }
 
+    val scrollState = rememberScrollState()
     val context = LocalContext.current
     val validation = remember { Validation() }
 
@@ -2767,14 +2828,21 @@ fun UnitDialog(
             )
         },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(scrollState)
+            ) {
                 OutlinedTextField(
                     value = unitNumber,
-                    onValueChange = { unitNumber = it },
+                    onValueChange = { },
+                    enabled = false,
                     label = { RequiredLabel(context.getString(R.string.unit_number)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth()
                 )
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
@@ -2852,10 +2920,7 @@ fun UnitDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = selectedFloorLabel,
                         onValueChange = { },
@@ -2895,7 +2960,8 @@ fun UnitDialog(
                                 onClick = {
                                     selectedFloor = opt.value
                                     floorDropdownExpanded = false
-                                }
+                                },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -2926,9 +2992,7 @@ fun UnitDialog(
             }
         },
         dismissButton = {
-            Button(
-                onClick = onDismiss
-            ) {
+            Button(onClick = onDismiss) {
                 Text(
                     text = context.getString(R.string.cancel),
                     style = MaterialTheme.typography.bodyLarge
@@ -2937,7 +3001,6 @@ fun UnitDialog(
         }
     )
 }
-
 
 @Composable
 fun EditUnitDialog(
@@ -2988,6 +3051,7 @@ fun EditUnitDialog(
             Column {
                 OutlinedTextField(
                     value = unitNumber,
+                    enabled = false,
                     onValueChange = { unitNumber = it },
                     label = { Text(context.getString(R.string.unit_number)) },
                     textStyle = MaterialTheme.typography.bodyLarge,
@@ -3518,8 +3582,7 @@ fun EditTenantDialog(
                         startDate = selected
                         dismissDatePicker()
                     },
-                    onDismiss = { dismissDatePicker() },
-                    context = context
+                    onDismiss = { dismissDatePicker() }
                 )
             }
             if (showEndDatePicker) {
@@ -3529,8 +3592,7 @@ fun EditTenantDialog(
                         endDate = selected
                         dismissDatePicker()
                     },
-                    onDismiss = { dismissDatePicker() },
-                    context = context
+                    onDismiss = { dismissDatePicker() }
                 )
             }
         },

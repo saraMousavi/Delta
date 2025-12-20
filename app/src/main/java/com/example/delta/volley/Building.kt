@@ -104,7 +104,11 @@ class Building {
                             buildingUsageId = if (bObj.isNull("buildingUsageId")) null else bObj.optLong("buildingUsageId"),
                             fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
                             userId = bObj.optLong("userId"),
-                            floorCount = bObj.optInt("floorCount")
+                            floorCount = bObj.optInt("floorCount"),
+                                    unitCount = bObj.optInt("unitCount"),
+                            parkingCount = bObj.optInt("parkingCount"),
+                            phone = bObj.optString("phone"),
+                            mobileNumber = bObj.optString("mobileNumber")
                         )
 
                         val units = parseUnits(obj.optJSONArray("units") ?: JSONArray())
@@ -243,6 +247,7 @@ class Building {
             put("idempotencyKey", "imp-${UUID.randomUUID()}")
         }
         val payload = JSONArray().put(item)
+        Log.d("buildingpayload", payload.toString())
         val req = jsonObjectRequestWithArrayBody(
             Request.Method.POST,
             baseUrl,
@@ -430,10 +435,12 @@ class Building {
         JSONObject().apply {
             put("name", b.name)
             put("postCode", b.postCode)
-            put("street", b.street)
+            put("address", b.street)
             put("province", b.province)
             put("state", b.state)
             put("floorCount", b.floorCount)
+            put("parkingCount", b.parkingCount)
+            put("unitCount", b.unitCount)
             put("serialNumber", b.serialNumber)
 
             if (b.complexId != null) {
@@ -451,7 +458,8 @@ class Building {
 
             put("fund", b.fund)
             put("userId", b.userId)
-            put("mobileNumber", mobileNumber)
+            put("mobileNumber", b.mobileNumber)
+            put("phone", b.phone)
         }
 
     fun unitToJson(unit: com.example.delta.data.entity.Units): JSONObject =
@@ -566,6 +574,10 @@ class Building {
                         fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
                         userId = bObj.optLong("userId"),
                         floorCount = bObj.optInt("floorCount"),
+                        unitCount = bObj.optInt("unitCount"),
+                        parkingCount = bObj.optInt("parkingCount"),
+                        phone = bObj.optString("phone"),
+                        mobileNumber = bObj.optString("mobileNumber")
                     )
 
                     fun parseUnits(arr: JSONArray): List<com.example.delta.data.entity.Units> {
@@ -770,7 +782,7 @@ class Building {
                         serialNumber = bObj.optString("serialNumber", ""),
                         name = bObj.optString("name", ""),
                         postCode = bObj.optString("postCode", ""),
-                        street = bObj.optString("street", ""),
+                        street = bObj.optString("address", ""),
                         province = bObj.optString("province", "Tehran"),
                         state = bObj.optString("state", "Central"),
                         buildingTypeId = if (bObj.isNull("buildingTypeId")) null else bObj.optLong("buildingTypeId"),
@@ -780,6 +792,10 @@ class Building {
                         fund = bObj.optDouble("fund").let { if (it.isNaN()) 0.0 else it },
                         userId = bObj.optLong("userId"),
                         floorCount = bObj.optInt("floorCount"),
+                        unitCount = bObj.optInt("unitCount"),
+                        parkingCount = bObj.optInt("parkingCount"),
+                        phone = bObj.optString("phone"),
+                        mobileNumber = bObj.optString("mobileNumber")
                     )
 
                     fun parseBuildingType(obj: JSONObject?): BuildingTypes? {
@@ -940,7 +956,10 @@ class Building {
                                     responsible = Responsible.valueOf(o.optString("responsible")),
                                     fundType = FundType.valueOf(o.optString("fundType")),
                                     chargeFlag = o.optBoolean("chargeFlag", false),
-                                    dueDate = o.optString("dueDate")
+                                    capitalFlag = o.optBoolean("capitalFlag", false),
+                                    dueDate = o.optString("dueDate"),
+                                    costFor = o.optString("costFor"),
+                                    documentNumber = o.optString("documentNumber"),
                                 )
                             )
                         }
@@ -1043,6 +1062,11 @@ class Building {
                         userId = obj.optLong("userId"),
                         serialNumber = obj.optString("serialNumber", ""),
                         floorCount = obj.optInt("floorCount"),
+                        unitCount = obj.optInt("unitCount"),
+                        parkingCount = obj.optInt("parkingCount"),
+                        phone = obj.optString("phone"),
+                        mobileNumber = obj.optString("mobileNumber")
+
                     )
 
                     onSuccess(updated)

@@ -20,4 +20,6 @@ data class Earnings(
     @ColumnInfo(name = "invoice_flag") var invoiceFlag: Boolean?= false,
     @ColumnInfo(name = "start_date") val startDate: String, // Due date of the debt
     @ColumnInfo(name = "end_date") val endDate: String, // Due date of the debt
+    @ColumnInfo(name = "for_building_id") val forBuildingId: Long?=null,
+    @ColumnInfo(name = "added_before_create_building") val addedBeforeCreateBuilding: Boolean?= false,
     ) : Parcelable

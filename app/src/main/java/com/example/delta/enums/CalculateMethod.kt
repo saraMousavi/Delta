@@ -6,6 +6,7 @@ import com.example.delta.R
 
 enum class CalculateMethod(@StringRes val resId: Int) {
     EQUAL(R.string.fixed),
+    NONE(R.string.none),
     AUTOMATIC(R.string.automatic),
     AREA(R.string.area),
     DANG(R.string.dang),

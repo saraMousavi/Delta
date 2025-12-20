@@ -28,7 +28,11 @@ import kotlinx.parcelize.Parcelize
 data class Costs(
     @PrimaryKey(autoGenerate = true) val costId: Long = 0,
     @ColumnInfo(name = "buildingId") val buildingId: Long?=null, // Foreign key reference
+    @ColumnInfo(name = "for_building_id") val forBuildingId: Long?=null,
+    @ColumnInfo(name = "added_before_create_building") val addedBeforeCreateBuilding: Boolean?= false,
     @ColumnInfo(name = "cost_name") val costName: String,
+    @ColumnInfo(name = "document_number") val documentNumber: String,
+    @ColumnInfo(name = "cost_for") val costFor: String,
     @ColumnInfo(name = "temp_amount") val tempAmount: Double,
     @ColumnInfo(name = "period") val period: Period,//weekly , monthly , yearly
     @ColumnInfo(name = "calculate_method") val calculateMethod: CalculateMethod, //fixed, automatic

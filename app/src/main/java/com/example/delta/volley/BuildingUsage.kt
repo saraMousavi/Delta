@@ -56,7 +56,9 @@ class BuildingUsage(
                         val obj = response.getJSONObject(i)
                         val item = BuildingUsages(
                             buildingUsageId = obj.optLong("buildingUsageId"),
-                            buildingUsageName = obj.optString("name", "")
+                            buildingUsageName = obj.optString("name", ""),
+                            forBuildingId = obj.optLong("forBuildingId", 0L),
+                            addedBeforeCreateBuilding = obj.optBoolean("addedBeforeCreateBuilding", false)
                         )
                         list += item
                     }
@@ -87,16 +89,18 @@ class BuildingUsage(
 
     fun createBuildingUsage(
         context: Context,
-        name: String,
+        buildingUsages: BuildingUsages,
         onSuccess: (BuildingUsages) -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
 
         val body = JSONObject().apply {
-            put("name", name)
+            put("name", buildingUsages.buildingUsageName)
+            put("forBuildingId", buildingUsages.forBuildingId)
+            put("addedBeforeCreateBuilding", buildingUsages.addedBeforeCreateBuilding)
         }
-
+        Log.d("bodyBuildingUsage", body.toString())
         val request = JsonObjectRequest(
             Request.Method.POST,
             baseUrl,
@@ -110,7 +114,9 @@ class BuildingUsage(
                     }
                     val item = BuildingUsages(
                         buildingUsageId = id,
-                        buildingUsageName = name
+                        buildingUsageName = buildingUsages.buildingUsageName,
+                        addedBeforeCreateBuilding = buildingUsages.addedBeforeCreateBuilding,
+                        forBuildingId = buildingUsages.forBuildingId
                     )
                     onSuccess(item)
                 } catch (e: Exception) {
@@ -125,11 +131,11 @@ class BuildingUsage(
 
     suspend fun createBuildingUsageSuspend(
         context: Context,
-        name: String
+        buildingUsages: BuildingUsages
     ): BuildingUsages? = suspendCancellableCoroutine { cont ->
         createBuildingUsage(
             context = context,
-            name = name,
+            buildingUsages = buildingUsages,
             onSuccess = { item ->
                 if (cont.isActive) cont.resume(item)
             },

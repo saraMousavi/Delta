@@ -49,6 +49,8 @@ class Validation {
                 sharedViewModel.selectedBuildingUsages?.buildingUsageId != 0L &&
                 sharedViewModel.street.isNotBlank() &&
                 sharedViewModel.postCode.isNotBlank() &&
+                sharedViewModel.phone.isNotBlank() &&
+                sharedViewModel.mobileNumber.isNotBlank() &&
                 isValidPostalCode(sharedViewModel.postCode) &&
                 (!sharedViewModel.sameArea ||
                         (sharedViewModel.numberOfUnits.isNotBlank() && sharedViewModel.unitArea.isNotBlank()))

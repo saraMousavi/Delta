@@ -37,15 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.example.delta.data.dao.AuthorizationDao
 import com.example.delta.data.dao.RoleDao
-import com.example.delta.data.entity.AuthorizationField
 import com.example.delta.data.entity.Role
-import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
 import com.example.delta.data.entity.User
 import com.example.delta.data.model.AppDatabase
-import com.example.delta.enums.AuthObject
-import com.example.delta.enums.BuildingProfileFields
-import com.example.delta.enums.PermissionLevel
-import com.example.delta.enums.Roles
 import com.example.delta.init.FileManagement
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
@@ -56,15 +50,20 @@ import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Cost
 import com.example.delta.volley.TokenUploader
 import com.google.firebase.messaging.FirebaseMessaging
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.text.style.TextAlign
+import com.example.delta.extentions.findActivity
+import com.example.delta.screens.OtpPurpose
+
 
 private lateinit var roleDao: RoleDao
 private lateinit var authorizationDao: AuthorizationDao
 
 class LoginPage : ComponentActivity() {
-    private val viewModel: BuildingsViewModel by viewModels()
     private val sharedViewModel: SharedViewModel by viewModels()
     private val REQUEST_CODE_PICK_EXCEL = 1001
 
@@ -159,8 +158,6 @@ class LoginPage : ComponentActivity() {
                         val selectedTab = remember { mutableIntStateOf(0) }
                         when (selectedTab.intValue) {
                             0 -> LoginFormScreen(
-                                buildingsViewModel = viewModel,
-                                sharedViewModel = sharedViewModel,
                                 onTabChange = { selectedTab.intValue = it }
                             )
                             1 -> SignUpScreen(
@@ -190,7 +187,8 @@ class LoginPage : ComponentActivity() {
                     navigateToIntent?.let { intent ->
                         LaunchedEffect(intent) {
                             context.startActivity(intent)
-                            if (context is Activity) context.finish()
+                            context.findActivity()?.finish()
+
                             navigateToIntent = null
                         }
                     }
@@ -203,11 +201,11 @@ class LoginPage : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginFormScreen(
-    sharedViewModel: SharedViewModel,
-    buildingsViewModel: BuildingsViewModel,
     onTabChange: (Int) -> Unit
 ) {
     val context = LocalContext.current
+    var showOtp by remember { mutableStateOf(false) }
+    var otpPurpose by remember { mutableStateOf<OtpPurpose?>(null) }
 
     val tabTitles = listOf(context.getString(R.string.login), context.getString(R.string.sign_up))
     var selectedTab by rememberSaveable { mutableStateOf(0) }
@@ -217,14 +215,38 @@ fun LoginFormScreen(
     var userId by remember { mutableLongStateOf(0L) }
     var roleDialogVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var isInValid by remember { mutableStateOf(false) }
+    var isInError by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
     var serverRoles by remember { mutableStateOf<List<Role>>(emptyList()) }
+    val scrollState = rememberScrollState()
+
+    if (showOtp && otpPurpose != null) {
+        OtpScreen(
+            phone = username.trim(),
+            purpose = OtpPurpose.FORGET_PASSWORD,
+            onVerified = {
+                showOtp = false
+                otpPurpose = null
+                errorText = null
+                isInValid = false
+            },
+            onBack = {
+                showOtp = false
+                otpPurpose = null
+            }
+        )
+        return
+    }
+
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
+            .imePadding()
+            .verticalScroll(scrollState)
     ) {
 
         TabRow(selectedTabIndex = selectedTab) {
@@ -265,28 +287,50 @@ fun LoginFormScreen(
         )
 
         if (errorText != null) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = errorText!!,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Spacer(Modifier.height(16.dp))
 
-            Spacer(Modifier.height(4.dp))
-
-            TextButton(
-                onClick = {
-                    selectedTab = 1
-                    onTabChange(1)
-                }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Text(
-                    text = context.getString(R.string.go_to_sign_up),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = errorText!!,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                        if (isInValid) {
+                            TextButton(
+                                onClick = {
+                                    showOtp = true
+                                    otpPurpose = OtpPurpose.FORGET_PASSWORD
+                                }
+                            ) {
+                                Text(context.getString(R.string.forget_password), style = MaterialTheme.typography.bodyLarge)
+                            }
+                        } else {
+                            if(!isInError){
+                                TextButton(
+                                    onClick = {
+                                        selectedTab = 1
+                                        onTabChange(1)
+                                    }
+                                ) {
+                                    Text(
+                                        context.getString(R.string.go_to_sign_up),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-
 
         Spacer(modifier = Modifier.height(30.dp))
 
@@ -303,17 +347,33 @@ fun LoginFormScreen(
                     onSuccess = { result ->
                         serverRoles = result.roles
                         userId = result.user.userId
-                        Log.d("serverRoles", serverRoles.toString())
                         isLoading = false
+                        isInValid = false
                         roleDialogVisible = true
                     },
-                    onInvalid = {
+                    onInvalidCredential = {
                         isLoading = false
-                        errorText = context.getString(R.string.login_user_not_found)
+                        isInValid = true
+                        isInError = true
+                        errorText = context.getString(R.string.wrong_password)
+                    },
+                    onInvalidMobile = {
+                        isLoading = false
+                        isInValid = false
+                        isInError = true
+                        errorText =  context.getString(R.string.invalid_mobile_number)
+                    },
+                    onNotFound = {
+                        isLoading = false
+                        isInValid = false
+                        isInError = false
+                        errorText =  context.getString(R.string.login_user_not_found)
                     },
                     onError = { t ->
                         isLoading = false
-                        errorText = t.message ?: context.getString(R.string.login_user_not_found)
+                        isInValid = false
+                        isInError = true
+                        errorText = t.message
                     }
                 )
 
@@ -400,10 +460,17 @@ fun SignUpScreen(
     var passwordError by remember { mutableStateOf(false) }
     var showOtp by remember { mutableStateOf(false) }
     var pendingUser by remember { mutableStateOf<User?>(null) }
-
+    val scrollState = rememberScrollState()
+    var isCheckingMobile by remember { mutableStateOf(false) }
+    var signupInfoMessage by remember { mutableStateOf<String?>(null) }
+    var signupErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showGoToLogin by remember { mutableStateOf(false) }
+    val tabTitles = listOf(context.getString(R.string.login), context.getString(R.string.sign_up))
+    var selectedTab by rememberSaveable { mutableStateOf(1) }
 
     if (showOtp) {
         OtpScreen(
+            purpose = OtpPurpose.SIGN_UP,
             phone = pendingUser?.mobileNumber.orEmpty(),
             onVerified = {
                 val user = pendingUser ?: return@OtpScreen
@@ -446,57 +513,32 @@ fun SignUpScreen(
         )
         return
     }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .imePadding()
+            .verticalScroll(scrollState)
+    ) {
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TabRow(
-                selectedTabIndex = 1,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                indicator = { tabPositions ->
-                    TabRowDefaults.Indicator(
-                        Modifier.tabIndicatorOffset(tabPositions[1]).height(3.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                divider = {}
-            ) {
+        TabRow(selectedTabIndex = selectedTab) {
+            tabTitles.forEachIndexed { index, title ->
                 Tab(
-                    selected = false,
-                    onClick = { onTabChange(0) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.login),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-                Tab(
-                    selected = true,
-                    onClick = {},
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.sign_up),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                    selected = selectedTab == index,
+                    onClick = {
+                        selectedTab = index
+                        onTabChange(index)
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    text = { Text(text = title, style = MaterialTheme.typography.bodyLarge) }
+                )
             }
         }
-
+        Spacer(Modifier.height(20.dp))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .imePadding()
         ) {
             OutlinedTextField(
                 value = mobile,
@@ -534,6 +576,7 @@ fun SignUpScreen(
                 visualTransformation = PasswordVisualTransformation()
             )
             if (passwordError) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.password_too_short),
                     color = MaterialTheme.colorScheme.error,
@@ -546,21 +589,82 @@ fun SignUpScreen(
 
             Button(
                 onClick = {
-                    val candidate = User(
+                    if (mobileError || passwordError || mobile.isBlank() || password.isBlank()) return@Button
+
+                    signupInfoMessage = null
+                    signupErrorMessage = null
+                    showGoToLogin = false
+                    isCheckingMobile = true
+
+                    com.example.delta.volley.Users().checkMobileExists(
+                        context = context,
                         mobileNumber = mobile,
-                        password = password
+                        onExists = {
+                            isCheckingMobile = false
+                            signupInfoMessage = context.getString(R.string.exist_user)
+                            showGoToLogin = true
+                        },
+                        onNotExists = {
+                            isCheckingMobile = false
+                            val candidate = User(
+                                mobileNumber = mobile,
+                                password = password
+                            )
+                            pendingUser = candidate
+                            showOtp = true
+                        },
+                        onError = { e ->
+                            isCheckingMobile = false
+                            signupErrorMessage = e.message ?: context.getString(R.string.failed)
+                        }
                     )
-                    pendingUser = candidate
-                    showOtp = true
                 },
-                enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank(),
+                enabled = !mobileError && !passwordError && mobile.isNotBlank() && password.isNotBlank() && !isCheckingMobile,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(text = stringResource(R.string.sign_up), style = MaterialTheme.typography.bodyLarge)
+                if (isCheckingMobile) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text(text = stringResource(R.string.sign_up), style = MaterialTheme.typography.bodyLarge)
+                }
             }
+
+            if (signupInfoMessage != null || signupErrorMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        signupInfoMessage?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        signupErrorMessage?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+
+                        if (showGoToLogin) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = { onTabChange(0) }) {
+                                Text(context.getString(R.string.login), style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+            }
+
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -575,6 +679,8 @@ fun SignUpScreen(
             )
         }
     }
+
+
 }
 
 @Composable
@@ -590,14 +696,21 @@ fun LoginFooter(onGuestClick: () -> Unit) {
 
     ClickableText(
         text = annotatedText,
-        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+        style = MaterialTheme.typography.bodyMedium.copy(
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        ),
         onClick = { offset ->
-            annotatedText.getStringAnnotations(tag = "guest_entrance", start = offset, end = offset)
-                .firstOrNull()?.let { _ -> onGuestClick() }
+            annotatedText
+                .getStringAnnotations(tag = "guest_entrance", start = offset, end = offset)
+                .firstOrNull()
+                ?.let { onGuestClick() }
         },
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth(),
         maxLines = 2
     )
+
 }
 
 fun saveLoginState(context: Context, isLoggedIn: Boolean, userId: Long, mobile: String, roleId: Long) {
@@ -626,69 +739,6 @@ fun isFirstLoggedIn(context: Context): Boolean {
     return prefs.getBoolean("first_login", false)
 }
 
-//private fun insertDefaultAuthorizationData() {
-//    CoroutineScope(Dispatchers.IO).launch {
-//        val existingCount = authorizationDao.getAuthorizationCrossRefCount()
-//        if (existingCount > 0) {
-//            return@launch
-//        }
-//        val rolesList = roleDao.getRoles()
-//        val roleMap = rolesList.associateBy { it.roleName }
-//
-//        suspend fun insertCrossRefs(
-//            roleId: Long,
-//            objectId: Long,
-//            fields: List<AuthorizationField>,
-//            permission: PermissionLevel
-//        ) {
-//            fields.forEach { field ->
-//                authorizationDao.insertRoleAuthorizationFieldCrossRef(
-//                    RoleAuthorizationObjectFieldCrossRef(
-//                        roleId = roleId,
-//                        objectId = objectId,
-//                        fieldId = field.fieldId,
-//                        permissionLevel = permission
-//                    )
-//                )
-//            }
-//        }
-//
-//        val adminManagerRoles = listOf(Roles.ADMIN, Roles.BUILDING_MANAGER)
-//        adminManagerRoles.forEach { roleName ->
-//            val role = roleMap[roleName] ?: return@forEach
-//            AuthObject.getAll().forEach { authObject ->
-//                val fields = authorizationDao.getFieldsForObject(authObject.id)
-//                insertCrossRefs(role.roleId, authObject.id, fields, PermissionLevel.FULL)
-//            }
-//        }
-//
-//        roleMap[Roles.PROPERTY_TENANT]?.let { tenantRole ->
-//            val tenantFieldNames = listOf(
-//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-//                BuildingProfileFields.TENANTS_TAB.fieldNameRes
-//            )
-//            val allFields = authorizationDao.getFieldsForObject(3L)
-//            val tenantFields = allFields.filter { it.name in tenantFieldNames }
-//            insertCrossRefs(tenantRole.roleId, 3L, tenantFields, PermissionLevel.FULL)
-//        }
-//
-//        roleMap[Roles.PROPERTY_OWNER]?.let { ownerRole ->
-//            val ownerFieldNames = listOf(
-//                BuildingProfileFields.UNITS_TAB.fieldNameRes,
-//                BuildingProfileFields.USERS_OWNERS.fieldNameRes,
-//                BuildingProfileFields.USERS_TENANTS.fieldNameRes,
-//                BuildingProfileFields.TENANTS_TAB.fieldNameRes,
-//                BuildingProfileFields.OWNERS_TAB.fieldNameRes
-//            )
-//            val allFields = authorizationDao.getFieldsForObject(3L)
-//            val ownerFields = allFields.filter { it.name in ownerFieldNames }
-//            insertCrossRefs(ownerRole.roleId, 3L, ownerFields, PermissionLevel.FULL)
-//        }
-//    }
-//}
-
 
 @Composable
 fun RolePickerDialog(
@@ -699,8 +749,6 @@ fun RolePickerDialog(
 ) {
     val uniqueRoles = remember(roles) { roles.distinctBy { it.roleId to it.roleName } }
     var selected by remember(uniqueRoles) { mutableStateOf<Role?>(uniqueRoles.firstOrNull()) }
-    Log.d("selected", selected.toString())
-    Log.d("uniqueRoles", uniqueRoles.toString())
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -713,7 +761,7 @@ fun RolePickerDialog(
                 Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
             }
         },
-        title = { Text(context.getString(R.string.choose_role), style = MaterialTheme.typography.bodyLarge) },
+        title = { Text(context.getString(R.string.choose_role), style = MaterialTheme.typography.headlineSmall) },
         text = {
             if (uniqueRoles.isEmpty()) {
                 Text(context.getString(R.string.no_role_found), style = MaterialTheme.typography.bodyLarge)
@@ -740,7 +788,7 @@ fun RolePickerDialog(
                         ) {
                             Text(
                                 text = role.roleName,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.headlineSmall,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface
                             )
@@ -757,14 +805,15 @@ fun navigateAfterLoginWithCostsCheck(
     roleId: Long,
     userId: Long
 ) {
-    if (roleId != 1L && roleId != 3L) {
+    if (roleId != 1L && roleId != 3L && roleId != 6L) {
         val intent = Intent(context, HomePageActivity::class.java).apply {
             putExtra("user_id", userId)
             putExtra("role_id", roleId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         context.startActivity(intent)
-        if (context is Activity) context.finish()
+        context.findActivity()?.finish()
+
         return
     }
 
@@ -787,7 +836,8 @@ fun navigateAfterLoginWithCostsCheck(
             }
 
             context.startActivity(intent)
-            if (context is Activity) context.finish()
+            context.findActivity()?.finish()
+
 
         },
         onError = { e ->
@@ -803,7 +853,8 @@ fun navigateAfterLoginWithCostsCheck(
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
             context.startActivity(intent)
-            if (context is Activity) context.finish()
+            context.findActivity()?.finish()
+
         }
     )
 }

@@ -17,6 +17,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.Locale
+import kotlin.coroutines.resumeWithException
 
 class Earning {
 
@@ -73,7 +74,11 @@ class Earning {
                 startDate    = o.optString("startDate",
                     o.optString("start_date", "")),
                 endDate      = o.optString("endDate",
-                    o.optString("end_date", ""))
+                    o.optString("end_date", "")),
+                addedBeforeCreateBuilding      = o.optBoolean("addedBeforeCreateBuilding",
+                    o.optBoolean("addedBeforeCreateBuilding", false)),
+                forBuildingId      = o.optLong("forBuildingId",
+                    o.optLong("forBuildingId", 0))
             )
             out += earnings
         }
@@ -128,8 +133,8 @@ class Earning {
     fun createEarningsWithCredits(
         context: Context,
         earnings: Earnings,
-        onSuccess: (Long) -> Unit,             // earningsId جدید
-        onConflict: () -> Unit,                // کانفلیکت مشابه IllegalStateException
+        onSuccess: (Long) -> Unit,
+        onConflict: () -> Unit,
         onError: (Exception) -> Unit
     ) {
         val url = "$baseUrl/with-credits"
@@ -142,6 +147,8 @@ class Earning {
             put("period", earnings.period.name)     // MONTHLY / YEARLY / NONE
             put("startDate", earnings.startDate)    // "YYYY/MM/DD"
             put("endDate", earnings.endDate)
+            put("forBuildingId", earnings.forBuildingId)
+            put("addedBeforeCreateBuilding", earnings.addedBeforeCreateBuilding)
         }
 
         val req = object : JsonObjectRequest(
@@ -210,7 +217,11 @@ class Earning {
             startDate    = o.optString("startDate",
                 o.optString("start_date", "")),
             endDate      = o.optString("endDate",
-                o.optString("end_date", ""))
+                o.optString("end_date", "")),
+            addedBeforeCreateBuilding      = o.optBoolean("addedBeforeCreateBuilding",
+                o.optBoolean("addedBeforeCreateBuilding", false)),
+            forBuildingId      = o.optLong("forBuildingId",
+                o.optLong("forBuildingId", 0))
         )
     }
 
@@ -289,15 +300,18 @@ class Earning {
 
         return EarningWithCredits(earning = earning, credits = credits)
     }
-
     fun getAllMenuEarnings(
         context: Context,
+        buildingId: Long? = null,
         onSuccess: (List<Earnings>) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/menu"
-        Log.d("EarningsApi", "GET $url")
-
+        val url = if (buildingId != null) {
+            "$baseUrl/menu?buildingId=$buildingId"
+        } else {
+            "$baseUrl/menu"
+        }
+        Log.d("url", url.toString())
         val queue = Volley.newRequestQueue(context)
         val req = JsonArrayRequest(
             Request.Method.GET,
@@ -306,6 +320,7 @@ class Earning {
             { arr ->
                 try {
                     val list = parseEarningsArray(arr)
+                    Log.d("earninglist", list.toString())
                     onSuccess(list)
                 } catch (e: Exception) {
                     onError(e)
@@ -318,11 +333,14 @@ class Earning {
         queue.add(req)
     }
 
+
     suspend fun getAllMenuEarningsSuspend(
-        context: Context
+        context: Context,
+        buildingId: Long? = null,
     ): List<Earnings> = suspendCancellableCoroutine { cont ->
         getAllMenuEarnings(
             context = context,
+            buildingId = buildingId,
             onSuccess = { list ->
                 if (cont.isActive) cont.resume(list, onCancellation = null)
             },
@@ -350,8 +368,10 @@ class Earning {
             put("startDate", earning.startDate)
             put("endDate", earning.endDate)
             put("invoiceFlag", earning.invoiceFlag)
+            put("addedBeforeCreateBuilding", earning.addedBeforeCreateBuilding)
+            put("forBuildingId", earning.forBuildingId)
         }
-
+        Log.d("bodyEarning", body.toString())
         val req = object : JsonObjectRequest(
             Method.POST,
             url,
@@ -381,6 +401,51 @@ class Earning {
         queue.add(req)
     }
 
+    fun hasReceivedCredit(
+        context: Context,
+        earningId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/has-received-credit?earningId=$earningId"
+        val queue = Volley.newRequestQueue(context.applicationContext)
+
+        val req = object : JsonObjectRequest(
+            Method.GET,
+            url,
+            null,
+            { o ->
+                val has = o.optBoolean("hasReceivedCredit", false)
+                onSuccess(has)
+            },
+            { err ->
+                onError(Exception(err.toString()))
+            }
+        ) {}
+
+        queue.add(req)
+    }
+
+    suspend fun hasReceivedCreditSuspend(
+        context: Context,
+        earningId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ): Boolean = suspendCancellableCoroutine { cont ->
+        hasReceivedCredit(
+            context = context,
+            earningId = earningId,
+            onSuccess = { has ->
+                onSuccess(has)
+                if (cont.isActive) cont.resume(has, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+        )
+    }
+
+
     suspend fun insertNewEarningSuspend(
         context: Context,
         earning: Earnings
@@ -400,6 +465,65 @@ class Earning {
             },
             onError = { e ->
                 if (cont.isActive) cont.resumeWith(Result.failure(e))
+            }
+        )
+    }
+
+    fun updateEarningWithCredits(
+        context: Context,
+        earningId: Long,
+        earningJson: JSONObject,
+        onSuccess: (JSONObject) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/$earningId/with-credits"
+        val queue = Volley.newRequestQueue(context.applicationContext)
+
+        val body = JSONObject().apply {
+            put("earning", earningJson)
+        }
+
+        val req = object : JsonObjectRequest(
+            Request.Method.PUT,
+            url,
+            body,
+            { resp -> onSuccess(resp) },
+            { err -> onError(formatVolleyError("updateEarningWithCredits", err)) }
+        ) {
+            override fun getBodyContentType(): String =
+                "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+
+    suspend fun updateEarningWithCreditsSuspend(
+        context: Context,
+        earning: Earnings
+    ): JSONObject = suspendCancellableCoroutine { cont ->
+        val earningJson = JSONObject().apply {
+            put("earningsId", earning.earningsId)
+            put("buildingId", earning.buildingId)
+            put("earningsName", earning.earningsName)
+            put("amount", earning.amount)
+            put("period", earning.period.name)
+            put("startDate", earning.startDate)
+            put("endDate", earning.endDate)
+            put("invoiceFlag", earning.invoiceFlag)
+            put("addedBeforeCreateBuilding", earning.addedBeforeCreateBuilding)
+            put("forBuildingId", earning.forBuildingId)
+        }
+        Log.d("earningJson", earningJson.toString())
+        updateEarningWithCredits(
+            context = context,
+            earningId = earning.earningsId,
+            earningJson = earningJson,
+            onSuccess = { resp ->
+                if (cont.isActive) cont.resume(resp, onCancellation = null)
+            },
+            onError = { e ->
+                if (cont.isActive) cont.resumeWithException(e)
             }
         )
     }
@@ -488,8 +612,10 @@ class Earning {
             put("period", earning.period.name)
             put("startDate", earning.startDate)
             put("endDate", earning.endDate)
+            put("addedBeforeCreateBuilding", earning.addedBeforeCreateBuilding)
+            put("forBuildingId", earning.forBuildingId)
         }
-
+        Log.d("bodyEarning", body.toString())
         val req = object : JsonObjectRequest(
             Method.POST,
             url,
@@ -647,6 +773,88 @@ class Earning {
         )
     }
 
+    fun hasReceivedCredits(
+        context: Context,
+        earningId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/$earningId/has-received"
+        val queue = Volley.newRequestQueue(context.applicationContext)
+
+        val req = object : JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { resp ->
+                onSuccess(resp.optBoolean("hasReceived", false))
+            },
+            { err ->
+                onError(Exception(err.toString()))
+            }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    suspend fun hasReceivedCreditsSuspend(
+        context: Context,
+        earningId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ): Boolean = suspendCancellableCoroutine { cont ->
+        hasReceivedCredits(
+            context = context,
+            earningId = earningId,
+            onSuccess = { ok ->
+                onSuccess(ok)
+                if (cont.isActive) cont.resume(ok, onCancellation = null)
+                        } ,
+            onError = { e ->
+                onError(e)
+                if (cont.isActive) cont.resumeWithException(e) }
+        )
+    }
+
+    fun deleteEarningWithCreditsIfNoReceived(
+        context: Context,
+        earningId: Long,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val url = "$baseUrl/$earningId/with-credits"
+        val queue = Volley.newRequestQueue(context.applicationContext)
+
+        val req = object : JsonObjectRequest(
+            Request.Method.DELETE,
+            url,
+            null,
+            { resp ->
+                onSuccess(resp.optBoolean("ok", false))
+            },
+            { err ->
+                onError(Exception(err.toString()))
+            }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    suspend fun deleteEarningWithCreditsIfNoReceivedSuspend(
+        context: Context,
+        earningId: Long
+    ): Boolean = suspendCancellableCoroutine { cont ->
+        deleteEarningWithCreditsIfNoReceived(
+            context = context,
+            earningId = earningId,
+            onSuccess = { ok -> if (cont.isActive) cont.resume(ok, onCancellation = null) },
+            onError = { e -> if (cont.isActive) cont.resumeWithException(e) }
+        )
+    }
 
 
 

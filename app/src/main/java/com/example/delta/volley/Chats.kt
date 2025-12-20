@@ -2,6 +2,7 @@
 package com.example.delta.volley
 
 import android.content.Context
+import android.util.Log
 import com.android.volley.Request
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
@@ -39,9 +40,11 @@ class Chats {
                         val o = arr.getJSONObject(i)
                         list += ChatManagerDto(
                             userId = o.optLong("userId"),
-                            firstName = o.optString("firstName", null),
-                            lastName = o.optString("lastName", null),
-                            mobileNumber = o.optString("mobileNumber", null)
+                            firstName = o.optString("firstName", ""),
+                            lastName = o.optString("lastName", ""),
+                            mobileNumber = o.optString("mobileNumber", ""),
+                            buildingId = if (o.isNull("buildingId")) null else o.optLong("buildingId"),
+                            buildingName = o.optString("buildingName", "")
                         )
                     }
                     onSuccess(list)
@@ -91,7 +94,7 @@ class Chats {
         }
 
         val req = object : JsonObjectRequest(
-            Request.Method.POST,
+            Method.POST,
             url,
             body,
             { o ->
@@ -101,9 +104,15 @@ class Chats {
                     val dto = ChatThreadDto(
                         threadId = o.optLong("threadId"),
                         buildingId = if (o.isNull("buildingId")) null else o.optLong("buildingId"),
+                        buildingName = o.optString("buildingName", ""),
                         participants = listOf(u, m),
                         lastMessageAt = o.optLong("lastMessageAt", 0L).takeIf { it != 0L },
-                        lastMessageText = o.optString("lastMessageText", null)
+                        lastMessageText = o.optString("lastMessageText", ""),
+                        partnerId = managerId,
+                        partnerFirstName = o.optString("partnerFirstName", ""),
+                        partnerLastName = o.optString("partnerLastName", ""),
+                        partnerMobileNumber = o.optString("partnerMobileNumber", ""),
+                        unreadCount = 0
                     )
                     onSuccess(dto)
                 } catch (e: Exception) {
@@ -151,16 +160,22 @@ class Chats {
                     val list = mutableListOf<ChatThreadDto>()
                     for (i in 0 until arr.length()) {
                         val o = arr.getJSONObject(i)
-                        val u = o.optLong("userId")
-                        val m = o.optLong("managerId")
+                        val partner = o.optJSONObject("partner")
                         list += ChatThreadDto(
                             threadId = o.optLong("threadId"),
                             buildingId = if (o.isNull("buildingId")) null else o.optLong("buildingId"),
-                            participants = listOf(u, m),
+                            participants = emptyList(),
+                            buildingName = o.optString("buildingName", ""),
                             lastMessageAt = o.optLong("lastMessageAt", 0L).takeIf { it != 0L },
-                            lastMessageText = o.optString("lastMessageText", null)
+                            lastMessageText = o.optString("lastMessageText", ""),
+                            partnerId = partner?.optLong("userId"),
+                            partnerFirstName = partner?.optString("firstName", ""),
+                            partnerLastName = partner?.optString("lastName", ""),
+                            partnerMobileNumber = partner?.optString("mobileNumber", ""),
+                            unreadCount = o.optInt("unreadCount", 0)
                         )
                     }
+                    Log.d("messageList", list.toString())
                     onSuccess(list)
                 } catch (e: Exception) {
                     onError(e)
@@ -171,6 +186,7 @@ class Chats {
 
         queue.add(req)
     }
+
 
     suspend fun fetchThreadsForUserSuspend(
         context: Context,
@@ -208,7 +224,7 @@ class Chats {
             }
 
             val req = object : JsonObjectRequest(
-                Request.Method.POST,
+                Method.POST,
                 url,
                 body,
                 { resp ->
@@ -217,12 +233,19 @@ class Chats {
                         val thread = ChatThreadDto(
                             threadId = t.optLong("threadId"),
                             buildingId = if (t.isNull("buildingId")) null else t.optLong("buildingId"),
+                            buildingName = t.optString("buildingName", null),
                             participants = (t.optJSONArray("participants") ?: JSONArray()).let { arr ->
                                 List(arr.length()) { i -> arr.getLong(i) }
                             },
                             lastMessageAt = null,
-                            lastMessageText = null
+                            lastMessageText = null,
+                            partnerId = null,
+                            partnerFirstName = null,
+                            partnerLastName = null,
+                            partnerMobileNumber = null,
+                            unreadCount = 0
                         )
+
 
                         val msgsJson = resp.optJSONArray("messages") ?: JSONArray()
                         val messages = mutableListOf<ChatMessageDto>()
@@ -319,7 +342,7 @@ class Chats {
         }
 
         val req = object : JsonObjectRequest(
-            Request.Method.POST,
+            Method.POST,
             "$baseUrl/messages",
             body,
             { o ->
@@ -361,10 +384,10 @@ class Chats {
         }
 
         val req = object : JsonObjectRequest(
-            Request.Method.POST,
+            Method.POST,
             url,
             body,
-            { _ -> onSuccess() },
+            { _ -> onSuccess()  },
             { err -> onError(Exception(err.toString())) }
         ) {}
 
@@ -382,7 +405,7 @@ class Chats {
         val queue = Volley.newRequestQueue(context.applicationContext)
 
         val req = object : JsonObjectRequest(
-            Request.Method.GET,
+            Method.GET,
             url,
             null,
             { o ->

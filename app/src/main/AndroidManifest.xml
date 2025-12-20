@@ -46,6 +46,7 @@
 
         <activity
             android:name=".CapitalActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false"
             >
 
@@ -58,11 +59,13 @@
         </activity>
         <activity
             android:name=".UserProfileActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false"
             >
         </activity>
         <activity
             android:name=".EarningDetailActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false"
             >
         </activity>
@@ -72,7 +75,14 @@
             >
         </activity>
         <activity
+            android:name=".ChatBoxActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false"
+            >
+        </activity>
+        <activity
             android:name=".LoginPage"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -82,40 +92,50 @@
         </activity>
         <activity
             android:name=".AuthActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".OwnerDetailsActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
         <activity
             android:name=".TenantsDetailsActivity"
             android:exported="false" />
         <activity android:name=".BuildingFormActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true" />
 
         <activity
             android:name=".UserManagementActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".ChargeCalculationActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".BuildingProfileActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".CostActivity"
             android:exported="false" />
         <activity
             android:name=".BuildingTypeActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".BuildingUsageActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".EarningsActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
         <activity
             android:name=".GuestActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
     </application>
 

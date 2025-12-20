@@ -23,51 +23,10 @@ class Owner {
         val userRole: Building.UserRole,
         val ownerUnits: List<OwnersUnitsCrossRef>,
         val units: List<Units>,
-        val userRoleCrossRefs: List<UserRoleBuildingUnitCrossRef>
+        val userRoleCrossRefs: List<UserRoleBuildingUnitCrossRef>,
+        val isManager: Boolean,
+        val isResident: Boolean
     )
-
-
-//    fun fetchOwnersForBuilding(
-//        context: Context,
-//        buildingId: Long,
-//        onSuccess: (List<Owners>) -> Unit,
-//        onError: (Exception) -> Unit
-//    ) {
-//        val queue = Volley.newRequestQueue(context)
-//        val url = "$baseUrl?buildingId=$buildingId"
-//
-//        val request = JsonArrayRequest(
-//            Request.Method.GET,
-//            url,
-//            null,
-//            { response ->
-//                try {
-//                    val list = mutableListOf<Owners>()
-//                    for (i in 0 until response.length()) {
-//                        val obj = response.getJSONObject(i)
-//                        val item = Owners(
-//                            ownerId = obj.optLong("ownerId", 0L),
-//                            firstName = obj.optString("firstName", ""),
-//                            lastName = obj.optString("lastName", ""),
-//                            email = obj.optString("email", ""),
-//                            phoneNumber = obj.optString("phoneNumber", ""),
-//                            mobileNumber = obj.optString("mobileNumber", ""),
-//                            address = obj.optString("address", ""),
-//                            birthday = obj.optString("birthday", "")
-//                        )
-//                        list += item
-//                    }
-//                    onSuccess(list)
-//                } catch (e: Exception) {
-//                    onError(e)
-//                }
-//            },
-//            { error ->
-//                onError(formatVolleyError("OwnerApi(fetchOwnersForBuilding)", error))
-//            }
-//        )
-//        queue.add(request)
-//    }
 
     fun updateOwnerUnitsAndRoleVolley(
         context: Context,
@@ -75,6 +34,7 @@ class Owner {
         userId: Long,
         units: List<OwnersUnitsCrossRef>,
         isManager: Boolean,
+        isResident: Boolean,
         onSuccess: () -> Unit,
         onError: (Exception) -> Unit
     ) {
@@ -82,6 +42,8 @@ class Owner {
 
         val body = JSONObject().apply {
             put("isManager", isManager)
+            put("isResident", isResident)
+
             val arr = JSONArray()
             units.forEach { u ->
                 arr.put(
@@ -176,11 +138,12 @@ class Owner {
     fun deleteOwner(
         context: Context,
         ownerId: Long,
+        buildingId: Long,
         onSuccess: () -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl/$ownerId"
+        val url = "$baseUrl/$ownerId?buildingId=$buildingId"
 
         val request = JsonObjectRequest(
             Request.Method.DELETE,
@@ -191,6 +154,7 @@ class Owner {
         )
         queue.add(request)
     }
+
 
     fun getOwnerWithUnits(
         context: Context,
@@ -253,7 +217,6 @@ class Owner {
 
     private fun parseOwnerWithUnits(obj: JSONObject): OwnerWithUnitsDto {
 
-        // -------- USER --------
         val userObj = obj.optJSONObject("user")
         val user = if (userObj != null) {
             User(
@@ -276,10 +239,7 @@ class Owner {
             )
         } else null
 
-
-        // -------- ROLE --------
         val roleNameStr = obj.optString("roleName", "PROPERTY_OWNER")
-
         val roleEnum = try {
             Roles.valueOf(roleNameStr)
         } catch (_: Exception) {
@@ -291,8 +251,6 @@ class Owner {
             roles = roleEnum
         )
 
-
-        // -------- OWNER UNITS --------
         val ownerUnitsArr = obj.optJSONArray("ownerUnits") ?: JSONArray()
         val ownerUnits = mutableListOf<OwnersUnitsCrossRef>()
         for (i in 0 until ownerUnitsArr.length()) {
@@ -304,7 +262,6 @@ class Owner {
             )
         }
 
-        // -------- UNITS --------
         val unitsArr = obj.optJSONArray("units") ?: JSONArray()
         val units = mutableListOf<Units>()
         for (i in 0 until unitsArr.length()) {
@@ -321,8 +278,6 @@ class Owner {
             )
         }
 
-
-        // -------- USER ROLE CROSS REFS --------
         val userRoleCrossArr = obj.optJSONArray("userRoleCrossRefs") ?: JSONArray()
         val userRoleCrossRefs = mutableListOf<UserRoleBuildingUnitCrossRef>()
         for (i in 0 until userRoleCrossArr.length()) {
@@ -335,14 +290,20 @@ class Owner {
             )
         }
 
+        val isManager = obj.optBoolean("isManager", roleEnum == Roles.BUILDING_MANAGER)
+        val isResident = obj.optBoolean("isResident", false)
+
         return OwnerWithUnitsDto(
             user = user,
             userRole = userRole,
             ownerUnits = ownerUnits,
             units = units,
-            userRoleCrossRefs = userRoleCrossRefs
+            userRoleCrossRefs = userRoleCrossRefs,
+            isManager = isManager,
+            isResident = isResident
         )
     }
+
 
 
     private fun formatVolleyError(

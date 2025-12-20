@@ -79,9 +79,13 @@ class FileManagement {
             val name = getCellStringValue(row.getCell(0))
             if (name.isEmpty()) break
 
+            val phone = getCellStringValue(row.getCell(1))
+            val mobileNumber = getCellStringValue(row.getCell(2))
             val postCode = getCellStringValue(row.getCell(3))
             val street = getCellStringValue(row.getCell(4))
             val floorCount = getCellStringValue(row.getCell(5))
+            val unitCount = getCellStringValue(row.getCell(6))
+            val parkingCount = getCellStringValue(row.getCell(7))
 
             val building = Buildings(
                 buildingId = 0,
@@ -95,7 +99,12 @@ class FileManagement {
                 buildingUsageId = 1,
                 fund = 0.0,
                 userId = userId,
-                floorCount = floorCount.toInt()
+                floorCount = floorCount.toInt(),
+                unitCount = unitCount.toInt(),
+                parkingCount = parkingCount.toInt(),
+                phone = phone,
+                mobileNumber = mobileNumber
+
             )
             list.add(building)
         }
@@ -151,7 +160,8 @@ class FileManagement {
                     excelUnitsNumber = getCellStringValue(row.getCell(6)),
                     excelBuildingName = getCellStringValue(row.getCell(7)),
                     excelIsManager = getCellStringValue(row.getCell(8)).toBoolean(),
-                    excelDang = getCellStringValue(row.getCell(9)).toDoubleOrNull() ?: 0.0
+                    excelDang = getCellStringValue(row.getCell(9)).toDoubleOrNull() ?: 0.0,
+                    excelIsResident = getCellStringValue(row.getCell(10)).toBoolean(),
                 )
             )
         }
@@ -178,7 +188,8 @@ class FileManagement {
                     endDate = getCellStringValue(row.getCell(7)),
                     status = getCellStringValue(row.getCell(8)),
                     excelUnitsNumber = getCellStringValue(row.getCell(9)),
-                    excelBuildingName = getCellStringValue(row.getCell(10))
+                    excelBuildingName = getCellStringValue(row.getCell(10)),
+                    excelPostCode = getCellStringValue(row.getCell(11)),
                 )
             )
         }

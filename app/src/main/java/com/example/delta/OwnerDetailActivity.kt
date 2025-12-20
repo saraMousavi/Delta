@@ -94,6 +94,34 @@ import com.example.delta.volley.Fund
 import com.example.delta.volley.Owner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import kotlin.math.roundToLong
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import com.example.delta.init.FinancialReport
+import com.example.delta.init.FinancialReportRow
+import java.io.File
+
 
 class OwnerDetailsActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -182,6 +210,7 @@ fun OwnerDetailsScreen(
         }
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OwnerOverviewTab(
     ownerId: Long,
@@ -204,7 +233,10 @@ fun OwnerOverviewTab(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var units by remember { mutableStateOf<List<Units>>(emptyList()) }
     var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
-
+    var isManager by remember { mutableStateOf(false) }
+    var isResident by remember { mutableStateOf(false) }
+    var showUnitsSheet by remember { mutableStateOf(false) }
+    val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
     val dangSums = remember(ownersWithUnits) {
         ownersWithUnits
             .flatMap { it.ownerUnits }
@@ -212,7 +244,6 @@ fun OwnerOverviewTab(
             .mapValues { (_, list) -> list.sumOf { it.dang } }
     }
 
-    val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
 
     val selectableUnits by remember(units, dangSums) {
         derivedStateOf {
@@ -265,6 +296,10 @@ fun OwnerOverviewTab(
                 ownerUnits = dto.ownerUnits
                 unitsForOwner = dto.units
                 editableOwnerUnits = dto.ownerUnits
+                isManager = dto.isManager
+                isResident = dto.isResident
+                selectedUnitsList.clear()
+                selectedUnitsList.addAll(dto.ownerUnits)
                 isLoading = false
             },
             onError = { e ->
@@ -281,32 +316,39 @@ fun OwnerOverviewTab(
         modifier = modifier
             .fillMaxSize()
             .padding(8.dp)
+            .imePadding()
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .fillMaxSize()
                 .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             shape = RoundedCornerShape(8.dp),
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
             LazyColumn(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 contentPadding = PaddingValues(bottom = 72.dp),
                 state = listState
             ) {
                 if (user == null && isLoading) {
                     item {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(vertical = 24.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = context.getString(R.string.loading),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(vertical = 24.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = context.getString(R.string.loading),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else if (user == null && errorMessage != null) {
                     item {
@@ -355,17 +397,37 @@ fun OwnerOverviewTab(
                             user!!.address?.ifBlank { context.getString(R.string.no) }.toString()
                         )
                     }
-                    item { Spacer(Modifier.height(16.dp)) }
+                    item { Spacer(Modifier.height(8.dp)) }
 
-                    item {
-                        Text(
-                            text = context.getString(R.string.units),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
+
 
                     if (!isEditing) {
+                        item {
+                            OwnerInfoRow(
+                                Icons.Default.Badge,
+                                "${context.getString(R.string.manager_teams)}: " +
+                                        if (isManager) context.getString(R.string.yes) else context.getString(R.string.none)
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+
+                        item {
+                            OwnerInfoRow(
+                                Icons.Default.Home,
+                                "${context.getString(R.string.owner_is_resident)}: " +
+                                        if (isResident) context.getString(R.string.yes) else context.getString(R.string.none)
+                            )
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
+
+
+                        item {
+                            Text(
+                                text = context.getString(R.string.units),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
                         items(ownerUnits, key = { "own-${it.unitId}" }) { unitCross ->
                             val thisUnit = unitsForOwner.firstOrNull { it.unitId == unitCross.unitId }
                             if (thisUnit != null) {
@@ -376,13 +438,12 @@ fun OwnerOverviewTab(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "${context.getString(R.string.unit_number)}: ${thisUnit.unitNumber}, " +
-                                                "${context.getString(R.string.area)}: ${thisUnit.area}",
+                                        text = "${context.getString(R.string.unit_number)}: ${thisUnit.unitNumber} ",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "${context.getString(R.string.dang)}: ${unitCross.dang}",
+                                        text = "${context.getString(R.string.area)}: ${thisUnit.area}",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -390,160 +451,52 @@ fun OwnerOverviewTab(
                             }
                         }
                     } else {
-                        items(editableOwnerUnits, key = { "editable-${it.unitId}" }) { unitCross ->
-                            val thisUnit = unitsForOwner.firstOrNull { it.unitId == unitCross.unitId }
-                            val unitLabel = if (thisUnit != null) {
-                                "${context.getString(R.string.unit_number)}: ${thisUnit.unitNumber}, " +
-                                        "${context.getString(R.string.area)}: ${thisUnit.area}"
-                            } else {
-                                "${context.getString(R.string.unit_number)}: ${unitCross.unitId}"
-                            }
-
-                            var dangText by remember(unitCross.unitId) {
-                                mutableStateOf(unitCross.dang.toString())
-                            }
-
+                        item {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = unitLabel,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    OutlinedTextField(
-                                        value = dangText,
-                                        onValueChange = { newValue ->
-                                            dangText = newValue
-                                            val asDouble = newValue.toDoubleOrNull() ?: 0.0
-                                            editableOwnerUnits = editableOwnerUnits.map {
-                                                if (it.unitId == unitCross.unitId) {
-                                                    it.copy(dang = asDouble)
-                                                } else it
-                                            }
-                                        },
-                                        label = { Text(context.getString(R.string.dang)) },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        editableOwnerUnits =
-                                            editableOwnerUnits.filterNot { it.unitId == unitCross.unitId }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remove unit"
-                                    )
-                                }
+                                Checkbox(
+                                    checked = isManager,
+                                    onCheckedChange = { isManager = it }
+                                )
+                                Text(context.getString(R.string.manager), style = MaterialTheme.typography.bodyLarge)
                             }
                         }
 
                         item {
-                            Text(
-                                text = context.getString(R.string.select_new_units_and_dang),
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            )
-                        }
-
-                        items(selectableUnits, key = { it.unitId }) { unit ->
-                            val usedDang = dangSums[unit.unitId] ?: 0.0
-                            val maxAllowed = (6.0 - usedDang).coerceAtLeast(0.0)
-
-                            val currentSelection =
-                                selectedUnitsList.firstOrNull { it.unitId == unit.unitId }
-
-                            var localDangText by remember(
-                                unit.unitId,
-                                currentSelection?.dang
-                            ) {
-                                mutableStateOf(
-                                    currentSelection?.dang
-                                        ?.takeIf { it > 0.0 }
-                                        ?.toString()
-                                        ?: ""
-                                )
-                            }
-
-                            val isChecked = currentSelection != null
-
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Checkbox(
-                                    checked = isChecked,
-                                    onCheckedChange = { checked ->
-                                        if (checked) {
-                                            val v = localDangText.toDoubleOrNull() ?: 0.0
-                                            val clamped = v.coerceIn(0.0, maxAllowed)
-                                            selectedUnitsList.removeAll { it.unitId == unit.unitId }
-                                            selectedUnitsList.add(
-                                                OwnersUnitsCrossRef(
-                                                    ownerId = 0L,
-                                                    unitId = unit.unitId,
-                                                    dang = clamped
-                                                )
-                                            )
-                                        } else {
-                                            selectedUnitsList.removeAll { it.unitId == unit.unitId }
-                                        }
-                                    }
+                                    checked = isResident,
+                                    onCheckedChange = { isResident = it }
                                 )
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-//                                    Text(
-//                                        text = "${context.getString(R.string.area)}: ${unit.area}",
-//                                        style = MaterialTheme.typography.bodyLarge
-//                                    )
-
-                                    if (isChecked) {
-                                        OutlinedTextField(
-                                            value = localDangText,
-                                            onValueChange = { text ->
-                                                localDangText = text
-
-                                                val v = text.toDoubleOrNull()
-                                                if (v != null) {
-                                                    val clamped = v.coerceIn(0.0, maxAllowed)
-                                                    val idx = selectedUnitsList.indexOfFirst {
-                                                        it.unitId == unit.unitId
-                                                    }
-                                                    if (idx >= 0) {
-                                                        selectedUnitsList[idx] =
-                                                            selectedUnitsList[idx].copy(dang = clamped)
-                                                    }
-                                                }
-                                            },
-                                            label = {
-                                                Text(
-                                                    text = context.getString(R.string.dang),
-                                                    style = MaterialTheme.typography.bodyLarge
-                                                )
-                                            },
-                                            textStyle = MaterialTheme.typography.bodyLarge,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
+                                Text(context.getString(R.string.owner_is_resident), style = MaterialTheme.typography.bodyLarge)
                             }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+
+                        item { Spacer(Modifier.height(16.dp)) }
+                        item {
+                            Text(
+                                text = context.getString(R.string.units),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+
+                        item {
+                            OutlinedButton(
+                                onClick = { showUnitsSheet = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "انتخاب واحدها (${selectedUnitsList.size})",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                 }
@@ -554,6 +507,7 @@ fun OwnerOverviewTab(
             hostState = snackBarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
 
         if (isEditing) {
             Row(
@@ -579,15 +533,31 @@ fun OwnerOverviewTab(
                 }
                 Button(
                     onClick = {
-                        val payloadUnits = editableOwnerUnits.filter { it.unitId > 0 }
+                        val payloadUnits = selectedUnitsList.filter { it.unitId > 0 }
+                        val updatedOwnerUnits = payloadUnits.toList()
+
                         ownerApi.updateOwnerUnitsAndRoleVolley(
                             context = context,
                             buildingId = buildingId,
                             userId = ownerId,
-                            units = payloadUnits,
-                            isManager = false,
+                            units = updatedOwnerUnits,
+                            isManager = isManager,
+                            isResident = isResident,
                             onSuccess = {
-                                ownerUnits = payloadUnits
+                                ownerUnits = updatedOwnerUnits
+
+                                unitsForOwner = units.filter { u ->
+                                    updatedOwnerUnits.any { it.unitId == u.unitId }
+                                }
+
+                                ownersWithUnits = ownersWithUnits.map { dto ->
+                                    if (dto.user?.userId == ownerId) {
+                                        dto.copy(ownerUnits = updatedOwnerUnits)
+                                    } else {
+                                        dto
+                                    }
+                                }
+
                                 isEditing = false
                                 coroutineScope.launch {
                                     snackBarHostState.showSnackbar(
@@ -606,11 +576,99 @@ fun OwnerOverviewTab(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = context.getString(R.string.edit))
+                    Text(
+                        text = context.getString(R.string.edit),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+            }
+
+
+        }
+
+        if (showUnitsSheet) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+            ModalBottomSheet(
+                onDismissRequest = { showUnitsSheet = false },
+                sheetState = sheetState
+            ) {
+
+                val scrollState = rememberLazyListState()
+
+                Text(
+                    text = context.getString(R.string.select_units),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    state = scrollState
+                ) {
+                    items(selectableUnits + unitsForOwner) { unit ->
+
+                        val isSelected =
+                            selectedUnitsList.any { it.unitId == unit.unitId }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        if (!isSelected) {
+                                            selectedUnitsList.add(
+                                                OwnersUnitsCrossRef(
+                                                    ownerId = ownerId,
+                                                    unitId = unit.unitId,
+                                                    dang = 6.0
+                                                )
+                                            )
+                                        }
+                                    } else {
+                                        selectedUnitsList.removeAll { it.unitId == unit.unitId }
+                                    }
+                                }
+                            )
+
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text(
+                                    text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "${context.getString(R.string.area)}: ${unit.area}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        HorizontalDivider()
+                    }
+                }
+
+                Button(
+                    onClick = { showUnitsSheet = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         }
-
         if (!isEditing) {
             FloatingActionButton(
                 onClick = { isEditing = true },
@@ -656,7 +714,6 @@ fun OwnerTextField(label: Int, value: String, onValueChange: (String) -> Unit) {
         modifier = Modifier.fillMaxWidth()
     )
 }
-
 @Composable
 fun OwnerFinancialsTab(
     ownerId: Long,
@@ -682,30 +739,19 @@ fun OwnerFinancialsTab(
             unitId = null,
             onSuccess = { costs, debts ->
                 allCosts = costs
-                allDebts = debts
+                allDebts = debts.filter { it.description != "رهن" && it.description != "اجاره" }
                 isLoading = false
             },
             onError = { e ->
-                errorMessage = e.message ?: "خطا در دریافت اطلاعات"
+                errorMessage = e.message ?: context.getString(R.string.failed)
                 isLoading = false
-                coroutineScope.launch {
-                    snackBarHostState.showSnackbar(errorMessage ?: "")
-                }
+                coroutineScope.launch { snackBarHostState.showSnackbar(errorMessage ?: "") }
             }
         )
     }
 
-    val unpaidDebts = remember(allDebts) {
-        allDebts.filter { it.paymentFlag == false }
-    }
-    Log.d("unpaidDebts", unpaidDebts.toString())
-    val payments = remember(allDebts) {
-        allDebts.filter { it.paymentFlag == true }
-    }
-    Log.d("payments", payments.toString())
-//    val chargeDebts = remember(allDebts) {
-//        allDebts.filter { it.paymentFlag == false && it.description == "شارژ" }
-//    }
+    val unpaidDebts = remember(allDebts) { allDebts.filter { it.paymentFlag == false } }
+    val payments = remember(allDebts) { allDebts.filter { it.paymentFlag == true } }
 
     val transactions = remember(allDebts, payments) {
         (unpaidDebts.map {
@@ -718,232 +764,398 @@ fun OwnerFinancialsTab(
     var filterType by rememberSaveable { mutableStateOf(FilterType.ALL) }
     val filteredTransactions = remember(transactions, filterType) {
         when (filterType) {
-            FilterType.ALL -> transactions
-            FilterType.DEBT -> transactions.filter { it.transactionType == FilterType.DEBT }
-            FilterType.PAYMENT -> transactions.filter { it.transactionType == FilterType.PAYMENT }
+            FilterType.ALL -> transactions.sortedBy { it.date }
+            FilterType.DEBT -> transactions.filter { it.transactionType == FilterType.DEBT }.sortedBy { it.date }
+            FilterType.PAYMENT -> transactions.filter { it.transactionType == FilterType.PAYMENT }.sortedBy { it.date }
         }
     }
 
-    val totalDebtAmount = allDebts.sumOf { it.amount }
-    val totalPaymentAmount = payments.sumOf { it.amount }
-    var showTransferDialog by remember { mutableStateOf(false) }
+    val totalDebtAmount = unpaidDebts.sumOf { it.amount }.toLong()
+    val totalPaymentAmount = payments.sumOf { it.amount }.toLong()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = modifier.fillMaxSize()) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "${context.getString(R.string.debt)}: ${
-                                formatNumberWithCommas(
-                                    totalDebtAmount
-                                )
-                            } ${context.getString(R.string.toman)}"
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "${context.getString(R.string.payments)}: ${
-                                formatNumberWithCommas(
-                                    totalPaymentAmount
-                                )
-                            } ${context.getString(R.string.toman)}"
-                        )
-                    }
-                }
-            }
+    var showReportDialog by remember { mutableStateOf(false) }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                FilterType.entries.forEach { type ->
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        bottomBar = {
+            Surface(tonalElevation = 2.dp) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Button(
-                        onClick = { filterType = type },
-                        colors = if (filterType == type)
-                            ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary)
-                        else
-                            ButtonDefaults.buttonColors(MaterialTheme.colorScheme.surfaceVariant)
+                        onClick = { showReportDialog = true },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = type.getDisplayName(context),
-                            color = if (filterType == type)
-                                Color(context.getColor(R.color.white))
-                            else
-                                Color(context.getColor(R.color.grey)),
+                            text = context.getString(R.string.financial_report),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
-
-            when {
-                isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                errorMessage != null -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = errorMessage ?: "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-
-                filteredTransactions.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = context.getString(R.string.no_transactions_recorded),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredTransactions) { item ->
-                            TransactionRow(
-                                transaction = item,
-                                onPayment = {
-                                    coroutineScope.launch {
-                                        val debt = allDebts.find { it.debtId == item.id }
-                                        if (debt == null) {
-                                            snackBarHostState.showSnackbar(
-                                                context.getString(R.string.failed)
-                                            )
-                                            return@launch
-                                        }
-
-                                        val updatedDebt = debt.copy(paymentFlag = true)
-
-                                        sharedViewModel.updateDebtOnServer(context, updatedDebt)
-
-                                        allDebts = allDebts.map {
-                                            if (it.debtId == debt.debtId) updatedDebt else it
-                                        }
-
-                                        val cost = allCosts.find { it.costId == debt.costId }
-                                        val fundType = cost?.fundType ?: FundType.OPERATIONAL
-
-                                        Fund().increaseBalanceFundOnServer(
-                                            context = context,
-                                            buildingId = debt.buildingId,
-                                            amount = debt.amount,
-                                            fundType = fundType,
-                                            onSuccess = {
-                                                coroutineScope.launch {
-                                                    sharedViewModel.loadFundBalances(context, debt.buildingId)
-                                                    snackBarHostState.showSnackbar(
-                                                        context.getString(
-                                                            if (fundType == FundType.OPERATIONAL)
-                                                                R.string.success_pay_tooperational_fund
-                                                            else
-                                                                R.string.success_pay_tocapital_fund
-                                                        )
-                                                    )
-                                                }
-                                            },
-                                            onError = {
-                                                coroutineScope.launch {
-                                                    snackBarHostState.showSnackbar(
-                                                        context.getString(R.string.failed)
-                                                    )
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
+        }
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "${context.getString(R.string.debt)}: ${
+                                    formatNumberWithCommas(totalDebtAmount)
+                                } ${context.getString(R.string.toman)}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "${context.getString(R.string.payments)}: ${
+                                    formatNumberWithCommas(totalPaymentAmount)
+                                } ${context.getString(R.string.toman)}",
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         }
                     }
                 }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    FilterType.entries.forEach { type ->
+                        Button(
+                            onClick = { filterType = type },
+                            colors = if (filterType == type)
+                                ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary)
+                            else
+                                ButtonDefaults.buttonColors(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Text(
+                                text = type.getDisplayName(context),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (filterType == type)
+                                    androidx.compose.ui.graphics.Color(context.getColor(R.color.white))
+                                else
+                                    androidx.compose.ui.graphics.Color(context.getColor(R.color.grey))
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                when {
+                    isLoading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    errorMessage != null -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = errorMessage ?: "",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    filteredTransactions.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = context.getString(R.string.no_transactions_recorded),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredTransactions.size) { idx ->
+                                val item = filteredTransactions[idx]
+                                TransactionRow(
+                                    transaction = item,
+                                    onPayment = {
+                                        coroutineScope.launch {
+                                            val debt = allDebts.find { it.debtId == item.id }
+                                            if (debt == null) {
+                                                snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                return@launch
+                                            }
+
+                                            val updatedDebt = debt.copy(paymentFlag = true)
+                                            sharedViewModel.updateDebtOnServer(context, updatedDebt)
+
+                                            allDebts = allDebts.map {
+                                                if (it.debtId == debt.debtId) updatedDebt else it
+                                            }
+
+                                            val cost = allCosts.find { it.costId == debt.costId }
+                                            val fundType = cost?.fundType ?: FundType.OPERATIONAL
+
+                                            Fund().increaseBalanceFundOnServer(
+                                                context = context,
+                                                buildingId = debt.buildingId,
+                                                amount = debt.amount,
+                                                fundType = fundType,
+                                                onSuccess = {
+                                                    coroutineScope.launch {
+                                                        sharedViewModel.loadFundBalances(context, debt.buildingId)
+                                                        snackBarHostState.showSnackbar(
+                                                            context.getString(
+                                                                if (fundType == FundType.OPERATIONAL)
+                                                                    R.string.success_pay_tooperational_fund
+                                                                else
+                                                                    R.string.success_pay_tocapital_fund
+                                                            )
+                                                        )
+                                                    }
+                                                },
+                                                onError = {
+                                                    coroutineScope.launch {
+                                                        snackBarHostState.showSnackbar(context.getString(R.string.failed))
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showReportDialog) {
+                FinancialReportDialog(
+                    sharedViewModel = sharedViewModel,
+                    onDismiss = { showReportDialog = false },
+                    onSubmit = { startDate, endDate ->
+                        showReportDialog = false
+                        sharedViewModel.requestOwnerFinancialReportPdf(
+                            sharedViewModel = sharedViewModel,
+                            context = context,
+                            ownerId = ownerId,
+                            startDate = startDate,
+                            endDate = endDate,
+                            onError = { e ->
+                                coroutineScope.launch {
+                                    snackBarHostState.showSnackbar(e.message ?: context.getString(R.string.failed))
+                                }
+                            }
+                        )
+                    }
+                )
             }
         }
+    }
+}
+private enum class ReportRangeType { THREE_MONTHS, SIX_MONTHS, ONE_YEAR, CUSTOM }
+@Composable
+fun FinancialReportDialog(
+    sharedViewModel: SharedViewModel,
+    onDismiss: () -> Unit,
+    onSubmit: (startDate: String, endDate: String) -> Unit
+) {
+    val context = LocalContext.current
 
-//        Column(
-//            modifier = Modifier
-//                .align(Alignment.BottomEnd)
-//                .background(Color(context.getColor(R.color.white)))
-//                .padding(16.dp)
-//                .fillMaxWidth(),
-//            verticalArrangement = Arrangement.spacedBy(12.dp),
-//            horizontalAlignment = Alignment.CenterHorizontally
-//        ) {
-//            Button(
-//                onClick = {
-//                    coroutineScope.launch {
-//                        if (chargeDebts.isEmpty()) {
-//                            snackBarHostState.showSnackbar(
-//                                context.getString(R.string.no_transactions_recorded)
-//                            )
-//                        } else {
-//                            showTransferDialog = true
-//                        }
-//                    }
-//                },
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(56.dp),
-//                shape = RoundedCornerShape(28.dp),
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-//                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-//                )
-//            ) {
-//                Text(
-//                    text = context.getString(R.string.transfer_debt_to_tenant),
-//                    style = MaterialTheme.typography.bodyLarge
-//                )
-//            }
-//        }
+    var rangeType by remember { mutableStateOf(ReportRangeType.THREE_MONTHS) }
+    var startDate by remember { mutableStateOf("") }
+    var endDate by remember { mutableStateOf("") }
+
+    var activeDateField by remember { mutableStateOf<DateField?>(null) }
+
+    val focusManager = LocalFocusManager.current
+
+    val isConfirmEnabled = remember(rangeType, startDate, endDate) {
+        rangeType != ReportRangeType.CUSTOM || (startDate.isNotBlank() && endDate.isNotBlank())
     }
 
-//    if (showTransferDialog) {
-//        Log.d("chargeDebts", chargeDebts.toString())
-//        TransferDebtsDialog(
-//            debts = chargeDebts,
-//            onConfirm = {
-//                showTransferDialog = false
-//            },
-//            onDismiss = {
-//                showTransferDialog = false
-//            }
-//        )
-//    }
+    AlertDialog(
+        onDismissRequest = {},
+        title = {
+            Text(
+                text = context.getString(R.string.get_report),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                RangeRadioRow(
+                    selected = rangeType == ReportRangeType.THREE_MONTHS,
+                    label = context.getString(R.string.three_months),
+                    onClick = { rangeType = ReportRangeType.THREE_MONTHS }
+                )
+                RangeRadioRow(
+                    selected = rangeType == ReportRangeType.SIX_MONTHS,
+                    label = context.getString(R.string.six_months),
+                    onClick = { rangeType = ReportRangeType.SIX_MONTHS }
+                )
+                RangeRadioRow(
+                    selected = rangeType == ReportRangeType.ONE_YEAR,
+                    label = context.getString(R.string.one_year),
+                    onClick = { rangeType = ReportRangeType.ONE_YEAR }
+                )
+                RangeRadioRow(
+                    selected = rangeType == ReportRangeType.CUSTOM,
+                    label = context.getString(R.string.date_range),
+                    onClick = { rangeType = ReportRangeType.CUSTOM }
+                )
+
+                if (rangeType == ReportRangeType.CUSTOM) {
+                    OutlinedTextField(
+                        value = startDate,
+                        onValueChange = { },
+                        label = { RequiredLabel(context.getString(R.string.start_date)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        readOnly = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    activeDateField = DateField.START
+                                }
+                            ) {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = endDate,
+                        onValueChange = { },
+                        label = { RequiredLabel(context.getString(R.string.end_date)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        readOnly = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    activeDateField = DateField.END
+                                }
+                            ) {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = isConfirmEnabled,
+                onClick = {
+                    val (s, e) = when (rangeType) {
+                        ReportRangeType.THREE_MONTHS -> sharedViewModel.calcRelativePersianRange(monthsBack = 3)
+                        ReportRangeType.SIX_MONTHS -> sharedViewModel.calcRelativePersianRange(monthsBack = 6)
+                        ReportRangeType.ONE_YEAR -> sharedViewModel.calcRelativePersianRange(monthsBack = 12)
+                        ReportRangeType.CUSTOM -> startDate to endDate
+                    }
+                    if (s.isBlank() || e.isBlank()) return@Button
+                    onSubmit(s, e)
+                }
+            ) {
+                Text(
+                    text = context.getString(R.string.get_report),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = context.getString(R.string.cancel),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    )
+
+    if (activeDateField != null) {
+        PersianDatePickerDialogContent(
+            sharedViewModel = sharedViewModel,
+            onDateSelected = { selected ->
+                when (activeDateField) {
+                    DateField.START -> startDate = selected
+                    DateField.END -> endDate = selected
+                    null -> {}
+                }
+                activeDateField = null
+            },
+            onDismiss = { activeDateField = null }
+        )
+    }
 }
+
+@Composable
+private fun RangeRadioRow(selected: Boolean, label: String, onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.width(8.dp))
+        Text(text = label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+
+fun openPdfFromBytes(context: Context, pdfBytes: ByteArray, fileName: String) {
+    val safeName = fileName
+        .replace("/", "-")
+        .replace("\\", "-")
+        .replace(":", "-")
+        .replace("*", "-")
+        .replace("?", "-")
+        .replace("\"", "-")
+        .replace("<", "-")
+        .replace(">", "-")
+        .replace("|", "-")
+        .replace(Regex("\\s+"), "_")
+
+    val dir = File(context.cacheDir, "reports").apply { mkdirs() }
+    val file = File(dir, safeName)
+    file.writeBytes(pdfBytes)
+
+    val uri: Uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+    )
+
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/pdf")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.open_pdf)))
+}
+
 
 @Composable
 fun TransferDebtsDialog(
@@ -1051,7 +1263,7 @@ fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${formatNumberWithCommas(transaction.amount)} ${context.getString(R.string.toman)}",
+                    text = "${formatNumberWithCommas(transaction.amount.roundToLong())} ${context.getString(R.string.toman)}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(context.getColor(R.color.Green))
                 )

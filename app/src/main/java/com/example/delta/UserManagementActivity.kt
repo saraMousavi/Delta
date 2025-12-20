@@ -42,10 +42,8 @@ import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.RoleAuthorizationObjectFieldCrossRef
 import com.example.delta.data.entity.User
-import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.enums.Gender
 import com.example.delta.enums.PermissionLevel
-import com.example.delta.enums.Roles
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
@@ -349,8 +347,7 @@ fun UserManagementScreen(viewModel: SharedViewModel) {
                             }
                         }
                     } else {
-                        // Index is invalid for this composition; we skip rendering TabRow.
-                        // LaunchedEffect بالا در فریم بعدی index را درست می‌کند.
+
                     }
                 }
             } else {
@@ -509,7 +506,8 @@ fun AssignRoleDialog(
             val name = role.roleName.lowercase()
             name == "مالک" ||
                     name == "ساکن" ||
-                    name.contains("مهمان")
+                    name.contains("مهمان" ) ||
+                    name.contains("سیستم" )
         }
     }
 
@@ -789,11 +787,13 @@ fun AssignRoleDialog(
                             isCreatingRole = true
                             newRoleError = null
                             try {
+                                Log.d("newRoleNameTitle", newRoleNameTitle.toString())
                                 val createdRole = RoleApi().createRoleSuspend(
                                     context = context,
                                     name = newRoleNameTitle.trim(),
                                     description = ""
                                 )
+                                Log.d("createdRole", createdRole.toString())
                                 localRoles = localRoles + createdRole
                                 selectedRole = createdRole
                                 isNewlyCreatedRole = true
@@ -1034,8 +1034,7 @@ fun AuthorizationObjectsList(
             text = {
                 Text(
                     text = context.getString(
-                        R.string.confirm_delete_field_message,
-                        f.field.name
+                        R.string.confirm_delete_field_message
                     ),
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -1117,12 +1116,12 @@ fun ExpandableAuthObjectCard(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit")
-                }
-                IconButton(onClick = onDeleteObject) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Object")
-                }
+//                IconButton(onClick = onEdit) {
+//                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+//                }
+//                IconButton(onClick = onDeleteObject) {
+//                    Icon(Icons.Default.Delete, contentDescription = "Delete Object")
+//                }
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand"
@@ -1167,9 +1166,9 @@ fun FieldPermissionRow(
             modifier = Modifier.width(120.dp),
             textAlign = TextAlign.Center
         )
-        IconButton(onClick = onDeleteField) {
-            Icon(Icons.Default.Delete, contentDescription = "Delete Field")
-        }
+//        IconButton(onClick = onDeleteField) {
+//            Icon(Icons.Default.Delete, contentDescription = "Delete Field")
+//        }
     }
 }
 

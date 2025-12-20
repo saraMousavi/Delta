@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "cf335a2a6ab2eba80c856cc0be362926",
+    "identityHash": "fa5cbddbfb53045681fb2b1b4333d9ff",
     "entities": [
       {
         "tableName": "building_types",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingTypeId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_type_name` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingTypeId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_type_name` TEXT NOT NULL, `for_building_id` INTEGER, `added_before_create_building` INTEGER)",
         "fields": [
           {
             "fieldPath": "buildingTypeId",
@@ -19,6 +19,16 @@
             "columnName": "building_type_name",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "forBuildingId",
+            "columnName": "for_building_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "addedBeforeCreateBuilding",
+            "columnName": "added_before_create_building",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -30,7 +40,7 @@
       },
       {
         "tableName": "building_usages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingUsageId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_usage_name` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingUsageId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `building_usage_name` TEXT NOT NULL, `for_building_id` INTEGER, `added_before_create_building` INTEGER)",
         "fields": [
           {
             "fieldPath": "buildingUsageId",
@@ -43,6 +53,16 @@
             "columnName": "building_usage_name",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "forBuildingId",
+            "columnName": "for_building_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "addedBeforeCreateBuilding",
+            "columnName": "added_before_create_building",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -54,7 +74,7 @@
       },
       {
         "tableName": "buildings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER NOT NULL, `complexId` INTEGER, `name` TEXT NOT NULL, `serialNumber` TEXT NOT NULL, `floorCount` INTEGER NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, `userId` INTEGER NOT NULL, PRIMARY KEY(`buildingId`), FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`complexId`) REFERENCES `city_complex`(`complexId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`buildingId` INTEGER NOT NULL, `complexId` INTEGER, `name` TEXT NOT NULL, `serialNumber` TEXT NOT NULL, `phone` TEXT NOT NULL, `mobileNumber` TEXT NOT NULL, `floorCount` INTEGER NOT NULL, `unitCount` INTEGER NOT NULL, `parkingCount` INTEGER NOT NULL, `postCode` TEXT NOT NULL, `street` TEXT NOT NULL, `province` TEXT NOT NULL, `state` TEXT NOT NULL, `buildingTypeId` INTEGER, `buildingUsageId` INTEGER, `fund` REAL NOT NULL, `userId` INTEGER NOT NULL, PRIMARY KEY(`buildingId`), FOREIGN KEY(`buildingTypeId`) REFERENCES `building_types`(`buildingTypeId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`buildingUsageId`) REFERENCES `building_usages`(`buildingUsageId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`userId`) REFERENCES `user`(`userId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`complexId`) REFERENCES `city_complex`(`complexId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "buildingId",
@@ -80,8 +100,32 @@
             "notNull": true
           },
           {
+            "fieldPath": "phone",
+            "columnName": "phone",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mobileNumber",
+            "columnName": "mobileNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "floorCount",
             "columnName": "floorCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unitCount",
+            "columnName": "unitCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parkingCount",
+            "columnName": "parkingCount",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -234,7 +278,7 @@
       },
       {
         "tableName": "costs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `cost_name` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_type` INTEGER NOT NULL, `charge_flag` INTEGER, `capital_flag` INTEGER, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`costId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER, `for_building_id` INTEGER, `added_before_create_building` INTEGER, `cost_name` TEXT NOT NULL, `document_number` TEXT NOT NULL, `cost_for` TEXT NOT NULL, `temp_amount` REAL NOT NULL, `period` TEXT NOT NULL, `calculate_method` TEXT NOT NULL, `payment_level` TEXT NOT NULL, `responsible` TEXT NOT NULL, `fund_type` INTEGER NOT NULL, `charge_flag` INTEGER, `capital_flag` INTEGER, `invoice_flag` INTEGER, `due_date` TEXT NOT NULL, FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`buildingId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "costId",
@@ -248,8 +292,30 @@
             "affinity": "INTEGER"
           },
           {
+            "fieldPath": "forBuildingId",
+            "columnName": "for_building_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "addedBeforeCreateBuilding",
+            "columnName": "added_before_create_building",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "costName",
             "columnName": "cost_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentNumber",
+            "columnName": "document_number",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "costFor",
+            "columnName": "cost_for",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -333,7 +399,7 @@
       },
       {
         "tableName": "earnings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`earningsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `invoice_flag` INTEGER, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`earningsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `earnings_name` TEXT NOT NULL, `buildingId` INTEGER, `amount` REAL NOT NULL, `period` TEXT NOT NULL, `invoice_flag` INTEGER, `start_date` TEXT NOT NULL, `end_date` TEXT NOT NULL, `for_building_id` INTEGER, `added_before_create_building` INTEGER)",
         "fields": [
           {
             "fieldPath": "earningsId",
@@ -380,6 +446,16 @@
             "columnName": "end_date",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "forBuildingId",
+            "columnName": "for_building_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "addedBeforeCreateBuilding",
+            "columnName": "added_before_create_building",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -1275,7 +1351,7 @@
       },
       {
         "tableName": "phonebook_entries",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entryId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `name` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `type` TEXT NOT NULL, `unitId` INTEGER, `isEmergency` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entryId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `buildingId` INTEGER NOT NULL, `name` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `type` TEXT NOT NULL, `unitId` INTEGER, `isEmergency` INTEGER NOT NULL, `roleLabel` TEXT)",
         "fields": [
           {
             "fieldPath": "entryId",
@@ -1317,6 +1393,11 @@
             "columnName": "isEmergency",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "roleLabel",
+            "columnName": "roleLabel",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -1510,7 +1591,7 @@
       },
       {
         "tableName": "city_complex",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`complexId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `address` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`complexId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `address` TEXT, `for_building_id` INTEGER, `added_before_create_building` INTEGER)",
         "fields": [
           {
             "fieldPath": "complexId",
@@ -1528,6 +1609,16 @@
             "fieldPath": "address",
             "columnName": "address",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "forBuildingId",
+            "columnName": "for_building_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "addedBeforeCreateBuilding",
+            "columnName": "added_before_create_building",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -1762,7 +1853,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cf335a2a6ab2eba80c856cc0be362926')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fa5cbddbfb53045681fb2b1b4333d9ff')"
     ]
   }
 }

@@ -15,6 +15,7 @@ import android.graphics.Paint
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.delta.R
 import com.example.delta.data.dao.AuthorizationDao.FieldWithPermission
 import com.example.delta.data.entity.AuthorizationObject
 import com.example.delta.data.entity.BuildingTypes
@@ -22,7 +23,6 @@ import com.example.delta.data.entity.BuildingUsages
 import com.example.delta.data.entity.BuildingWithCounts
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.ChatManagerDto
-import com.example.delta.data.entity.ChatMessageDto
 import com.example.delta.data.entity.ChatThreadDto
 import com.example.delta.data.entity.ChatUiState
 import com.example.delta.data.entity.CityComplexes
@@ -44,8 +44,12 @@ import com.example.delta.enums.Period
 import com.example.delta.enums.Roles
 import com.example.delta.enums.UserType
 import com.example.delta.enums.UserWithUnit
+import com.example.delta.init.AuthUtils
+import com.example.delta.init.DashboardFinancialReport
+import com.example.delta.init.FinancialReport
+import com.example.delta.init.FinancialReportRow
 import com.example.delta.init.Preference
-import com.example.delta.volley.AuthObjectFieldCross
+import com.example.delta.openPdfFromBytes
 import com.example.delta.volley.Building
 import com.example.delta.volley.BuildingFile
 import com.example.delta.volley.BuildingType
@@ -72,6 +76,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -83,6 +88,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.min
 
 
@@ -100,6 +107,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     // State for Building Info Page
     var name by mutableStateOf("")
     var phone by mutableStateOf("")
+    var mobileNumber by mutableStateOf("")
     var email by mutableStateOf("")
     var postCode by mutableStateOf("")
     var street by mutableStateOf("")
@@ -107,6 +115,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     var state by mutableStateOf("")
     var serialNumber by mutableStateOf("")
     var floorCount by mutableStateOf("")
+    var unitCount by mutableStateOf("")
+    var parkingCount by mutableStateOf("")
     var sameArea by mutableStateOf(false)
     var numberOfUnits by mutableStateOf("")
     var unitArea by mutableStateOf("")
@@ -194,6 +204,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun loadFundBalances(context: Context, buildingId: Long) {
         viewModelScope.launch {
+            Log.d("buildingIddd", buildingId.toString())
             Fund().getFundsForBuilding(
                 context = context,
                 buildingId = buildingId,
@@ -494,9 +505,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 //
 //
 
-    fun getFixedEarnings(context: Context): Flow<List<Earnings>> =
+    fun getFixedEarnings(context: Context,
+                         buildingId: Long? = null): Flow<List<Earnings>> =
         flow {
-            val list = Earning().getAllMenuEarningsSuspend(context)
+            val list = Earning().getAllMenuEarningsSuspend(context, buildingId)
             emit(list)
         }.flowOn(Dispatchers.IO)
 
@@ -521,17 +533,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    var rolePermissions by mutableStateOf<List<FieldWithPermission>>(emptyList())
+        private set
 
-
-    // SharedViewModel (or wherever you keep this)
-    fun getAuthorizationDetailsForUser(
-        context: Context,
-        userId: Long
-    ): Flow<List<FieldWithPermission>> = flow {
-        val api = AuthObjectFieldCross()
-        val list = api.fetchFieldsWithPermissionsForUserSuspend(context, userId)
-        emit(list)
-    }.flowOn(Dispatchers.IO)
+    fun loadRolePermissions(context: Context, roleId: Long) {
+        viewModelScope.launch {
+            AuthUtils().getAuthorizationDetailsForRole(context, roleId).collectLatest { list ->
+                rolePermissions = list
+            }
+        }
+    }
 
 
     fun appendGlobalCost(cost: Costs) {
@@ -602,6 +613,112 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         return isYearMonthGE(currentYearMonth, startYM) && isYearMonthLE(currentYearMonth, endYM)
     }
 
+    fun gregorianToPersian(dateStr: String): String {
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val date = sdf.parse(dateStr) ?: return dateStr
+
+            val pc = PersianCalendar()
+            pc.timeInMillis = date.time
+
+            val y = pc.persianYear
+            val m = pc.persianMonth + 1
+            val d = pc.persianDay
+
+            toPersianDigits(
+                "$y/${m.toString().padStart(2, '0')}/${d.toString().padStart(2, '0')}"
+            )
+        } catch (e: Exception) {
+            dateStr
+        }
+    }
+
+    fun toPersianDigits(input: String): String {
+        val en = charArrayOf('0','1','2','3','4','5','6','7','8','9')
+        val fa = charArrayOf('۰','۱','۲','۳','۴','۵','۶','۷','۸','۹')
+        val map = en.zip(fa).toMap()
+        return buildString {
+            input.forEach { append(map[it] ?: it) }
+        }
+    }
+
+
+    fun calcRelativePersianRange(monthsBack: Int): Pair<String, String> {
+        val endCal = PersianCalendar()
+        val startCal = PersianCalendar().apply { timeInMillis = endCal.timeInMillis }
+
+        val y = startCal.persianYear
+        val m = startCal.persianMonth
+        val d = startCal.persianDay
+
+        val totalMonths = (y * 12 + (m - 1)) - monthsBack
+        val newYear = totalMonths / 12
+        val newMonth = (totalMonths % 12) + 1
+
+        val fixedDay = d.coerceAtMost(29)
+
+        startCal.setPersianDate(newYear, newMonth, fixedDay)
+
+        fun format(cal: PersianCalendar): String {
+            val mm = cal.persianMonth.toString().padStart(2, '0')
+            val dd = cal.persianDay.toString().padStart(2, '0')
+            return "${cal.persianYear}/$mm/$dd"
+        }
+
+        return format(startCal) to format(endCal)
+    }
+
+    fun updateCost(
+        context: Context,
+        cost: Costs,
+        onSuccess: () -> Unit = {},
+        onError: (Exception) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                Cost().updateCostSuspend(context, cost)
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
+
+    private val _canDeleteEarning = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val canDeleteEarning = _canDeleteEarning
+
+    fun checkEarningDeletable(context: Context, earningId: Long) {
+        viewModelScope.launch {
+            try {
+                val hasReceived = earningsApi.hasReceivedCreditsSuspend(context, earningId, onSuccess = {}, onError = {})
+                _canDeleteEarning.value = !hasReceived
+            } catch (_: Exception) {
+                _canDeleteEarning.value = false
+            }
+        }
+    }
+
+
+    fun deleteEarningSafe(context: Context, earningId: Long, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val ok = earningsApi.deleteEarningWithCreditsIfNoReceivedSuspend(context, earningId)
+                onDone(ok)
+            } catch (_: Exception) {
+                onDone(false)
+            }
+        }
+    }
+
+    fun deleteCost(context: Context, costId: Long, onDone: (Boolean) -> Unit) {
+        costApi.deleteCost(
+            context = context,
+            costId = costId,
+            onSuccess = { ok -> onDone(ok) },
+            onError = { _ -> onDone(false) }
+        )
+    }
+
 
     fun insertDebtForCapitalCost(
         context: Context,
@@ -643,6 +760,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     fun insertCostToServer(
+        buildingId:Long,
         context: Context,
         costs: List<Costs>,
         debts: List<Debts>,
@@ -698,6 +816,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             serialNumber = serialNumber,
             complexId = selectedCityComplexes?.complexId,
             floorCount = floorCount.toIntOrNull() ?: 0,
+            unitCount = unitCount.toIntOrNull() ?: 0,
+            parkingCount = parkingCount.toIntOrNull() ?: 0,
+            phone = phone,
+            mobileNumber = mobileNumber
         )
         val buildingHelper = Building()
 
@@ -827,7 +949,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     fun getNextYearSameDaySafe(inputDate: PersianCalendar?): PersianCalendar {
         val date = inputDate ?: PersianCalendar() // Use current date if null
         val newYear = date.persianYear + 1
-        val newMonth = date.persianMonth// zero-based month
+        val newMonth = date.persianMonth + 1// zero-based month
 
         // Temporary PersianCalendar for max days in the same month next year
         val temp = PersianCalendar().apply {
@@ -893,7 +1015,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
     private val _invoiceResult = MutableStateFlow<Boolean?>(null)
     val invoiceResult: StateFlow<Boolean?> = _invoiceResult
 
-    fun invoiceCostIfEnoughFund(context: Context, cost: Costs) {
+    fun invoiceCostIfEnoughFund(context: Context, cost: Costs, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             val buildingId = cost.buildingId ?: return@launch
             val fundType = cost.fundType
@@ -905,11 +1027,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     buildingId = buildingId,
                     onSuccess = { funds ->
                         val fund = funds.firstOrNull { it.fundType == fundType }
+                        Log.d("fundfund", fund.toString())
                         if (fund == null) {
                             _invoiceResult.value = false
                             return@getFundsForBuilding
                         }
-
+                        Log.d("fund.balance", fund.balance.toString())
+                        Log.d("costAmount", costAmount.toString())
                         if (fund.balance >= costAmount) {
 
                             Cost().markCostInvoicedOnServer(
@@ -928,22 +1052,27 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                                         fundType = fundType,
                                         onSuccess = { ok2 ->
                                             _invoiceResult.value = ok2
+                                            onSuccess()
                                         },
-                                        onError = {
+                                        onError = { e->
                                             _invoiceResult.value = false
+                                            onError(e.toString())
                                         }
                                     )
                                 },
-                                onError = {
+                                onError = { e->
                                     _invoiceResult.value = false
+                                    onError(e.toString())
                                 }
                             )
                         } else {
                             _invoiceResult.value = false
+                            onError("false")
                         }
                     },
-                    onError = {
+                    onError = { e->
                         _invoiceResult.value = false
+                        onError(e.toString())
                     }
                 )
             } catch (_: Exception) {
@@ -1074,11 +1203,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     context = context,
                     buildingId = buildingId,
                     amount = totalAmount,
-                    fundType = FundType.OPERATIONAL,
+                    fundType = FundType.CAPITAL,
                     onSuccess = {
                         loadFundBalances(context, buildingId)
                     },
-                    onError = {}
+                    onError = { e ->
+                        Log.e("increaseBalanceError", e.message.toString())
+                    }
                 )
 
                 _creditsForEarning.value = updatedCredits
@@ -1093,6 +1224,54 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    private val earningsApi = Earning()
+
+    private val _canOpenEarningUpdateDialog = MutableStateFlow(false)
+    val canOpenEarningUpdateDialog: StateFlow<Boolean> = _canOpenEarningUpdateDialog
+
+    private val _earningUpdateBlocked = MutableStateFlow(false)
+    val earningUpdateBlocked: StateFlow<Boolean> = _earningUpdateBlocked
+
+    suspend fun canUpdateEarning(context: Context, earningId: Long): Boolean {
+        return try {
+            earningsApi.hasReceivedCreditsSuspend(
+                context = context,
+                earningId = earningId,
+                onSuccess = { hasReceived ->
+                    Log.d("hasReceived1", hasReceived.toString())
+                    hasReceived
+                            },
+                onError = { throw it }
+            ).let { hasReceived ->
+                Log.d("hasReceived", hasReceived.toString())
+                !hasReceived
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+
+
+    fun updateEarningWithCredits(
+        context: Context,
+        earning: Earnings,
+        onSuccess: (JSONObject) -> Unit = {},
+        onError: (Exception) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val resp = earningsApi.updateEarningWithCreditsSuspend(
+                    context = context,
+                    earning = earning
+                )
+                onSuccess(resp)
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
 
 
 
@@ -1110,7 +1289,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
 
     fun loadOverviewData(
-        context: Context
+        context: Context,
+        buildingId: Long? = null
     ) {
         viewModelScope.launch {
             try {
@@ -1122,7 +1302,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 val t = async { typeApi.fetchAllSuspend(context) }
                 val u = async { usageApi.fetchAllSuspend(context) }
                 val c = async { cityApi.fetchAllSuspend(context) }
-                val g = async { costApi.fetchGlobalCostsSuspend(context) }
+                val g = async { costApi.fetchGlobalCostsSuspend(context, buildingId) }
 
                 _buildingTypes.value = t.await()
                 _buildingUsages.value = u.await()
@@ -1370,6 +1550,20 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
         _costsList.value = newList
     }
 
+    fun updateBuildingType(newList: List<BuildingTypes>) {
+        _buildingTypes.value = newList
+    }
+
+
+    fun updateBuildingUsage(newList: List<BuildingUsages>) {
+        _buildingUsages.value = newList
+    }
+
+
+    fun updateCityComplex(newList: List<CityComplexes>) {
+        _cityComplexes.value = newList
+    }
+
     private val _chargesCost = MutableStateFlow<List<Costs>>(emptyList())
     val chargesCost: StateFlow<List<Costs>> = _chargesCost.asStateFlow()
 
@@ -1420,16 +1614,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun insertCityComplexRemote(
         context: Context,
-        name: String,
-        address: String?,
+        cityComplexes: CityComplexes,
         onInserted: (CityComplexes?) -> Unit
     ) {
         viewModelScope.launch {
             try {
                 val created = cityComplexApi.createCityComplexSuspend(
                     context = context,
-                    name = name,
-                    address = address
+                    cityComplex = cityComplexes
                 )
                 if (created != null) {
                     _cityComplexes.value = _cityComplexes.value + created
@@ -1445,14 +1637,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun insertBuildingTypeRemote(
         context: Context,
-        name: String,
+        buildingTypes: BuildingTypes,
         onInserted: (BuildingTypes?) -> Unit
     ) {
         viewModelScope.launch {
             try {
                 val created = buildingTypeApi.createBuildingTypeSuspend(
                     context = context,
-                    name = name
+                    buildingTypes = buildingTypes
                 )
                 if (created != null) {
                     _buildingTypes.value = _buildingTypes.value + created
@@ -1467,14 +1659,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
 
     fun insertBuildingUsageRemote(
         context: Context,
-        name: String,
+        buildingUsages: BuildingUsages,
         onInserted: (BuildingUsages?) -> Unit
     ) {
         viewModelScope.launch {
             try {
                 val created = buildingUsageApi.createBuildingUsageSuspend(
                     context = context,
-                    name = name
+                    buildingUsages = buildingUsages
                 )
                 if (created != null) {
                     _buildingUsages.value = _buildingUsages.value + created
@@ -1634,7 +1826,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             if (userId == 0L) return@launch
             try {
                 val list = chatApi.fetchManagersForUserSuspend(ctx, userId)
-                _chatManagers.value = list
+                _chatManagers.value = list.filter { it.buildingName != "null" }.distinctBy { it.mobileNumber }
             } catch (_: Exception) {
             }
         }
@@ -1669,14 +1861,22 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 val userId = Preference().getUserId(context)
                 if (userId == 0L) return@launch
 
+                val initialThread = ChatThreadDto(
+                    threadId = 0L,
+                    buildingId = buildingId,
+                    buildingName = null,
+                    participants = listOf(userId, managerUserId),
+                    lastMessageAt = null,
+                    lastMessageText = null,
+                    partnerId = managerUserId,
+                    partnerFirstName = managerName,
+                    partnerLastName = null,
+                    partnerMobileNumber = null,
+                    unreadCount = 0
+                )
+
                 _currentChat.value = ChatUiState(
-                    thread = ChatThreadDto(
-                        threadId = 0L,
-                        buildingId = buildingId,
-                        participants = listOf(userId, managerUserId),
-                        lastMessageAt = null,
-                        lastMessageText = null
-                    ),
+                    thread = initialThread,
                     peerId = managerUserId,
                     peerName = managerName,
                     messages = emptyList(),
@@ -1691,10 +1891,18 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     buildingId = buildingId
                 )
 
-                _currentThreadId.value = result.thread.threadId
+                val resolvedThread = result.thread.copy(
+                    partnerId = managerUserId,
+                    partnerFirstName = managerName,
+                    partnerLastName = null,
+                    partnerMobileNumber = null,
+                    unreadCount = 0
+                )
+
+                _currentThreadId.value = resolvedThread.threadId
 
                 _currentChat.value = ChatUiState(
-                    thread = result.thread,
+                    thread = resolvedThread,
                     peerId = managerUserId,
                     peerName = managerName,
                     messages = result.messages.sortedBy { it.createdAt },
@@ -1704,7 +1912,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: Exception) {
                 _currentChat.value = _currentChat.value?.copy(
                     isLoading = false,
-                    error = e.message ?: "Chat error"
+                    error = e.message ?: "پیغام خطا"
                 )
             }
         }
@@ -1787,7 +1995,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                 )
             } catch (e: Exception) {
                 _currentChat.value = _currentChat.value?.copy(
-                    error = e.message ?: "Send failed"
+                    error = e.message ?: "ارسال ناموفق"
                 )
             }
         }
@@ -1800,12 +2008,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
             val userId = Preference().getUserId(ctx)
             if (userId == 0L) return@launch
             try {
-                chatApi.markThreadRead(ctx, tid, userId, {}, {})
+                chatApi.markThreadRead(ctx, tid, userId, {
+
+                }, {})
                 refreshUnreadCount()
+                loadChatThreadsForCurrentUser(asManager = false)
             } catch (_: Exception) {
             }
         }
     }
+
 
     fun refreshUnreadCount() {
         viewModelScope.launch {
@@ -1817,12 +2029,149 @@ class SharedViewModel(application: Application) : AndroidViewModel(application) 
                     context = ctx,
                     userId = userId,
                     asManager = false,
-                    onSuccess = { count -> _chatUnreadCount.value = count },
+                    onSuccess = { count -> _chatUnreadCount.value = count
+                                Log.d("count", count.toString())},
                     onError = { _chatUnreadCount.value = 0 }
                 )
             } catch (_: Exception) {
             }
         }
     }
+
+    fun openExistingThread(context: Context, thread: ChatThreadDto) {
+        viewModelScope.launch {
+            try {
+                val peerId = thread.partnerId ?: thread.participants.firstOrNull { it != Preference().getUserId(context) } ?: 0L
+                _currentChat.value = ChatUiState(
+                    thread = thread,
+                    peerId = peerId,
+                    peerName = thread.partnerFullName,
+                    messages = emptyList(),
+                    isLoading = true,
+                    error = null
+                )
+                _currentThreadId.value = thread.threadId
+
+                val msgs = chatApi.fetchMessagesSuspend(
+                    context = context,
+                    threadId = thread.threadId,
+                    sinceTs = null
+                )
+
+                _currentChat.value = _currentChat.value?.copy(
+                    messages = msgs.sortedBy { it.createdAt },
+                    isLoading = false,
+                    error = null
+                )
+
+                markCurrentThreadRead()
+            } catch (e: Exception) {
+                _currentChat.value = _currentChat.value?.copy(
+                    isLoading = false,
+                    error = e.message ?: "پیغام خطا"
+                )
+            }
+        }
+    }
+
+    fun closeCurrentChat() {
+        _currentChat.value = null
+        _currentThreadId.value = null
+    }
+
+    fun requestOwnerFinancialReportPdf(
+        sharedViewModel: SharedViewModel,
+        context: Context,
+        ownerId: Long,
+        startDate: String,
+        endDate: String,
+        onError: (Exception) -> Unit
+    ) {
+        Cost().fetchOwnerFinancialReportRows(
+            context = context,
+            ownerId = ownerId,
+            startDate = startDate,
+            endDate = endDate,
+            onSuccess = { rows ->
+                val title = context.getString(R.string.financial_report)
+
+                val bytes = FinancialReport().buildFinancialReportPdfBytes(
+                    sharedViewModel = sharedViewModel,
+                    context = context,
+                    title = title,
+                    startDate = startDate,
+                    endDate = endDate,
+                    rows = rows.map {
+                        FinancialReportRow(
+                            description = it.description,
+                            dueDate = it.dueDate,
+                            paymentDate = it.paymentDate,
+                            isPaid = it.isPaid,
+                            amount = it.amount
+                        )
+                    }.map {
+                        FinancialReportRow(
+                            description = it.description,
+                            dueDate = it.dueDate,
+                            paymentDate = it.paymentDate,
+                            isPaid = it.isPaid,
+                            amount = it.amount
+                        )
+                    }
+                )
+
+                openPdfFromBytes(
+                    context = context,
+                    pdfBytes = bytes,
+                    fileName = "financial_report_${startDate}_$endDate.pdf"
+                )
+            },
+            onError = onError
+        )
+    }
+
+    fun requestDashboardFinancialReportPdf(
+        context: Context,
+        buildingId: Long,
+        startDate: String,
+        endDate: String,
+        buildingName: String,
+        onError: (Exception) -> Unit
+    ) {
+        Reports().getDashboardPrintData(
+            context = context,
+            buildingId = buildingId,
+            startDate = startDate,
+            endDate = endDate,
+            onSuccess = { data ->
+                try {
+                    Log.d("PRINT_DBG", "debts=${data.debtList.size} pays=${data.paysList.size} costs=${data.costs.size} units=${data.units.size}")
+
+                    val bytes = DashboardFinancialReport().buildDashboardPdfBytes(
+                        context = context,
+                        startDate = startDate,
+                        endDate = endDate,
+                        units = data.units,
+                        debts = data.debtList,
+                        pays = data.paysList,
+                        buildingName = buildingName
+                    )
+
+                    val safeFileName = "dashboard_financial_report_${startDate}_$endDate.pdf"
+                        .replace("/", "-")
+
+                    openPdfFromBytes(
+                        context = context,
+                        pdfBytes = bytes,
+                        fileName = safeFileName
+                    )
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            onError = onError
+        )
+    }
+
 
 }

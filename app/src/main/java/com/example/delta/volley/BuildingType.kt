@@ -56,7 +56,9 @@ class BuildingType(
                         val obj = response.getJSONObject(i)
                         val item = BuildingTypes(
                             buildingTypeId = obj.optLong("buildingTypeId"),
-                            buildingTypeName = obj.optString("name", "")
+                            buildingTypeName = obj.optString("name", ""),
+                            forBuildingId = obj.optLong("forBuildingId", 0L),
+                            addedBeforeCreateBuilding = obj.optBoolean("addedBeforeCreateBuilding", false)
                         )
                         list += item
                     }
@@ -87,14 +89,16 @@ class BuildingType(
 
     fun createBuildingType(
         context: Context,
-        name: String,
+        buildingTypes: BuildingTypes,
         onSuccess: (BuildingTypes) -> Unit,
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
 
         val body = JSONObject().apply {
-            put("name", name)
+            put("name", buildingTypes.buildingTypeName)
+            put("addedBeforeCreateBuilding", buildingTypes.addedBeforeCreateBuilding)
+            put("forBuildingId", buildingTypes.forBuildingId)
         }
 
         val request = JsonObjectRequest(
@@ -110,7 +114,9 @@ class BuildingType(
                     }
                     val item = BuildingTypes(
                         buildingTypeId = id,
-                        buildingTypeName = name
+                        buildingTypeName = buildingTypes.buildingTypeName,
+                        addedBeforeCreateBuilding = buildingTypes.addedBeforeCreateBuilding,
+                        forBuildingId = buildingTypes.forBuildingId
                     )
                     onSuccess(item)
                 } catch (e: Exception) {
@@ -125,11 +131,11 @@ class BuildingType(
 
     suspend fun createBuildingTypeSuspend(
         context: Context,
-        name: String
+        buildingTypes: BuildingTypes
     ): BuildingTypes? = suspendCancellableCoroutine { cont ->
         createBuildingType(
             context = context,
-            name = name,
+            buildingTypes = buildingTypes,
             onSuccess = { item ->
                 if (cont.isActive) cont.resume(item)
             },

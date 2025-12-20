@@ -3,21 +3,21 @@ package com.example.delta.volley
 import android.content.Context
 import android.util.Log
 import com.android.volley.Request
+import com.android.volley.VolleyError
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.enums.Gender
-import com.example.delta.enums.Roles
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.coroutines.resumeWithException
+import java.nio.charset.Charset
 
 class Users {
 
-    private val BASE_URL = "http://217.144.107.231:3000"
+    private val baseUrl = "http://217.144.107.231:3000"
 
     data class UserRoleBuilding(
         val user: User,
@@ -34,31 +34,106 @@ class Users {
         val roles: List<Role>
     )
 
-    fun sendWelcomeSms(
-        context: Context,
-        phone: String,
-        roleName: String,
-        link: String,
-        template: String
-    ) {
-        val url = "${BASE_URL}/sms/welcome"
+    private fun VolleyError.bodyString(): String {
+        val data = this.networkResponse?.data ?: return ""
+        return try {
+            String(data, Charset.forName(this.networkResponse?.headers?.get("Content-Type")?.let { "UTF-8" } ?: "UTF-8"))
+        } catch (_: Exception) {
+            String(data)
+        }
+    }
 
-        val payload = JSONObject().apply {
-            put("phone", phone)
-            put("roleName", roleName)
-            put("link", link)
-            put("template", template)
+    private fun parseErrorMessage(raw: String): String {
+        if (raw.isBlank()) return ""
+        return try {
+            val obj = JSONObject(raw)
+            when {
+                obj.has("message") -> obj.optString("message", "")
+                obj.has("errmsg") -> obj.optString("errmsg", "")
+                else -> raw
+            }
+        } catch (_: Exception) {
+            raw
+        }
+    }
+
+    fun changePassword(
+        context: Context,
+        mobileNumber: String,
+        oldPassword: String,
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onInvalidOldPassword: () -> Unit,
+        onNotFound: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/user/change-password"
+        val body = JSONObject().apply {
+            put("mobileNumber", mobileNumber.trim())
+            put("oldPassword", oldPassword)
+            put("newPassword", newPassword)
         }
 
         val req = JsonObjectRequest(
             Request.Method.POST,
             url,
-            payload,
-            { },
-            { }
+            body,
+            { _ -> onSuccess() },
+            { err ->
+                val status = err.networkResponse?.statusCode
+                val rawBody = err.bodyString()
+                val msg = parseErrorMessage(rawBody).ifBlank { err.message.orEmpty() }
+
+                when {
+                    status == 404 -> onNotFound()
+                    status == 401 -> onInvalidOldPassword()
+
+                    msg.contains("Invalid old password", ignoreCase = true) ||
+                            msg.contains("invalid old password", ignoreCase = true) -> onInvalidOldPassword()
+
+                    msg.contains("User not found", ignoreCase = true) ||
+                            msg.contains("not found", ignoreCase = true) -> onNotFound()
+
+                    else -> onError(Exception(msg.ifBlank { "failed" }))
+                }
+            }
         )
+
         Volley.newRequestQueue(context).add(req)
     }
+
+
+    fun sendForgetPassword(
+        context: Context,
+        mobileNumber: String,
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/user/forget-password?mobileNumber=${mobileNumber.trim()}"
+
+        val req = JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { resp ->
+                try {
+                    val ok = resp.optBoolean("ok", false)
+                    when {
+                        ok -> onSuccess()
+                        else -> onError(Exception("Unexpected response"))
+                    }
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                onError(err)
+            }
+        )
+
+        Volley.newRequestQueue(context).add(req)
+    }
+
 
 
     fun insertUser(
@@ -67,7 +142,7 @@ class Users {
         onSuccess: (Long) -> Unit = {},
         onError: (Throwable) -> Unit = {}
     ) {
-        val url = "$BASE_URL/user"
+        val url = "$baseUrl/user"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -90,34 +165,49 @@ class Users {
         queue.add(req)
     }
 
-    private fun normalizeFa(s: String): String =
-        s.trim()
-            .replace('\u200c'.toString(), "")
-            .replace('ي', 'ی')
-            .replace('ك', 'ک')
 
-    private fun roleDisplayToEnum(displayRaw: String): Roles? {
-        val display = normalizeFa(displayRaw)
-        val map = mapOf(
-            normalizeFa("مدیر سیستم") to Roles.ADMIN,
-            normalizeFa("مدیر ساختمان") to Roles.BUILDING_MANAGER,
-            normalizeFa("مالک") to Roles.PROPERTY_OWNER,
-            normalizeFa("ساکن") to Roles.PROPERTY_TENANT,
-            normalizeFa("کاربر مستقل") to Roles.INDEPENDENT_USER
+    fun checkMobileExists(
+        context: Context,
+        mobileNumber: String,
+        onExists: (userId: Long?) -> Unit,
+        onNotExists: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/user/exists?mobileNumber=${mobileNumber.trim()}"
+
+        val queue = Volley.newRequestQueue(context)
+        val req = JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { resp ->
+                try {
+                    val exists = resp.optBoolean("exists", false)
+                    val userId = if (resp.isNull("userId")) null else resp.optLong("userId")
+                    if (exists) onExists(userId) else onNotExists()
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                onError(err)
+            }
         )
-        return map[display]
+        queue.add(req)
     }
+
 
     fun login(
         context: Context,
         mobileNumber: String,
         password: String,
         onSuccess: (LoginResult) -> Unit,
-        onInvalid: () -> Unit,
+        onInvalidMobile: () -> Unit,
+        onInvalidCredential: () -> Unit,
+        onNotFound: () -> Unit,
         onError: (Throwable) -> Unit
     ) {
-        val url = "$BASE_URL/user/login?mobileNumber=$mobileNumber&password=$password"
-        Log.d("Users.login", url)
+        val url = "$baseUrl/user/login?mobileNumber=$mobileNumber&password=$password"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -126,10 +216,6 @@ class Users {
             null,
             { resp ->
                 try {
-                    if (!resp.has("user")) {
-                        onInvalid()
-                        return@JsonObjectRequest
-                    }
 
                     val userJson = resp.getJSONObject("user")
                     val loginUser = LoginUser(
@@ -168,8 +254,12 @@ class Users {
             },
             { err ->
                 val code = err.networkResponse?.statusCode
-                if (code == 401 || code == 403 || code == 404) {
-                    onInvalid()
+                if(code == 404){
+                    onNotFound()
+                } else if (code == 401){
+                    onInvalidCredential()
+                } else if (code == 400){
+                    onInvalidMobile
                 } else {
                     onError(err)
                 }
@@ -187,7 +277,7 @@ class Users {
         onSuccess: (User) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$BASE_URL/user/$userId"
+        val url = "$baseUrl/user/$userId"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -228,7 +318,7 @@ class Users {
         onNotFound: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$BASE_URL/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
+        val url = "$baseUrl/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -292,7 +382,7 @@ class Users {
         onNotFound: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$BASE_URL/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
+        val url = "$baseUrl/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -338,7 +428,7 @@ class Users {
 
     private fun formatVolleyError(
         tag: String,
-        error: com.android.volley.VolleyError
+        error: VolleyError
     ): Exception {
         val resp = error.networkResponse
         return if (resp != null) {
@@ -362,7 +452,7 @@ class Users {
         onSuccess: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$BASE_URL/user/$userId"
+        val url = "$baseUrl/user/$userId"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -385,7 +475,7 @@ class Users {
         user: User? = null,
     ): Role {
         return suspendCancellableCoroutine { cont ->
-            val url = "$BASE_URL/user/assign-role"
+            val url = "$baseUrl/user/assign-role"
             val queue = Volley.newRequestQueue(context)
 
             val body = JSONObject().apply {
@@ -435,49 +525,6 @@ class Users {
 
             queue.add(req)
         }
-    }
-
-
-    fun addUserRole(
-        context: Context,
-        userId: Long,
-        roleId: Long,
-        buildingId: Long,
-        unitId: Long = 0L,
-        onSuccess: (Role) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        val url = "$BASE_URL/user/assign-role"
-        val queue = Volley.newRequestQueue(context)
-
-        val body = JSONObject().apply {
-            put("userId", userId)
-            put("roleId", roleId)
-            put("buildingId", buildingId)
-            put("unitId", unitId)
-        }
-
-        val req = JsonObjectRequest(
-            Request.Method.POST,
-            url,
-            body,
-            { resp ->
-                try {
-                    val r = resp.getJSONObject("role")
-                    val role = Role(
-                        roleId = r.optLong("roleId"),
-                        roleName = r.optString("roleName", ""),
-                        roleDescription = r.optString("roleDescription", "")
-                    )
-                    onSuccess(role)
-                } catch (e: Exception) {
-                    onError(e)
-                }
-            },
-            { err -> onError(Exception(err)) }
-        )
-
-        queue.add(req)
     }
 
 }

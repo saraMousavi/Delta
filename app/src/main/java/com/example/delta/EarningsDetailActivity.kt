@@ -86,6 +86,7 @@ class EarningDetailActivity : ComponentActivity() {
         fun start(context: Context, earningId: Long, buildingId : Long) {
             val intent = Intent(context, EarningDetailActivity::class.java)
             intent.putExtra(EXTRA_EARNING_ID, earningId)
+            Log.d("putbuildingId", buildingId.toString())
             intent.putExtra(EXTRA_BUILDING_ID, buildingId)
             context.startActivity(intent)
         }
@@ -158,7 +159,7 @@ fun EarningDetailScreen(
                                         coroutineScope.launch {
                                             viewModel.loadFundBalances(context, buildingId)
                                             snackbarHostState.showSnackbar(
-                                                context.getString(R.string.transfer_to_operational)
+                                                context.getString(R.string.transfer_to_capital)
                                             )
                                         }
                                     },

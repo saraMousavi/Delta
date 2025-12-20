@@ -20,62 +20,6 @@ import java.util.Locale
 class Fund {
     private val baseUrl = "http://217.144.107.231:3000/funds"
 
-    fun fetchDebts(context: Context, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
-        val queue = Volley.newRequestQueue(context)
-        val request = JsonArrayRequest(
-            Request.Method.GET, baseUrl, null,
-            { response -> onSuccess(response.toString()) },
-            { error -> onError(Exception(error.message)) }
-        )
-        queue.add(request)
-    }
-
-    fun insertFund(context: Context, fundJsonArray: JSONArray, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
-        val queue = Volley.newRequestQueue(context)
-        val payload = JSONObject().apply {
-            put("fund", fundJsonArray)
-        }
-//
-        Log.d("FundVolley", payload.toString())
-        val request = object : JsonObjectRequest(
-            Request.Method.POST, baseUrl, payload,
-            { response ->
-                Log.d("InsertFundServer", "Fund inserted: $response")
-                onSuccess(response.toString())
-            },
-            { error ->
-                onError(formatVolleyError("InsertFundServer", error))
-            }
-        ) {
-            override fun getBodyContentType() = "application/json; charset=utf-8"
-        }
-        queue.add(request)
-    }
-
-    fun updateFund(
-        context: Context,
-        fundId: Long,                    // or Int, depending on your API
-        fundJson: JSONObject,
-        onSuccess: (String) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl/$fundId"
-        Log.d("FundVolley", "Update fund ($fundId) JSON: $fundJson")
-
-        val request = object : JsonObjectRequest(
-            Request.Method.PUT,            // Use PATCH here if your backend expects it
-            url,
-            fundJson,
-            { response -> onSuccess(response.toString()) },
-            { error ->
-                onError(formatVolleyError("InsertFundServer", error)) }
-        ) {
-            override fun getBodyContentType() = "application/json; charset=utf-8"
-        }
-
-        queue.add(request)
-    }
 
     private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {
         val resp = error.networkResponse
@@ -94,21 +38,6 @@ class Fund {
         }
     }
 
-    fun fundToJson(fund: Funds): JSONObject {
-        return JSONObject().apply {
-            put("buildingId", fund.buildingId)
-            put("fundType", fund.fundType)
-            put("balance", fund.balance)
-        }
-    }
-
-    fun <T> listToJsonArray(list: List<T>, toJsonFunc: (T) -> JSONObject): JSONArray {
-        val jsonArray = JSONArray()
-        list.forEach { item ->
-            jsonArray.put(toJsonFunc(item))
-        }
-        return jsonArray
-    }
 
     fun increaseBalanceFundOnServer(
         context: Context,
@@ -122,13 +51,11 @@ class Fund {
         val url = "$baseUrl//increase"
 
         val payload = JSONObject().apply {
-            Log.d("buildingId", buildingId.toString())
-            Log.d("amount", amount.toString())
             put("buildingId", buildingId)
             put("amount", amount)
-            put("fundType", fundType.name) // or value to match server
+            put("fundType", fundType.name)
         }
-
+        Log.d("payload", payload.toString())
         val request = object : JsonObjectRequest(
             Method.POST,
             url,
@@ -158,7 +85,6 @@ class Fund {
     ) {
         val queue = Volley.newRequestQueue(context)
         val url = "$baseUrl//decrease"
-        Log.d("url", url)
         val payload = JSONObject().apply {
             put("buildingId", buildingId)
             put("amount", amount)
@@ -192,8 +118,7 @@ class Fund {
         onError: (Exception) -> Unit
     ) {
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl?buildingId=$buildingId"   // GET /funds?buildingId=...
-
+        val url = "$baseUrl/balance?buildingId=$buildingId"
         val request = object : JsonArrayRequest(
             Method.GET,
             url,
@@ -211,7 +136,6 @@ class Fund {
                         )
                         list += fund
                     }
-                    Log.d("fundList", list.toString())
                     onSuccess(list)
                 } catch (e: Exception) {
                     onError(e)
@@ -237,7 +161,6 @@ class Fund {
     ) {
         val queue = Volley.newRequestQueue(context)
         val url = "$baseUrl/by-building-with-costs?buildingId=$buildingId"
-        // baseUrl = "http://217.144.107.231:3000/funds"
 
         val request = object : JsonObjectRequest(
             Method.GET,
@@ -245,7 +168,6 @@ class Fund {
             null,
             { response ->
                 try {
-                    Log.d("response", response.toString())
                     val fundsArray = response.optJSONArray("funds") ?: JSONArray()
                     val pendingArray = response.optJSONArray("pendingCosts") ?: JSONArray()
 
@@ -296,8 +218,11 @@ class Fund {
                             responsible   = Responsible.valueOf(obj.optString("responsible")),
                             fundType      = FundType.valueOf(obj.optString("fundType")),
                             chargeFlag    = obj.optBoolean("chargeFlag", false),
+                            capitalFlag    = obj.optBoolean("capitalFlag", false),
                             dueDate       = obj.optString("dueDate", ""),
-                            invoiceFlag   = obj.optBoolean("invoiceFlag", false)
+                            invoiceFlag   = obj.optBoolean("invoiceFlag", false),
+                            costFor = obj.optString("costFor"),
+                            documentNumber = obj.optString("documentNumber"),
                         )
                         costsList += cost
                     }
@@ -318,24 +243,5 @@ class Fund {
 
         queue.add(request)
     }
-
-    fun getFundByType(
-        context: Context,
-        buildingId: Long,
-        fundType: FundType,
-        onSuccess: (Funds?) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        getFundsForBuilding(
-            context = context,
-            buildingId = buildingId,
-            onSuccess = { list ->
-                val fund = list.firstOrNull { it.fundType == fundType }
-                onSuccess(fund)
-            },
-            onError = onError
-        )
-    }
-
 
 }

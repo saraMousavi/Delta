@@ -77,11 +77,11 @@ class BuildingUsageActivity : ComponentActivity() {
                             insertItem = { name ->
                                 scope.launch {
                                     try {
-                                        val created =
-                                            BuildingUsage().createBuildingUsageSuspend(context, name)
-                                        if (created != null) {
-                                            viewModel.insertBuildingUsage(created)
-                                        }
+//                                        val created =
+//                                            BuildingUsage().createBuildingUsageSuspend(context, name)
+//                                        if (created != null) {
+//                                            viewModel.insertBuildingUsage(created)
+//                                        }
                                     } catch (_: Exception) {}
                                 }
                             },

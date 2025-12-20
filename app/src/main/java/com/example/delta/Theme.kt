@@ -1,6 +1,9 @@
 package com.example.delta
 
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -85,7 +88,23 @@ val AppTypography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 22.sp,
         fontFamily = customFontFamily
-    )
+    ),
+    headlineSmall = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        fontFamily = customFontFamily
+    ),
+
+    labelLarge = TextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        fontFamily = customFontFamily
+    ),
+    labelSmall = TextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.sp,
+        fontFamily = customFontFamily
+    ),
     // Add more styles if needed
 )
 

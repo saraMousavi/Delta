@@ -19,7 +19,7 @@ object FloorFormatter {
                 context.getString(R.string.floor_ground)
             }
             else -> {
-                val index = floorNumber - 1
+                val index = floorNumber
                 context.getString(R.string.floor_n, index)
             }
         }

@@ -3,7 +3,6 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -38,11 +37,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.AttachMoney
-import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Support
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -100,36 +96,46 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
 import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.rememberAsyncImagePainter
 import com.example.delta.data.entity.ChatManagerDto
 import com.example.delta.data.entity.ChatMessageDto
+import com.example.delta.data.entity.ChatThreadDto
 import com.example.delta.data.entity.UploadedFileEntity
-import com.example.delta.enums.HomePageFields
 import com.example.delta.enums.PermissionLevel
-import com.example.delta.init.AuthUtils
+import com.example.delta.extentions.findActivity
+import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
+import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
+import com.example.delta.init.AuthUtils.AuthorizationObjects
 import com.example.delta.init.FloorFormatter
 import com.example.delta.init.Preference
 import com.example.delta.volley.BuildingFile
@@ -272,7 +278,7 @@ fun buildFloorOptionsForBuilding(
     )
 
     // Floors above ground: 1..(floorCount - 1)
-    val aboveCount = (floorCount - 1).coerceAtLeast(0)
+    val aboveCount = (floorCount).coerceAtLeast(0)
     for (i in 1..aboveCount) {
         val value = FloorFormatter.normalFloor(i)
         result += FloorOption(
@@ -484,10 +490,14 @@ fun <T> ExposedDropdownMenuBoxExample(
     onItemSelected: (T) -> Unit,
     label: String,
     itemLabel: (T) -> String,
-    modifier: Modifier
+    modifier: Modifier = Modifier,
+    showDeleteFor: (T) -> Boolean = { false },
+    onDeleteRequest: (T) -> Unit = {},
+    required: Boolean = false
 ) {
     var expanded by remember { mutableStateOf(false) }
-    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
+
+    AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
         ExposedDropdownMenuBox(
             modifier = modifier,
             expanded = expanded,
@@ -498,14 +508,18 @@ fun <T> ExposedDropdownMenuBoxExample(
                     .menuAnchor()
                     .fillMaxWidth(),
                 readOnly = true,
-                value = selectedItem?.let { itemLabel(it) } ?: "",
-                onValueChange = { },
-                label = { Text(text = label, style = MaterialTheme.typography.bodyLarge) },
+                value = selectedItem?.let(itemLabel) ?: "",
+                onValueChange = {},
+                label = {
+                    if (required) {
+                        RequiredLabel(text = label)
+                    } else {
+                        Text(text = label)
+                    }
+                },
                 textStyle = MaterialTheme.typography.bodyLarge,
                 trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(
-                        expanded = expanded
-                    )
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                 }
             )
 
@@ -514,23 +528,49 @@ fun <T> ExposedDropdownMenuBoxExample(
                 onDismissRequest = { expanded = false }
             ) {
                 items.forEach { item ->
+                    val deletable = showDeleteFor(item)
+
                     DropdownMenuItem(
                         text = {
-                            Text(
-                                text = itemLabel(item),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = itemLabel(item),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+
+                                if (deletable) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }
+                                            ) {
+                                                expanded = false
+                                                onDeleteRequest(item)
+                                            }
+                                    )
+                                }
+                            }
                         },
                         onClick = {
                             onItemSelected(item)
                             expanded = false
-                        }
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun ProvinceStateSelector(
@@ -635,7 +675,6 @@ fun ChipGroupUnits(
     }
 }
 
-
 @Composable
 fun ChipGroupShared(
     modifier: Modifier = Modifier,
@@ -643,30 +682,60 @@ fun ChipGroupShared(
     onSelectionChange: (List<String>) -> Unit,
     items: List<String>,
     label: String,
-    singleSelection: Boolean = false // Add this flag
+    singleSelection: Boolean = false,
+    showDeleteFor: (String) -> Boolean = { false },
+    onDeleteRequest: (String) -> Unit = {}
 ) {
-    Column(modifier = modifier) {
+    val layout: @Composable (@Composable () -> Unit) -> Unit =
+        if (items.size < 3) {
+            { content ->
+                Row(modifier = modifier) { content() }
+            }
+        } else {
+            { content ->
+                Column(modifier = modifier) { content() }
+            }
+        }
+
+    layout {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             items.forEach { item ->
                 val isSelected = selectedItems.contains(item)
+                val deletable = showDeleteFor(item)
+
                 InputChip(
                     selected = isSelected,
                     onClick = {
                         val newSelection = when {
-                            singleSelection -> listOf(item) // Single selection
-                            isSelected -> selectedItems - item // Toggle off
-                            else -> selectedItems + item // Toggle on
+                            singleSelection -> listOf(item)
+                            isSelected -> selectedItems - item
+                            else -> selectedItems + item
                         }
                         onSelectionChange(newSelection)
                     },
-                    label = { Text(item, style = MaterialTheme.typography.bodyLarge) }
+                    label = { Text(item, style = MaterialTheme.typography.bodyLarge) },
+                    trailingIcon = if (deletable) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) {
+                                        onDeleteRequest(item)
+                                    }
+                            )
+                        }
+                    } else null
                 )
             }
         }
@@ -705,47 +774,50 @@ fun PasswordTextField(
         modifier = Modifier.fillMaxWidth()
     )
 }
-
-// Function for the date picker content to use
+// PersianDatePickerDialogContent
 @Composable
 fun PersianDatePickerDialogContent(
     sharedViewModel: SharedViewModel,
     onDateSelected: (String) -> Unit,
-    onDismiss: () -> Unit,
-    context: Context
+    onDismiss: () -> Unit
 ) {
-    val activity = context as? Activity
-    AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
-        LaunchedEffect(key1 = Unit) {
-            activity?.let {
-                val picker = PersianDatePickerDialog(it)
-                    .setPositiveButtonString(context.getString(R.string.insert))
-                    .setNegativeButton(context.getString(R.string.cancel))
-                    .setTodayButton(context.getString(R.string.today))
-                    .setTodayButtonVisible(true)
-                    .setMinYear(1300)
-                    .setMaxYear(1450)
-                    .setInitDate(1404, 1, 1)
-                    .setActionTextColor(android.graphics.Color.GRAY)
-                    .setTitleType(PersianDatePickerDialog.WEEKDAY_DAY_MONTH_YEAR)
-                    .setShowInBottomSheet(true)
-                    .setListener(object : PersianPickerListener {
-                        override fun onDateSelected(persianPickerDate: PersianPickerDate) {
-                            val monthStr = persianPickerDate.persianMonth.toString().padStart(2, '0')
-                            val dayStr = persianPickerDate.persianDay.toString().padStart(2, '0')
-                            val dateStr = "${persianPickerDate.persianYear}/$monthStr/$dayStr"
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val latestOnDateSelected by rememberUpdatedState(onDateSelected)
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
 
-                            onDateSelected(dateStr)
-                        }
+    if (activity == null) {
+        LaunchedEffect(Unit) { latestOnDismiss() }
+        return
+    }
 
-                        override fun onDismissed() {
-                            onDismiss()
-                        }
-                    })
-                picker.show()
-            }
+    AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+        LaunchedEffect(activity) {
+            val picker = PersianDatePickerDialog(activity)
+                .setPositiveButtonString(context.getString(R.string.insert))
+                .setNegativeButton(context.getString(R.string.cancel))
+                .setTodayButton(context.getString(R.string.today))
+                .setTodayButtonVisible(true)
+                .setMinYear(1300)
+                .setMaxYear(1450)
+                .setInitDate(1404, 1, 1)
+                .setActionTextColor(android.graphics.Color.GRAY)
+                .setTitleType(PersianDatePickerDialog.WEEKDAY_DAY_MONTH_YEAR)
+                .setShowInBottomSheet(true)
+                .setListener(object : PersianPickerListener {
+                    override fun onDateSelected(persianPickerDate: PersianPickerDate) {
+                        val monthStr = persianPickerDate.persianMonth.toString().padStart(2, '0')
+                        val dayStr = persianPickerDate.persianDay.toString().padStart(2, '0')
+                        val dateStr = "${persianPickerDate.persianYear}/$monthStr/$dayStr"
+                        latestOnDateSelected(dateStr)
+                    }
 
+                    override fun onDismissed() {
+                        latestOnDismiss()
+                    }
+                })
 
+            picker.show()
         }
     }
 }
@@ -824,25 +896,25 @@ fun SettingsScreen(
 //            icon = Icons.Outlined.Support,
 //            onClick = { context.startActivity(Intent(context, ChargeCalculationActivity::class.java)) }
 //        ),
-        NavItem(
-            title = R.string.income_list,
-            icon = Icons.Outlined.AttachMoney,
-            onClick = { context.startActivity(Intent(context, EarningsActivity::class.java)) }
-        )
+//        NavItem(
+//            title = R.string.income_list,
+//            icon = Icons.Outlined.AttachMoney,
+//            onClick = { context.startActivity(Intent(context, EarningsActivity::class.java)) }
+//        )
     )
 
-    val secondGroup = listOf(
-        NavItem(
-            title = R.string.building_type_list,
-            icon = Icons.Outlined.Apartment,
-            onClick = { context.startActivity(Intent(context, BuildingTypeActivity::class.java)) }
-        ),
-        NavItem(
-            title = R.string.building_usage_list,
-            icon = Icons.Outlined.Business,
-            onClick = { context.startActivity(Intent(context, BuildingUsageActivity::class.java)) }
-        )
-    )
+//    val secondGroup = listOf(
+//        NavItem(
+//            title = R.string.building_type_list,
+//            icon = Icons.Outlined.Apartment,
+//            onClick = { context.startActivity(Intent(context, BuildingTypeActivity::class.java)) }
+//        ),
+//        NavItem(
+//            title = R.string.building_usage_list,
+//            icon = Icons.Outlined.Business,
+//            onClick = { context.startActivity(Intent(context, BuildingUsageActivity::class.java)) }
+//        )
+//    )
 
     Scaffold { innerPadding ->
         LazyColumn(
@@ -882,7 +954,7 @@ fun SettingsScreen(
                         .heightIn(max = 130.dp) // adjust based on your content
                 ) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(1),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(4.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -903,32 +975,32 @@ fun SettingsScreen(
             }
 
             // Second group grid wrapped in Box to enforce max height
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp) // adjust as needed to fit all rows without scrolling
-                ) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        userScrollEnabled = false
-                    ) {
-                        items(secondGroup) { item ->
-                            ClickableSettingItem(
-                                title = context.getString(item.title),
-                                icon = item.icon,
-                                onClick = item.onClick,
-                                modifier = Modifier.height(120.dp),
-                                iconOnTop = true
-                            )
-                        }
-                    }
-                }
-            }
+//            item {
+//                Box(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .heightIn(max = 400.dp) // adjust as needed to fit all rows without scrolling
+//                ) {
+////                    LazyVerticalGrid(
+////                        columns = GridCells.Fixed(2),
+////                        modifier = Modifier.fillMaxSize(),
+////                        contentPadding = PaddingValues(4.dp),
+////                        verticalArrangement = Arrangement.spacedBy(16.dp),
+////                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+////                        userScrollEnabled = false
+////                    ) {
+////                        items(secondGroup) { item ->
+////                            ClickableSettingItem(
+////                                title = context.getString(item.title),
+////                                icon = item.icon,
+////                                onClick = item.onClick,
+////                                modifier = Modifier.height(120.dp),
+////                                iconOnTop = true
+////                            )
+////                        }
+////                    }
+//                }
+//            }
         }
     }
 
@@ -1042,6 +1114,7 @@ fun ClickableSettingItem(
 }
 @Composable
 fun CurvedBottomNavigation(
+    currentRoleId : Long,
     navController: NavHostController,
     items: List<Screen>,
     modifier: Modifier = Modifier,
@@ -1122,26 +1195,79 @@ fun CurvedBottomNavigation(
                         onClick = {
                             val route = screen.route
                             if (screen == Screen.Add) {
-                                context.startActivity(
-                                    Intent(
-                                        context,
-                                        BuildingFormActivity::class.java
-                                    )
+                                val perms = sharedViewModel.rolePermissions
+
+                                val perm = perms.permissionFor(
+                                    AuthorizationObjects.HOME,
+                                    AuthorizationFieldsHome.CREATE_BUILDING_BUTTON
                                 )
+                                if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                    context.startActivity(
+                                        Intent(
+                                            context,
+                                            BuildingFormActivity::class.java
+                                        )
+                                    )
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.auth_cancel),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+
                             } else if (screen == Screen.Settings) {
                                 navController.navigate(route)
                             } else if (screen == Screen.Home) {
                                 navController.navigate(route)
                             } else if (screen == Screen.Dashboard) {
-                                context.startActivity(
-                                    Intent(
-                                        context,
-                                        DashboardActivity::class.java
-                                    )
+                                val perms = sharedViewModel.rolePermissions
+                                val perm = perms.permissionFor(
+                                    AuthorizationObjects.HOME,
+                                    AuthorizationFieldsHome.DASHBOARD_BUTTON
                                 )
+                                if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                    context.startActivity(
+                                        Intent(
+                                            context,
+                                            DashboardActivity::class.java
+                                        )
+                                    )
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.auth_cancel),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             } else if (screen == Screen.Chat) {
-                                sharedViewModel.refreshUnreadCount()
-                                navController.navigate(route)
+                                val perms = sharedViewModel.rolePermissions
+                                val perm = perms.permissionFor(
+                                    AuthorizationObjects.HOME,
+                                    AuthorizationFieldsHome.CONTACT_MANAGEMENT_BUTTON
+                                )
+                                if (perm == PermissionLevel.READ || perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                    if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.auth_cancel),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        context.startActivity(
+                                            Intent(
+                                                context,
+                                                ChatBoxActivity::class.java
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.auth_cancel),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         }
                     )
@@ -1150,7 +1276,6 @@ fun CurvedBottomNavigation(
         }
     }
 }
-
 @Composable
 fun CurvedBottomNavItem(
     icon: ImageVector,
@@ -1168,60 +1293,71 @@ fun CurvedBottomNavItem(
         Box(
             modifier = Modifier
                 .padding(4.dp)
-                .then(if (isAddButton) Modifier.offset(y = (-10).dp) else Modifier)
-                .background(
-                    color = when {
-                        isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        else -> Color.Transparent
-                    },
-                    shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
-                )
-                .border(
-                    width = if (isAddButton) 1.dp else 0.dp,
-                    color = if (isAddButton) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
-                )
-                .clickable(onClick = onClick)
-                .padding(10.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = when {
-                    isAddButton -> MaterialTheme.colorScheme.primary
-                    selected -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                modifier = Modifier
+                    .then(if (isAddButton) Modifier.offset(y = (-10).dp) else Modifier)
+                    .background(
+                        color = when {
+                            isAddButton -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            else -> Color.Transparent
+                        },
+                        shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
+                    )
+                    .border(
+                        width = if (isAddButton) 1.dp else 0.dp,
+                        color = if (isAddButton) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        shape = if (isAddButton) RoundedCornerShape(8.dp) else CircleShape
+                    )
+                    .clickable(onClick = onClick)
+                    .padding(10.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = when {
+                        isAddButton -> MaterialTheme.colorScheme.primary
+                        selected -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            if (badgeCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 6.dp, y = (-6).dp)
+                        .background(MaterialTheme.colorScheme.error, shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (badgeCount > 9) "9+" else badgeCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onError,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
-            )
+            }
         }
 
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.labelLarge,
             color = when {
                 isAddButton -> MaterialTheme.colorScheme.primary
                 selected -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
+            },
+            maxLines = 1,
+            softWrap = false
         )
-        if (badgeCount > 0) {
-            Box(
-                modifier = Modifier
-                    .offset(x = 4.dp, y = (-4).dp)
-                    .size(16.dp)
-                    .background(MaterialTheme.colorScheme.error, shape = CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (badgeCount > 9) "9+" else badgeCount.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onError
-                )
-            }
-        }
-   }
+    }
 }
+
 
 
 
@@ -1348,7 +1484,7 @@ fun UploadFile(
                     onDelete = {
                         sharedViewModel.deleteFile(path.fileUrl)
                     },
-                    modifier = Modifier.size(64.dp)
+                    modifier = Modifier.size(84.dp)
                 )
             }
         }
@@ -1405,13 +1541,13 @@ fun FileItem(
                 imageVector = Icons.Default.PictureAsPdf,
                 contentDescription = "PDF file",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(52.dp)
             )
             // Add other file type icons as needed
             else -> Icon(
                 imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = "File",
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(52.dp)
             )
         }
 
@@ -1420,7 +1556,7 @@ fun FileItem(
                 onDelete()
             },
             modifier = Modifier
-                .size(24.dp)
+                .size(16.dp)
                 .background(
                     color = Color.Black.copy(alpha = 0.6f),
                     shape = CircleShape
@@ -1431,7 +1567,7 @@ fun FileItem(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Delete file",
                 tint = Color.White,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(12.dp)
             )
         }
     }
@@ -1522,217 +1658,6 @@ fun String.englishToPersianDigits(): String {
         }
     }.joinToString("")
 }
-
-
-//************************Chat
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChatScreen(sharedViewModel: SharedViewModel) {
-    val context = LocalContext.current
-    val managers by sharedViewModel.chatManagers.collectAsState()
-    val chatState by sharedViewModel.currentChat.collectAsState()
-
-    var showManagerDialog by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        sharedViewModel.loadChatManagersForCurrentUser()
-        sharedViewModel.refreshUnreadCount()
-    }
-
-    val currentThread = chatState?.thread
-    val messages = chatState?.messages.orEmpty()
-
-    LaunchedEffect(currentThread?.threadId) {
-        if (currentThread?.threadId != null && currentThread.threadId != 0L) {
-            sharedViewModel.markCurrentThreadRead()
-            sharedViewModel.startChatPolling(context)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(id = R.string.chat_title),
-                style = MaterialTheme.typography.bodyLarge
-            )
-            OutlinedButton(onClick = { showManagerDialog = true }) {
-                Text(
-                    text = stringResource(id = R.string.chat_select_manager),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Log.d("currentThread", currentThread.toString())
-        if (currentThread == null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(id = R.string.chat_start_hint),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            Box(
-                modifier = Modifier.weight(1f)
-            ) {
-                ChatMessagesList(messages = messages)
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Log.d("inputText", inputText.toString())
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    modifier = Modifier.weight(1f),
-                    maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        val text = inputText.trim()
-                        if (text.isNotEmpty()) {
-                            sharedViewModel.sendChatMessage(context, text)
-                            inputText = ""
-                        }
-                    },
-                    enabled = inputText.isNotBlank()
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.chat_send),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-            Spacer(Modifier.height(85.dp))
-        }
-    }
-
-    if (showManagerDialog) {
-        ManagersDialog(
-            managers = managers,
-            onDismiss = { showManagerDialog = false },
-            onSelect = { manager ->
-                sharedViewModel.openChatWithManager(
-                    context = context,
-                    managerUserId = manager.userId,
-                    managerName = manager.fullName,
-                    buildingId = null
-                )
-                showManagerDialog = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun ChatMessagesList(messages: List<ChatMessageDto>) {
-    val context = LocalContext.current
-    val userId = com.example.delta.init.Preference().getUserId(context)
-    Log.d("messages", messages.toString())
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        reverseLayout = false
-    ) {
-        items(messages) { msg ->
-            val isMine = msg.senderId == userId
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
-            ) {
-                Surface(
-                    color = if (isMine) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Text(
-                        text = msg.text,
-                        modifier = Modifier.padding(8.dp),
-                        color = if (isMine) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ManagersDialog(
-    managers: List<ChatManagerDto>,
-    onDismiss: () -> Unit,
-    onSelect: (ChatManagerDto) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = stringResource(id = R.string.chat_select_manager),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        },
-        text = {
-            if (managers.isEmpty()) {
-                Text(
-                    text = stringResource(id = R.string.chat_manager_not_found),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            } else {
-                Column {
-                    managers.forEach { m ->
-                        TextButton(
-                            onClick = { onSelect(m) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = m.fullName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Start
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(id = R.string.chat_close),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-    )
-}
-
-
-
-
-
-
 
 
 
