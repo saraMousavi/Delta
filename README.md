@@ -28,3 +28,9 @@ The project follows MVVM architecture:
 
 ## Project Status
 This project is based on a real-world building management use case and is under active development.
+
+## Screenshots
+| Building_Cost_Management | Capital_calculation | Cost_Income_Dashboard | HomePage | Login_registration | OnBoarding | Operational_Charge | Resident_Profile_payment | User_Management
+|------|-----------|---------------|------------|
+| ![](screens/Building_Cost_Management.jpeg) | ![](screens/Capital_calculation.jpeg) | ![](screens/Cost_Income_Dashboard.jpeg) | ![](screens/HomePage.jpeg) | ![](screens/Login_registration.jpeg) | ![](screens/OnBoarding.png) | ![](screens/Operational_Charge.jpeg) |  ![](screens/Resident_Profile_payment.jpeg) | ![](screens/User_Management.jpeg)
+
