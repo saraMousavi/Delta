@@ -10,6 +10,7 @@ import com.example.delta.enums.Roles
 )
 data class Role(
     @PrimaryKey(autoGenerate = true) val roleId: Long = 0,
+    @ColumnInfo(name = "building_id") val buildingId: Long? = 0,
     @ColumnInfo(name = "roleName") val roleName: String,
     @ColumnInfo(name = "role_description") val roleDescription: String,
 )

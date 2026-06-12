@@ -12,8 +12,25 @@ import com.example.delta.HomePageActivity
 import com.example.delta.R
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 class AppFirebaseMessagingService : FirebaseMessagingService() {
+
+    object NotificationEventBus {
+        private val _events = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val events = _events.asSharedFlow()
+
+        fun notifyNewMessage() {
+            _events.tryEmit(Unit)
+        }
+    }
+
+    object ChatEventBus {
+        private val _events = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val events = _events.asSharedFlow()
+        fun notifyNewChat() { _events.tryEmit(Unit) }
+    }
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
@@ -24,6 +41,7 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
             // store pending token if needed
         }
     }
+
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         val title = remoteMessage.data["title"]
@@ -42,6 +60,7 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
             openNotificationsDrawer = openDrawer,
             threadId = remoteMessage.data["threadId"]?.toLongOrNull()
         )
+        NotificationEventBus.notifyNewMessage()
     }
 
     private fun showNotification(

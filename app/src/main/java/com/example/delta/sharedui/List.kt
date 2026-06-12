@@ -63,7 +63,6 @@ fun DebtItem(debt: Debts, onPayment: () -> Unit) {
                     )
                 }
             }
-            Log.d("debt.paymentFlag", debt.paymentFlag.toString())
             if (debt.paymentFlag) {
                 Text(
                     text = LocalContext.current.getString(R.string.payment_done),

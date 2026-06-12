@@ -1,5 +1,6 @@
 package com.example.delta.init
 
+import android.util.Log
 import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.Units
 
@@ -13,7 +14,7 @@ data class ExcelOwner(
     val excelUnitsNumber: String,
     val excelBuildingName: String,
     val excelIsManager: Boolean,
-    val excelDang: Double,
+//    val excelDang: Double,
     val excelIsResident: Boolean
 )
 
@@ -32,10 +33,31 @@ data class ExcelTenant(
     val excelPostCode: String
 )
 
+data class ExcelBuilding(
+    val name: String,
+    val serialNumber: String,
+    val phone: String,
+    val mobileNumber: String,
+    val floorCount: String,
+    val unitCount: String,
+    val parkingCount: String,
+    val postCode: String,
+    val street: String,
+    val province: String = "Tehran",
+    val state: String = "Central",
+    val buildingTypeId: Long? = null,
+    val buildingUsageId: Long? = null,
+    val fund: Double,
+    val userId: Long,
+    val buildingTypeName: String,
+    val buildingUsageName: String,
+    val creatorMobile: String,
+)
+
 object ExcelPayloadBuilder {
 
     fun build(
-        buildings: List<Buildings>,
+        buildings: List<ExcelBuilding>,
         units: List<Units>,
         owners: List<ExcelOwner>,
         tenants: List<ExcelTenant>
@@ -49,21 +71,22 @@ object ExcelPayloadBuilder {
             val buildingTenants = tenants.filter { it.excelBuildingName == buildingName }
 
             val managerOwner = buildingOwners.firstOrNull { it.excelIsManager }
-            val creatorMobile = when {
-                managerOwner != null && managerOwner.mobileNumber.isNotBlank() ->
-                    managerOwner.mobileNumber
-                buildingOwners.firstOrNull()?.mobileNumber?.isNotBlank() == true ->
-                    buildingOwners.first().mobileNumber
-                else ->
-                    b.userId.toString()
-            }
+//            val creatorMobile = when {
+//                managerOwner != null && managerOwner.mobileNumber.isNotBlank() ->
+//                    managerOwner.mobileNumber
+//                buildingOwners.firstOrNull()?.mobileNumber?.isNotBlank() == true ->
+//                    buildingOwners.first().mobileNumber
+//                else ->
+//                    b.userId.toString()
+//            }
 
             val ownerUnits = buildingOwners.map {
                 mapOf(
                     "ownerMobile" to it.mobileNumber,
                     "unitNumber" to it.excelUnitsNumber,
-                    "dang" to it.excelDang,
-                    "isResident" to it.excelIsResident
+                    "dang" to 6,
+                    "isResident" to it.excelIsResident,
+                    "isManager" to it.excelIsManager
                 )
             }
 
@@ -73,21 +96,30 @@ object ExcelPayloadBuilder {
                     "unitNumber" to it.excelUnitsNumber,
                     "startDate" to it.startDate,
                     "endDate" to it.endDate,
+                    "numberOfTenants" to it.numberOfTenants,
                     "status" to it.status
                 )
             }
 
             mapOf(
-                "mobileNumber" to creatorMobile,
+                "mobileNumber" to b.creatorMobile,
                 "building" to mapOf(
                     "name" to b.name,
                     "postCode" to b.postCode,
-                    "street" to b.street,
+                    "mobileNumber" to b.mobileNumber,
+                    "phone" to b.phone,
+                    "address" to b.street,
                     "province" to b.province,
                     "state" to b.state,
                     "buildingTypeId" to b.buildingTypeId,
                     "buildingUsageId" to b.buildingUsageId,
-                    "fund" to b.fund
+                    "fund" to b.fund,
+                    "userId" to b.userId,
+                    "floorCount" to b.floorCount,
+                    "unitCount" to b.unitCount,
+                    "serialNumber" to b.serialNumber,
+                    "buildingTypeName" to b.buildingTypeName,
+                    "buildingUsageName" to b.buildingUsageName
                 ),
                 "units" to buildingUnits.map {
                     mapOf(
@@ -96,7 +128,8 @@ object ExcelPayloadBuilder {
                         "numberOfRooms" to it.numberOfRooms,
                         "numberOfParking" to it.numberOfParking,
                         "numberOfWarehouse" to it.numberOfWarehouse,
-                        "postCode" to it.postCode
+                        "postCode" to it.postCode,
+                        "floorNumber" to it.floorNumber
                     )
                 },
                 "owners" to buildingOwners.map {

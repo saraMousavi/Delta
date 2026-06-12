@@ -9,7 +9,7 @@ import com.example.delta.R
 import com.example.delta.init.VolleySingleton
 import org.json.JSONObject
 
-private const val BASE_URL = "http://217.144.107.231:3000"
+private const val BASE_URL = "http://185.129.197.6:443"
 class OTPApi {
 
     fun sendOtp(
@@ -20,7 +20,6 @@ class OTPApi {
     ) {
         val url = "$BASE_URL/auth/otp/send"
         val body = JSONObject().apply { put("phone", phone) }
-        Log.d("body", body.toString())
         val req = JsonObjectRequest(
             Request.Method.POST, url, body,
             { resp ->
@@ -28,7 +27,6 @@ class OTPApi {
                 if (ok) onSuccess() else onError(resp.optString("error", context.getString(R.string.failed)))
             },
             { err ->
-                Log.d("err.message1", err.message.toString())
                 onError(err.message ?: context.getString(R.string.network_error)) }
         ).apply {
             retryPolicy = DefaultRetryPolicy(

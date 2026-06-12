@@ -2,9 +2,11 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -80,13 +82,24 @@ class ChatBoxActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    sharedViewModel.closeCurrentChat()
+                    sharedViewModel.loadChatManagersForCurrentUser()
+                    sharedViewModel.loadChatThreadsForCurrentUser()
+                }
+            }
+        )
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     ChatScreen(
                         sharedViewModel = sharedViewModel,
-                        onBack = { finish() }
+                        onBack = {
+                            finish()
+                        }
                     )
                 }
             }
@@ -148,7 +161,11 @@ fun ChatScreen(
             } else {
                 TopAppBar(
                     navigationIcon = {
-                        IconButton(onClick = { sharedViewModel.closeCurrentChat() }) {
+                        IconButton(onClick = {
+                            sharedViewModel.closeCurrentChat()
+                            sharedViewModel.loadChatManagersForCurrentUser()
+                            sharedViewModel.loadChatThreadsForCurrentUser()
+                        }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = null
@@ -171,7 +188,7 @@ fun ChatScreen(
 
                             val displayName = when {
                                 !chatState?.peerName.isNullOrBlank() -> chatState?.peerName
-                                !currentThread.partnerFullName.isNullOrBlank() -> currentThread.partnerFullName
+                                currentThread.partnerFullName.isNotBlank() -> currentThread.partnerFullName
                                 !currentThread.partnerFirstName.isNullOrBlank() ||
                                         !currentThread.partnerLastName.isNullOrBlank() ->
                                     listOfNotNull(
@@ -272,7 +289,7 @@ fun ChatScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding(),   // فقط این ردیف با کیبورد بالا بیاید
+                        .imePadding(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
@@ -307,7 +324,9 @@ fun ChatScreen(
     if (showManagerDialog) {
         ManagersDialog(
             managers = managers,
-            onDismiss = { showManagerDialog = false },
+            onDismiss = {
+                showManagerDialog = false
+            },
             onSelect = { manager ->
                 sharedViewModel.openChatWithManager(
                     context = context,

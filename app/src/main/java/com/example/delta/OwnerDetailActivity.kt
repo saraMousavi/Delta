@@ -109,6 +109,7 @@ import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.filled.DateRange
@@ -120,6 +121,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.delta.init.FinancialReport
 import com.example.delta.init.FinancialReportRow
+import com.example.delta.init.Preference
+import com.example.delta.server.JsonParser.OwnerWithUnitsDto
+import com.example.delta.volley.Tenant
+import kotlinx.coroutines.flow.channelFlow
 import java.io.File
 
 
@@ -130,6 +135,19 @@ class OwnerDetailsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val ownerId = intent.getLongExtra("ownerId", -1L)
         val buildingId = intent.getLongExtra("buildingId", -1L)
+        val hasOwnerAuth = intent.getBooleanExtra("hasOwnerAuth", false)
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+//                    val resultIntent = Intent().apply {
+//                        putExtra("NEED_REFRESH", NEED_REFRESH)
+//                    }
+                    setResult(RESULT_OK)
+                    finish()
+                }
+            }
+        )
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -137,7 +155,11 @@ class OwnerDetailsActivity : ComponentActivity() {
                         ownerId = ownerId,
                         buildingId = buildingId,
                         sharedViewModel = sharedViewModel,
-                        onBack = { finish() }
+                        hasOwnerAuth = hasOwnerAuth,
+                        onBack = { changed ->
+                            if (changed) setResult(RESULT_OK)
+                            finish()
+                        }
                     )
                 }
             }
@@ -149,9 +171,10 @@ class OwnerDetailsActivity : ComponentActivity() {
 @Composable
 fun OwnerDetailsScreen(
     ownerId: Long,
-    buildingId:Long,
+    buildingId: Long,
+    hasOwnerAuth: Boolean,
     sharedViewModel: SharedViewModel,
-    onBack: () -> Unit
+    onBack: (changed: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -162,6 +185,7 @@ fun OwnerDetailsScreen(
     )
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var changed by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -173,7 +197,7 @@ fun OwnerDetailsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { onBack(changed) }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = context.getString(R.string.back)
@@ -199,9 +223,18 @@ fun OwnerDetailsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             when (tabs[selectedTab].type) {
-                OwnerTabType.OVERVIEW -> OwnerOverviewTab(ownerId, buildingId = buildingId )
+                OwnerTabType.OVERVIEW -> OwnerOverviewTab(
+                    ownerId = ownerId,
+                    buildingId = buildingId,
+                    hasOwnerAuth = hasOwnerAuth,
+                    onChanged = { isChanged ->
+                        if (isChanged) changed = true
+                    }
+                )
+
                 OwnerTabType.FINANCIALS -> OwnerFinancialsTab(
                     ownerId = ownerId,
+                    buildingId = buildingId,
                     sharedViewModel = sharedViewModel,
                     snackBarHostState = snackbarHostState,
                     coroutineScope = coroutineScope
@@ -210,21 +243,27 @@ fun OwnerDetailsScreen(
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OwnerOverviewTab(
     ownerId: Long,
     buildingId: Long,
-    modifier: Modifier = Modifier
+    hasOwnerAuth : Boolean,
+    modifier: Modifier = Modifier,
+    onChanged: (changed: Boolean) -> Unit
 ) {
     val listState = rememberLazyListState()
     val context = LocalContext.current
-    val ownerApi = remember { com.example.delta.volley.Owner() }
-
+    val ownerApi = remember { Owner(context) }
+    var currentRoleId = Preference().getRoleId(context)
     var user by remember { mutableStateOf<User?>(null) }
     var unitsForOwner by remember { mutableStateOf<List<Units>>(emptyList()) }
+    var unitsForOwnerText by remember { mutableStateOf<List<String>>(emptyList()) }
     var ownerUnits by remember { mutableStateOf<List<OwnersUnitsCrossRef>>(emptyList()) }
     var editableOwnerUnits by remember { mutableStateOf<List<OwnersUnitsCrossRef>>(emptyList()) }
+
+    var hasChanges by rememberSaveable { mutableStateOf(false) }
 
     val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -232,18 +271,27 @@ fun OwnerOverviewTab(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var units by remember { mutableStateOf<List<Units>>(emptyList()) }
-    var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
+    var ownersWithUnits by remember { mutableStateOf<List<OwnerWithUnitsDto>>(emptyList()) }
     var isManager by remember { mutableStateOf(false) }
     var isResident by remember { mutableStateOf(false) }
+    var canEdit  by remember { mutableStateOf(true) }
+    var residentUnit by remember { mutableStateOf<Units?>(null) }
     var showUnitsSheet by remember { mutableStateOf(false) }
     val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
+    var selectedUnitsText by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedUnits by remember { mutableStateOf<List<Units>>(emptyList()) }
+    var selectedUnitText by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var isResidentUnitLoading by remember { mutableStateOf(false) }
+    val uiLocked = isResidentUnitLoading || isLoading
+
+
     val dangSums = remember(ownersWithUnits) {
         ownersWithUnits
             .flatMap { it.ownerUnits }
             .groupBy { it.unitId }
             .mapValues { (_, list) -> list.sumOf { it.dang } }
     }
-
 
     val selectableUnits by remember(units, dangSums) {
         derivedStateOf {
@@ -253,17 +301,57 @@ fun OwnerOverviewTab(
             }
         }
     }
+    val mergedUnits = remember(selectableUnits, unitsForOwner) {
+        (selectableUnits + unitsForOwner)
+            .distinctBy { it.unitNumber }
+    }
+
+    LaunchedEffect(residentUnit) {
+        if (residentUnit == null) {
+            canEdit = true
+            isResidentUnitLoading = false
+            return@LaunchedEffect
+        }
+
+        isResidentUnitLoading = true
+
+        Tenant().getTenantForUnitInBuilding(
+            context = context,
+            buildingId = buildingId,
+            unitId = residentUnit!!.unitId,
+            onSuccess = { dto ->
+                val tUser = dto?.user
+                if (tUser != null) {
+                    if(dto.tenantUnit.status == context.getString(R.string.active)) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.it_has_active_tenant),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        canEdit = false
+                    } else {
+                        canEdit = true
+                    }
+                } else {
+                    canEdit = true
+                }
+                isResidentUnitLoading = false
+            },
+            onError = { e ->
+                Log.e("DebtCard", "Failed to fetch tenant for unit ${residentUnit!!.unitId}", e)
+                canEdit = true
+                isResidentUnitLoading = false
+            }
+        )
+    }
 
     LaunchedEffect(ownerId, buildingId) {
         isLoading = true
         errorMessage = null
 
-        Owner().getOwnersWithUnitsByBuilding(
-            context = context,
+        Owner(context).getOwnersWithUnitsByBuilding(
             buildingId = buildingId,
-            onSuccess = { list ->
-                ownersWithUnits = list
-            },
+            onSuccess = { list -> ownersWithUnits = list },
             onError = {
                 Toast.makeText(
                     context,
@@ -276,9 +364,7 @@ fun OwnerOverviewTab(
         com.example.delta.volley.Units().fetchUnitsForBuilding(
             context = context,
             buildingId = buildingId,
-            onSuccess = { list ->
-                units = list
-            },
+            onSuccess = { list -> units = list },
             onError = { e ->
                 Toast.makeText(
                     context,
@@ -289,17 +375,30 @@ fun OwnerOverviewTab(
         )
 
         ownerApi.getOwnerWithUnits(
-            context = context,
             ownerId = ownerId,
+            buildingId = buildingId,
             onSuccess = { dto ->
                 user = dto.user
-                ownerUnits = dto.ownerUnits
-                unitsForOwner = dto.units
-                editableOwnerUnits = dto.ownerUnits
-                isManager = dto.isManager
-                isResident = dto.isResident
+
+                val distinctOwnerUnits = dto.ownerUnits.distinctBy { it.unitId }
+
+                ownerUnits = distinctOwnerUnits
+                editableOwnerUnits = distinctOwnerUnits
+                unitsForOwner = dto.units.distinctBy { it.unitId }
+
                 selectedUnitsList.clear()
-                selectedUnitsList.addAll(dto.ownerUnits)
+                selectedUnitsList.addAll(distinctOwnerUnits)
+                unitsForOwner.forEach { unit ->
+                    selectedUnitsText = selectedUnitsText + unit.unitNumber
+                }
+                selectedUnits = unitsForOwner
+                isManager = dto.isManager
+                if(distinctOwnerUnits.any { it.isResident == true }){
+                    isResident = true
+                    residentUnit =
+                        unitsForOwner.first { it.unitId == distinctOwnerUnits.find { it.isResident == true }!!.unitId }
+                    selectedUnitText = listOf(residentUnit!!.unitNumber)
+                }
                 isLoading = false
             },
             onError = { e ->
@@ -409,15 +508,6 @@ fun OwnerOverviewTab(
                                         if (isManager) context.getString(R.string.yes) else context.getString(R.string.none)
                             )
                         }
-                        item { Spacer(Modifier.height(8.dp)) }
-
-                        item {
-                            OwnerInfoRow(
-                                Icons.Default.Home,
-                                "${context.getString(R.string.owner_is_resident)}: " +
-                                        if (isResident) context.getString(R.string.yes) else context.getString(R.string.none)
-                            )
-                        }
                         item { Spacer(Modifier.height(16.dp)) }
 
 
@@ -450,6 +540,18 @@ fun OwnerOverviewTab(
                                 }
                             }
                         }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            OwnerInfoRow(
+                                Icons.Default.Home,
+                                "${context.getString(R.string.owner_is_resident)}: " +
+                                        if (isResident)
+                                            (context.getString(R.string.yes) + " " + context.getString(
+                                                R.string.resident_in_unit
+                                            ) + " " + residentUnit?.unitNumber)
+                                        else context.getString(R.string.none)
+                            )
+                        }
                     } else {
                         item {
                             Row(
@@ -457,6 +559,7 @@ fun OwnerOverviewTab(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Checkbox(
+                                    enabled = hasOwnerAuth,
                                     checked = isManager,
                                     onCheckedChange = { isManager = it }
                                 )
@@ -464,18 +567,6 @@ fun OwnerOverviewTab(
                             }
                         }
 
-                        item {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Checkbox(
-                                    checked = isResident,
-                                    onCheckedChange = { isResident = it }
-                                )
-                                Text(context.getString(R.string.owner_is_resident), style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
 
                         item { Spacer(Modifier.height(16.dp)) }
                         item {
@@ -485,8 +576,8 @@ fun OwnerOverviewTab(
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
-                        item { Spacer(Modifier.height(8.dp)) }
 
+                        item { Spacer(Modifier.height(8.dp)) }
                         item {
                             OutlinedButton(
                                 onClick = { showUnitsSheet = true },
@@ -496,6 +587,97 @@ fun OwnerOverviewTab(
                                     text = "انتخاب واحدها (${selectedUnitsList.size})",
                                     style = MaterialTheme.typography.bodyLarge
                                 )
+                            }
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                        item {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Checkbox(
+                                    checked = isResident,
+                                    onCheckedChange = { checked ->
+                                        if (uiLocked) return@Checkbox
+
+                                        isResident = checked
+
+                                        if (!checked) {
+                                            residentUnit = null
+                                            selectedUnitText = emptyList()
+
+                                            for (i in selectedUnitsList.indices) {
+                                                val item = selectedUnitsList[i]
+                                                if (item.isResident) {
+                                                    selectedUnitsList[i] = item.copy(isResident = false)
+                                                }
+                                            }
+                                        } else {
+                                            if (selectedUnitsList.size == 1) {
+                                                val only = selectedUnitsList.first()
+                                                selectedUnitsList[0] = only.copy(isResident = true)
+                                                val onlyUnitNumber = selectedUnits.firstOrNull { it.unitId == only.unitId }?.unitNumber
+                                                selectedUnitText = listOfNotNull(onlyUnitNumber)
+                                                residentUnit = units.firstOrNull { it.unitId == only.unitId } ?: unitsForOwner.firstOrNull { it.unitId == only.unitId }
+                                            } else if (selectedUnitsList.size > 1) {
+                                                for (i in selectedUnitsList.indices) {
+                                                    val item = selectedUnitsList[i]
+                                                    if (item.isResident) selectedUnitsList[i] = item.copy(isResident = false)
+                                                }
+                                                residentUnit = null
+                                                selectedUnitText = emptyList()
+                                            }
+                                        }
+                                    }
+                                )
+
+                                Text(context.getString(R.string.owner_is_resident), style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+
+                        item {
+                            if (isResidentUnitLoading) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            if (isResident && selectedUnitsList.size > 1) {
+                                ChipGroupShared(
+                                    selectedItems = selectedUnitText,
+                                    onSelectionChange = { newSelectionStrings ->
+                                        if (uiLocked) return@ChipGroupShared
+
+                                        val chosenUnitNumber = newSelectionStrings.firstOrNull()
+                                        if (chosenUnitNumber != null) {
+                                            val chosenUnit = selectedUnits.firstOrNull { it.unitNumber == chosenUnitNumber }
+                                                ?: unitsForOwner.firstOrNull { it.unitNumber == chosenUnitNumber }
+
+                                            if (chosenUnit != null) {
+                                                for (i in selectedUnitsList.indices) {
+                                                    val item = selectedUnitsList[i]
+                                                    selectedUnitsList[i] = item.copy(isResident = item.unitId == chosenUnit.unitId)
+                                                }
+                                                residentUnit = units.firstOrNull { it.unitId == chosenUnit.unitId }
+                                                    ?: unitsForOwner.firstOrNull { it.unitId == chosenUnit.unitId }
+                                            }
+                                        }
+                                        selectedUnitText = newSelectionStrings
+                                    },
+                                    items = selectedUnitsText,
+                                    label = context.getString(R.string.unit_for_resident),
+                                    singleSelection = true
+                                )
+
                             }
                         }
                     }
@@ -531,21 +713,24 @@ fun OwnerOverviewTab(
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
+
                 Button(
+                    enabled = canEdit && !uiLocked,
                     onClick = {
-                        val payloadUnits = selectedUnitsList.filter { it.unitId > 0 }
-                        val updatedOwnerUnits = payloadUnits.toList()
+                        val updatedOwnerUnits =
+                            selectedUnitsList
+                                .filter { it.unitId > 0 }
+                                .distinctBy { it.unitId }
+                                .toList()
 
                         ownerApi.updateOwnerUnitsAndRoleVolley(
-                            context = context,
                             buildingId = buildingId,
                             userId = ownerId,
                             units = updatedOwnerUnits,
                             isManager = isManager,
-                            isResident = isResident,
+//                            isResident = isResident,
                             onSuccess = {
                                 ownerUnits = updatedOwnerUnits
-
                                 unitsForOwner = units.filter { u ->
                                     updatedOwnerUnits.any { it.unitId == u.unitId }
                                 }
@@ -553,10 +738,11 @@ fun OwnerOverviewTab(
                                 ownersWithUnits = ownersWithUnits.map { dto ->
                                     if (dto.user?.userId == ownerId) {
                                         dto.copy(ownerUnits = updatedOwnerUnits)
-                                    } else {
-                                        dto
-                                    }
+                                    } else dto
                                 }
+
+                                hasChanges = true
+                                onChanged(true)
 
                                 isEditing = false
                                 coroutineScope.launch {
@@ -581,10 +767,7 @@ fun OwnerOverviewTab(
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
-
             }
-
-
         }
 
         if (showUnitsSheet) {
@@ -609,7 +792,8 @@ fun OwnerOverviewTab(
                     modifier = Modifier.fillMaxWidth(),
                     state = scrollState
                 ) {
-                    items(selectableUnits + unitsForOwner) { unit ->
+
+                    items(mergedUnits) { unit ->
 
                         val isSelected =
                             selectedUnitsList.any { it.unitId == unit.unitId }
@@ -624,18 +808,55 @@ fun OwnerOverviewTab(
                             Checkbox(
                                 checked = isSelected,
                                 onCheckedChange = { checked ->
+                                    if (uiLocked) return@Checkbox
+
                                     if (checked) {
                                         if (!isSelected) {
+                                            selectedUnitsText = selectedUnitsText + unit.unitNumber
+                                            selectedUnits = selectedUnits + unit
+
+                                            val afterAddCount = selectedUnitsList.size + 1
+                                            val residentFlag = isResident && afterAddCount == 1
+
                                             selectedUnitsList.add(
                                                 OwnersUnitsCrossRef(
                                                     ownerId = ownerId,
                                                     unitId = unit.unitId,
-                                                    dang = 6.0
+                                                    dang = 6.0,
+                                                    isResident = residentFlag
                                                 )
                                             )
+
+                                            if (residentFlag) {
+                                                selectedUnitText = listOf(unit.unitNumber)
+                                                residentUnit = units.firstOrNull { it.unitId == unit.unitId }
+                                                    ?: unitsForOwner.firstOrNull { it.unitId == unit.unitId }
+                                            }
                                         }
                                     } else {
+                                        // remove selection
                                         selectedUnitsList.removeAll { it.unitId == unit.unitId }
+                                        selectedUnitsText = selectedUnitsText - unit.unitNumber
+                                        selectedUnits = selectedUnits - unit
+
+                                        // if removed unit was resident, clear resident choice
+                                        if (selectedUnitText.contains(unit.unitNumber)) {
+                                            selectedUnitText = emptyList()
+                                            residentUnit = null
+                                        }
+
+                                        // if isResident is on and only one unit remains, auto-set it as resident
+                                        if (isResident && selectedUnitsList.size == 1) {
+                                            val only = selectedUnitsList.first()
+                                            selectedUnitsList[0] = only.copy(isResident = true)
+
+                                            val onlyUnitNumber = selectedUnits.firstOrNull { it.unitId == only.unitId }?.unitNumber
+                                                ?: unitsForOwner.firstOrNull { it.unitId == only.unitId }?.unitNumber
+                                            selectedUnitText = listOfNotNull(onlyUnitNumber)
+
+                                            residentUnit = units.firstOrNull { it.unitId == only.unitId }
+                                                ?: unitsForOwner.firstOrNull { it.unitId == only.unitId }
+                                        }
                                     }
                                 }
                             )
@@ -669,7 +890,7 @@ fun OwnerOverviewTab(
                 }
             }
         }
-        if (!isEditing) {
+        if (!isEditing && currentRoleId != 7L && currentRoleId != 9L && currentRoleId != 10L) {
             FloatingActionButton(
                 onClick = { isEditing = true },
                 modifier = Modifier
@@ -717,6 +938,7 @@ fun OwnerTextField(label: Int, value: String, onValueChange: (String) -> Unit) {
 @Composable
 fun OwnerFinancialsTab(
     ownerId: Long,
+    buildingId:Long,
     sharedViewModel: SharedViewModel,
     snackBarHostState: SnackbarHostState,
     coroutineScope: CoroutineScope,
@@ -728,14 +950,14 @@ fun OwnerFinancialsTab(
     var allCosts by remember { mutableStateOf<List<Costs>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
+    var currentRoleId = Preference().getRoleId(context)
     LaunchedEffect(ownerId) {
         isLoading = true
         errorMessage = null
 
-        Cost().fetchCostsWithDebts(
-            context = context,
+        Cost(context).fetchCostsWithDebts(
             ownerId = ownerId,
+            buildingId = buildingId,
             unitId = null,
             onSuccess = { costs, debts ->
                 allCosts = costs
@@ -786,7 +1008,15 @@ fun OwnerFinancialsTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
-                        onClick = { showReportDialog = true },
+                        onClick = {
+                            if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L ){
+                                Toast.makeText(context, context.getString(R.string.auth_cancel),
+                                    Toast.LENGTH_LONG).show()
+                                } else {
+                                showReportDialog = true
+                            }
+
+                                  },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -853,9 +1083,12 @@ fun OwnerFinancialsTab(
                                 text = type.getDisplayName(context),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = if (filterType == type)
-                                    androidx.compose.ui.graphics.Color(context.getColor(R.color.white))
+                                    Color(context.getColor(R.color.white))
                                 else
-                                    androidx.compose.ui.graphics.Color(context.getColor(R.color.grey))
+                                    if(sharedViewModel.isDarkModeEnabled)
+                                        Color(context.getColor(R.color.white))
+                                                else
+                                    Color(context.getColor(R.color.grey))
                             )
                         }
                     }
@@ -917,7 +1150,6 @@ fun OwnerFinancialsTab(
 
                                             val cost = allCosts.find { it.costId == debt.costId }
                                             val fundType = cost?.fundType ?: FundType.OPERATIONAL
-
                                             Fund().increaseBalanceFundOnServer(
                                                 context = context,
                                                 buildingId = debt.buildingId,
@@ -980,6 +1212,7 @@ private enum class ReportRangeType { THREE_MONTHS, SIX_MONTHS, ONE_YEAR, CUSTOM 
 fun FinancialReportDialog(
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
+    title: String ?= "",
     onSubmit: (startDate: String, endDate: String) -> Unit
 ) {
     val context = LocalContext.current
@@ -999,10 +1232,17 @@ fun FinancialReportDialog(
     AlertDialog(
         onDismissRequest = {},
         title = {
-            Text(
-                text = context.getString(R.string.get_report),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            if (title.isNullOrEmpty()) {
+                Text(
+                    text = context.getString(R.string.get_report),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                Text(
+                    text = title.toString(),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1265,7 +1505,7 @@ fun TransactionRow(transaction: TransactionItem, onPayment: () -> Unit) {
                 Text(
                     text = "${formatNumberWithCommas(transaction.amount.roundToLong())} ${context.getString(R.string.toman)}",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(context.getColor(R.color.Green))
+                    color = MaterialTheme.colorScheme.secondary,
                 )
                 Spacer(Modifier.height(8.dp))
                 if (transaction.transactionType == FilterType.PAYMENT) {

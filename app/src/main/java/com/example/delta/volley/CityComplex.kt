@@ -15,7 +15,7 @@ import kotlin.coroutines.resumeWithException
 import org.json.JSONObject
 
 class CityComplex(
-    private val baseUrl: String = "http://217.144.107.231:3000/citycomplex"
+    private val baseUrl: String = "http://185.129.197.6:443/citycomplex"
 ) {
 
     private fun formatVolleyError(tag: String, error: VolleyError): Exception {

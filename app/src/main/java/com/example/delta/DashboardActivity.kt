@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,7 @@ import com.example.delta.volley.Cost
 import com.example.delta.volley.Cost.BuildingWithCosts
 import com.example.delta.volley.UnitBreakdown
 import com.github.mikephil.charting.charts.BarChart
+import com.github.mikephil.charting.components.Legend
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.BarData
 import com.github.mikephil.charting.data.BarDataSet
@@ -60,12 +63,15 @@ class DashboardActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        val initialBuildingId = intent.getLongExtra("building_id", 0L).let { if (it == 0L) null else it }
+
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MaterialTheme {
                         ReportsActivityScreen(
                             sharedViewModel = sharedViewModel,
+                            initialBuildingId = initialBuildingId,
                             onHomeClick = { startActivity(Intent(this, HomePageActivity::class.java)) }
                         )
                     }
@@ -79,31 +85,36 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 fun ReportsActivityScreen(
     sharedViewModel: SharedViewModel,
+    initialBuildingId: Long?,
     onHomeClick: () -> Unit
 ) {
     val context = LocalContext.current
+    var isSwitchingBuilding by rememberSaveable { mutableStateOf(false) }
+    var lastLoadedBuildingId by rememberSaveable { mutableStateOf<Long?>(null) }
 
-    var selectedBuildingId by remember { mutableStateOf<Long?>(null) }
-    var buildingName by remember { mutableStateOf<String>("") }
+//    var selectedBuildingId by remember { mutableStateOf<Long?>(initialBuildingId) }
+    var selectedBuildingId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    var buildingName by remember { mutableStateOf("") }
     var showNoDataChartDialog by remember { mutableStateOf(false) }
 
     var buildingsWithCosts by remember { mutableStateOf<List<BuildingWithCosts>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDashboardReportDialog by remember { mutableStateOf(false) }
-
     LaunchedEffect(Unit) {
-        Cost().fetchBuildingsWithCosts(
-            context = context,
+        Cost(context).fetchBuildingsWithCosts(
             mobileNumber = Preference().getUserMobile(context) ?: "",
+            roleId = Preference().getRoleId(context),
             onSuccess = { list ->
                 buildingsWithCosts = list
                 isLoading = false
 
                 if (list.isNotEmpty()) {
-                    if (selectedBuildingId == null) {
-                        selectedBuildingId = list.first().building.buildingId
-                    }
+                    val availableIds = list.map { it.building.buildingId }.toSet()
+
+                    selectedBuildingId = initialBuildingId
+
                     showNoDataChartDialog = false
                 } else {
                     selectedBuildingId = null
@@ -111,21 +122,43 @@ fun ReportsActivityScreen(
                 }
             },
             onError = { e ->
-                errorMessage = e.message
                 isLoading = false
-                showNoDataChartDialog = true
+                errorMessage = e.message
             }
         )
     }
-
     val buildings = remember(buildingsWithCosts) {
         buildingsWithCosts.map { it.building }
+    }
+
+    LaunchedEffect(buildingsWithCosts, initialBuildingId) {
+        if (buildingsWithCosts.isNotEmpty()) {
+            val validIds = buildingsWithCosts.map { it.building.buildingId }
+
+            selectedBuildingId = when {
+                initialBuildingId != null ->//&& initialBuildingId in validIds ->
+                    initialBuildingId
+
+                selectedBuildingId != null ->// && selectedBuildingId in validIds ->
+                    selectedBuildingId
+
+                else -> validIds.first()
+            }
+        }
     }
 
     LaunchedEffect(selectedBuildingId) {
         val bId = selectedBuildingId
         if (bId != null && bId > 0) {
-            sharedViewModel.loadDashboard(context, bId)
+            try{
+                isSwitchingBuilding = true
+                sharedViewModel.loadDashboard(context, bId)
+            } catch (e: Exception){
+                isSwitchingBuilding = false
+            } finally {
+                isSwitchingBuilding = false
+            }
+
         }
     }
 
@@ -295,12 +328,14 @@ fun ReportsActivityScreen(
     val totalDebtsCurrentYear: Double = remember(debtsList, currentYear) {
         debtsList
             .filter { extractYear(it.dueDate) == currentYear }
+            .filter { it.description !in excludedDescriptions }
             .sumOf { it.amount / 1_000_000f }
     }
 
     val totalPaysCurrentYear: Double = remember(paysList, currentYear) {
         paysList
             .filter { extractYear(it.dueDate) == currentYear }
+            .filter { it.description !in excludedDescriptions }
             .sumOf { it.amount / 1_000_000f }
     }
 
@@ -315,6 +350,27 @@ fun ReportsActivityScreen(
             .filter { extractYear(it.dueDate) == currentYear }
             .sumOf { it.amount / 1_000_000f }
     }
+
+//    LaunchedEffect(selectedBuildingId, debtsList, paysList, costsList, unitsList) {
+//        val bId = selectedBuildingId
+//        if (bId != null && bId > 0) {
+//            if (lastLoadedBuildingId != bId) {
+//                val hasAnyUpdate =
+//                    debtsList.isNotEmpty() ||
+//                            paysList.isNotEmpty() ||
+//                            costsList.isNotEmpty() ||
+//                            unitsList.isNotEmpty()
+//
+//                if (hasAnyUpdate) {
+//                    lastLoadedBuildingId = bId
+//                    isSwitchingBuilding = false
+//                }
+//            } else {
+//                isSwitchingBuilding = false
+//            }
+//        }
+//    }
+
 
     Scaffold(
         floatingActionButton = {
@@ -342,245 +398,307 @@ fun ReportsActivityScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(scrollState)
         ) {
-            if (!showNoDataChartDialog) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp)
-                ) {
-                    items(buildings) { building ->
-                        FilterChip(
-                            selected = building.buildingId == selectedBuildingId,
-                            onClick = { selectedBuildingId = building.buildingId },
-                            label = {
-                                Text(
-                                    building.name,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        if (building.buildingId == selectedBuildingId) {
-                            buildingName = building.name
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+            ) {
+                if (!showNoDataChartDialog) {
+                    Row(modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp)){
+                        Text(text = context.getString(R.string.manager_building_list), style = MaterialTheme.typography.labelLarge)
+                    }
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp)
+                    ) {
+                        items(buildings) { building ->
+                            FilterChip(
+                                selected = building.buildingId == selectedBuildingId,
+                                onClick = {
+                                    if (selectedBuildingId != building.buildingId) {
+                                        isSwitchingBuilding = true
+                                        selectedBuildingId = building.buildingId
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        building.name,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                enabled = !isSwitchingBuilding,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            if (building.buildingId == selectedBuildingId) {
+                                buildingName = building.name
+                            }
                         }
                     }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    SummaryCard(
-                        title = context.getString(R.string.current_year_debt),
-                        subtitle = "سال $currentYear",
-                        amount = totalDebtsCurrentYear,
-                        formatter = numberFormatter,
-                        modifier = Modifier.weight(1f),
-                        amountColor = Color(context.getColor(R.color.Red_light))
-                    )
-                    SummaryCard(
-                        title = context.getString(R.string.current_year_pays),
-                        subtitle = "سال $currentYear",
-                        amount = totalPaysCurrentYear,
-                        formatter = numberFormatter,
-                        modifier = Modifier.weight(1f),
-                        amountColor = Color(context.getColor(R.color.Green))
-                    )
-                }
-
-                Spacer(Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    SummaryCard(
-                        title = context.getString(R.string.current_year_pending_receipt),
-                        subtitle = "سال $currentYear",
-                        amount = totalPendingReceiptCurrentYear,
-                        formatter = numberFormatter,
-                        modifier = Modifier.weight(1f),
-                        amountColor = Color(context.getColor(R.color.Red_light))
-                    )
-                    SummaryCard(
-                        title = context.getString(R.string.current_year_receipt),
-                        subtitle = "سال $currentYear",
-                        amount = totalReceiptCurrentYear,
-                        formatter = numberFormatter,
-                        modifier = Modifier.weight(1f),
-                        amountColor = Color(context.getColor(R.color.Green))
-                    )
-                }
-
-                if (showNoRecordedData) {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = context.getString(R.string.no_data_recorded),
-                            style = MaterialTheme.typography.bodyLarge
+                        SummaryCard(
+                            title = context.getString(R.string.current_year_debt),
+                            subtitle = "سال $currentYear",
+                            amount = totalDebtsCurrentYear,
+                            formatter = numberFormatter,
+                            modifier = Modifier.weight(1f),
+                            amountColor = Color(context.getColor(R.color.Red_light))
+                        )
+                        SummaryCard(
+                            title = context.getString(R.string.current_year_pays),
+                            subtitle = "سال $currentYear",
+                            amount = totalPaysCurrentYear,
+                            formatter = numberFormatter,
+                            modifier = Modifier.weight(1f),
+                            amountColor = MaterialTheme.colorScheme.secondary
                         )
                     }
-                } else {
-                    AndroidView(
-                        factory = { ctx ->
-                            BarChart(ctx).apply {
-                                setNoDataText(context.getString(R.string.no_data))
-                                description.isEnabled = false
-                                setPinchZoom(false)
-                                setDrawGridBackground(false)
-                                legend.isEnabled = true
-                                animateY(1000)
-                                axisRight.isEnabled = false
-                                axisLeft.apply {
-                                    axisMinimum = 0f
-                                    setDrawGridLines(true)
-                                    granularity = 1f
-                                    typeface = yekanTypeface
-                                    valueFormatter = MillionValueFormatter()
-                                    textSize = 13f
-                                }
-                                legend.apply {
-                                    typeface = yekanTypeface
-                                    textSize = 12f
-                                    textColor = Color(ctx.getColor(R.color.black)).toArgb()
-                                }
-                                xAxis.apply {
-                                    position = XAxis.XAxisPosition.BOTTOM
-                                    granularity = 1f
-                                    setDrawGridLines(false)
-                                    typeface = yekanTypeface
-                                    labelRotationAngle = -15f
-                                    setCenterAxisLabels(true)
-                                }
-                            }
-                        },
-                        update = { chart ->
-                            val labels = arrayOf("شارژ عمرانی", "شارژ جاری")
 
-                            val debtsEntries = mutableListOf<BarEntry>()
-                            val paysEntries = mutableListOf<BarEntry>()
+                    Spacer(Modifier.height(4.dp))
 
-                            val capitalDebt = capitalSummary!!.unpaid.toFloat()
-                            val capitalPay = capitalSummary!!.paid.toFloat()
-                            val chargeDebt = chargeSummary!!.unpaid.toFloat()
-                            val chargePay = chargeSummary!!.paid.toFloat()
-
-                            debtsEntries.add(BarEntry(0f, capitalDebt))
-                            paysEntries.add(BarEntry(0f, capitalPay))
-
-                            debtsEntries.add(BarEntry(1f, chargeDebt))
-                            paysEntries.add(BarEntry(1f, chargePay))
-
-                            val hasData = debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
-
-                            if (hasData) {
-                                val debtDataSet = BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
-                                    color = Color(context.getColor(R.color.Red_light)).toArgb()
-                                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                                    valueTextSize = 12f
-                                    valueTypeface = yekanTypeface
-                                    valueFormatter = MillionValueFormatter()
-                                }
-                                val payDataSet = BarDataSet(
-                                    paysEntries,
-                                    context.getString(R.string.payments)
-                                ).apply {
-                                    color = Color(context.getColor(R.color.Green)).toArgb()
-                                    valueTextColor = Color(context.getColor(R.color.black)).toArgb()
-                                    valueTextSize = 12f
-                                    valueTypeface = yekanTypeface
-                                    valueFormatter = MillionValueFormatter()
-                                }
-
-                                val data = BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
-                                val groupSpace = 0.4f
-                                val barSpace = 0.05f
-
-                                chart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
-                                chart.data = data
-                                data.groupBars(0f, groupSpace, barSpace)
-                                chart.xAxis.axisMinimum = -0.5f
-                                chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
-                                chart.invalidate()
-                            } else {
-                                chart.clear()
-                                chart.invalidate()
-                            }
-
-                            chart.setOnChartValueSelectedListener(object : OnChartValueSelectedListener {
-                                override fun onValueSelected(
-                                    e: com.github.mikephil.charting.data.Entry?,
-                                    h: Highlight?
-                                ) {
-                                    if (e == null) return
-                                    val xIndex = e.x.toInt()
-                                    selectedCategoryKey = when (xIndex) {
-                                        0 -> "شارژ عمرانی"
-                                        1 -> "شارژ جاری"
-                                        else -> null
-                                    }
-                                }
-
-                                override fun onNothingSelected() {
-                                    selectedCategoryKey = null
-                                }
-                            })
-                        },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(350.dp)
-                            .padding(horizontal = 16.dp)
-                    )
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        SummaryCard(
+                            title = context.getString(R.string.current_year_pending_receipt),
+                            subtitle = "سال $currentYear",
+                            amount = totalPendingReceiptCurrentYear,
+                            formatter = numberFormatter,
+                            modifier = Modifier.weight(1f),
+                            amountColor = Color(context.getColor(R.color.Red_light))
+                        )
+                        SummaryCard(
+                            title = context.getString(R.string.current_year_receipt),
+                            subtitle = "سال $currentYear",
+                            amount = totalReceiptCurrentYear,
+                            formatter = numberFormatter,
+                            modifier = Modifier.weight(1f),
+                            amountColor = MaterialTheme.colorScheme.secondary
+                        )
+                    }
 
-                    Spacer(Modifier.height(16.dp))
-
-                    if (selectedCategoryKey == null) {
-                        Text(
-                            text = context.getString(R.string.click_on_cost_columns),
-                            style = MaterialTheme.typography.bodyLarge,
+                    if (showNoRecordedData) {
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            textAlign = TextAlign.Center
-                        )
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = context.getString(R.string.no_data_recorded),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                     } else {
-                        when (selectedCategoryKey) {
-                            "شارژ عمرانی" -> {
-                                CategoryDetailChartByOwner(
-                                    category = "شارژ عمرانی",
-                                    items = capitalDetailByOwner,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                )
-                            }
-                            "شارژ جاری" -> {
-                                CategoryDetailChartByUnit(
-                                    category = "شارژ جاری",
-                                    items = chargeDetailByUnit,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                )
+                        AndroidView(
+                            factory = { ctx ->
+                                BarChart(ctx).apply {
+                                    setNoDataText(context.getString(R.string.no_data))
+                                    description.isEnabled = false
+                                    setPinchZoom(false)
+                                    setDrawGridBackground(false)
+                                    legend.isEnabled = true
+                                    animateY(1000)
+                                    axisRight.isEnabled = false
+                                    axisLeft.apply {
+                                        axisMinimum = 0f
+                                        setDrawGridLines(true)
+                                        granularity = 1f
+                                        typeface = yekanTypeface
+                                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                                            Color.White.toArgb()
+                                        else
+                                            Color(ctx.getColor(R.color.black)).toArgb()
+                                        valueFormatter = MillionValueFormatter()
+                                        textSize = 13f
+                                    }
+                                    legend.apply {
+                                        typeface = yekanTypeface
+                                        textSize = 12f
+                                        textColor = if(sharedViewModel.isDarkModeEnabled) Color.White.toArgb()  else  Color(ctx.getColor(R.color.black)).toArgb()
+                                    }
+                                    legend.apply {
+                                        isEnabled = true
+
+                                        verticalAlignment = Legend.LegendVerticalAlignment.BOTTOM
+                                        horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+                                        orientation = Legend.LegendOrientation.HORIZONTAL
+
+                                        xEntrySpace = 12f
+                                        yEntrySpace = 8f
+                                        textSize = 12f
+                                        form = Legend.LegendForm.SQUARE
+                                    }
+
+                                    xAxis.apply {
+                                        position = XAxis.XAxisPosition.BOTTOM
+                                        granularity = 1f
+                                        setDrawGridLines(false)
+                                        typeface = yekanTypeface
+                                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                                            Color.White.toArgb()
+                                        else
+                                            Color(ctx.getColor(R.color.black)).toArgb()
+                                        labelRotationAngle = -15f
+                                        setCenterAxisLabels(true)
+                                    }
+                                }
+                            },
+                            update = { chart ->
+                                val labels = arrayOf("شارژ عمرانی", "شارژ جاری")
+
+                                val debtsEntries = mutableListOf<BarEntry>()
+                                val paysEntries = mutableListOf<BarEntry>()
+
+                                val capitalDebt = capitalSummary!!.unpaid.toFloat()
+                                val capitalPay = capitalSummary!!.paid.toFloat()
+                                val chargeDebt = chargeSummary!!.unpaid.toFloat()
+                                val chargePay = chargeSummary!!.paid.toFloat()
+
+                                debtsEntries.add(BarEntry(0f, capitalDebt))
+                                paysEntries.add(BarEntry(0f, capitalPay))
+
+                                debtsEntries.add(BarEntry(1f, chargeDebt))
+                                paysEntries.add(BarEntry(1f, chargePay))
+
+                                val hasData =
+                                    debtsEntries.any { it.y != 0f } || paysEntries.any { it.y != 0f }
+
+                                if (hasData) {
+                                    val debtDataSet = BarDataSet(
+                                        debtsEntries,
+                                        context.getString(R.string.debt)
+                                    ).apply {
+                                        color = Color(context.getColor(R.color.Red_light)).toArgb()
+                                        valueTextColor =
+                                            if (sharedViewModel.isDarkModeEnabled)
+                                                Color(context.getColor(R.color.white)).toArgb()
+                                            else
+                                                Color(context.getColor(R.color.black)).toArgb()
+                                        valueTextSize = 12f
+                                        valueTypeface = yekanTypeface
+                                        valueFormatter = MillionValueFormatter()
+                                    }
+                                    val payDataSet = BarDataSet(
+                                        paysEntries,
+                                        context.getString(R.string.payments)
+                                    ).apply {
+                                        color = Color(context.getColor(R.color.Green)).toArgb()
+                                        valueTextColor =
+                                            if (sharedViewModel.isDarkModeEnabled)
+                                                Color(context.getColor(R.color.white)).toArgb()
+                                            else
+                                                Color(context.getColor(R.color.black)).toArgb()
+                                        valueTextSize = 12f
+                                        valueTypeface = yekanTypeface
+                                        valueFormatter = MillionValueFormatter()
+                                    }
+
+                                    val data =
+                                        BarData(debtDataSet, payDataSet).apply { barWidth = 0.3f }
+                                    val groupSpace = 0.4f
+                                    val barSpace = 0.05f
+
+                                    chart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
+                                    chart.data = data
+                                    data.groupBars(0f, groupSpace, barSpace)
+                                    chart.xAxis.axisMinimum = -0.5f
+                                    chart.xAxis.axisMaximum = data.xMax + groupSpace + 0.9f
+                                    chart.invalidate()
+                                } else {
+                                    chart.clear()
+                                    chart.invalidate()
+                                }
+
+                                chart.setOnChartValueSelectedListener(object :
+                                    OnChartValueSelectedListener {
+                                    override fun onValueSelected(
+                                        e: com.github.mikephil.charting.data.Entry?,
+                                        h: Highlight?
+                                    ) {
+                                        if (e == null) return
+                                        val xIndex = e.x.toInt()
+                                        selectedCategoryKey = when (xIndex) {
+                                            0 -> "شارژ عمرانی"
+                                            1 -> "شارژ جاری"
+                                            else -> null
+                                        }
+                                    }
+
+                                    override fun onNothingSelected() {
+                                        selectedCategoryKey = null
+                                    }
+                                })
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(350.dp)
+                                .padding(horizontal = 16.dp)
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        if (selectedCategoryKey == null) {
+                            Text(
+                                text = context.getString(R.string.click_on_cost_columns),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                textAlign = TextAlign.Right
+                            )
+                        } else {
+                            when (selectedCategoryKey) {
+                                "شارژ عمرانی" -> {
+                                    CategoryDetailChartByOwner(
+                                        sharedViewModel = sharedViewModel,
+                                        category = "شارژ عمرانی",
+                                        items = capitalDetailByOwner,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    )
+                                }
+
+                                "شارژ جاری" -> {
+                                    CategoryDetailChartByUnit(
+                                        sharedViewModel = sharedViewModel,
+                                        category = "شارژ جاری",
+                                        items = chargeDetailByUnit,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    )
+                                }
                             }
                         }
+                        Spacer(modifier = Modifier.height(56.dp))
                     }
-                    Spacer(modifier = Modifier.height(56.dp))
                 }
             }
+                if (isSwitchingBuilding) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
         }
     }
 
@@ -619,6 +737,7 @@ fun ReportsActivityScreen(
         FinancialReportDialog(
             sharedViewModel = sharedViewModel,
             onDismiss = { showDashboardReportDialog = false },
+            title = context.getString(R.string.get_report) + " "+ context.getString(R.string.building) + " " + buildingName,
             onSubmit = { startDate, endDate ->
                 showDashboardReportDialog = false
                 val bId = selectedBuildingId
@@ -649,6 +768,7 @@ fun formatMillionLabel(value: Double): String {
 
 @Composable
 fun CategoryDetailChartByUnit(
+    sharedViewModel: SharedViewModel,
     category: String,
     items: List<UnitBreakdown>,
     modifier: Modifier = Modifier
@@ -679,19 +799,43 @@ fun CategoryDetailChartByUnit(
                         setDrawGridLines(true)
                         granularity = 1f
                         typeface = yekanTypeface
+                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                            Color.White.toArgb()
+                        else
+                            Color(ctx.getColor(R.color.black)).toArgb()
                         valueFormatter = MillionValueFormatter()
                     }
                     legend.apply {
                         typeface = yekanTypeface
                         textSize = 12f
-                        textColor = Color(ctx.getColor(R.color.black)).toArgb()
+                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                            Color.White.toArgb()
+                        else
+                            Color(ctx.getColor(R.color.black)).toArgb()
                     }
+                    legend.apply {
+                        isEnabled = true
+
+                        verticalAlignment = Legend.LegendVerticalAlignment.BOTTOM
+                        horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+                        orientation = Legend.LegendOrientation.HORIZONTAL
+
+                        xEntrySpace = 12f
+                        yEntrySpace = 8f
+                        textSize = 12f
+                        form = Legend.LegendForm.SQUARE
+                    }
+
                     xAxis.apply {
                         position = XAxis.XAxisPosition.BOTTOM
                         granularity = 1f
                         setDrawGridLines(false)
                         setCenterAxisLabels(true)
                         textSize = 14f
+                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                            Color.White.toArgb()
+                        else
+                            Color(ctx.getColor(R.color.black)).toArgb()
                         typeface = yekanTypeface
                         valueFormatter = IndexAxisValueFormatter(labels)
                     }
@@ -712,7 +856,12 @@ fun CategoryDetailChartByUnit(
                     val debtDataSet =
                         BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
                             color = Color(context.getColor(R.color.secondary_color)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextColor =
+                                if (sharedViewModel.isDarkModeEnabled)
+                                    Color(context.getColor(R.color.white)).toArgb()
+                                else
+                                    Color(context.getColor(R.color.black)).toArgb()
+
                             valueTextSize = 12f
                             valueTypeface = yekanTypeface
                             valueFormatter = MillionValueFormatter()
@@ -720,7 +869,11 @@ fun CategoryDetailChartByUnit(
                     val payDataSet =
                         BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
                             color = Color(context.getColor(R.color.teal_700)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextColor =
+                                if (sharedViewModel.isDarkModeEnabled)
+                                    Color(context.getColor(R.color.white)).toArgb()
+                                else
+                                    Color(context.getColor(R.color.black)).toArgb()
                             valueTextSize = 12f
                             valueTypeface = yekanTypeface
                             valueFormatter = MillionValueFormatter()
@@ -753,6 +906,7 @@ fun CategoryDetailChartByUnit(
 
 @Composable
 fun CategoryDetailChartByOwner(
+    sharedViewModel: SharedViewModel,
     category: String,
     items: List<CapitalOwnerBreakdown>,
     modifier: Modifier = Modifier
@@ -772,6 +926,7 @@ fun CategoryDetailChartByOwner(
         AndroidView(
             factory = { ctx ->
                 BarChart(ctx).apply {
+                    setNoDataText(context.getString(R.string.no_data))
                     description.isEnabled = false
                     setPinchZoom(false)
                     setDrawGridBackground(false)
@@ -782,12 +937,29 @@ fun CategoryDetailChartByOwner(
                         setDrawGridLines(true)
                         granularity = 1f
                         typeface = yekanTypeface
+                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                            Color.White.toArgb()
+                        else
+                            Color(ctx.getColor(R.color.black)).toArgb()
                         valueFormatter = MillionValueFormatter()
                     }
                     legend.apply {
                         typeface = yekanTypeface
                         textSize = 12f
-                        textColor = Color(ctx.getColor(R.color.black)).toArgb()
+                        textColor = if(sharedViewModel.isDarkModeEnabled) Color.White.toArgb()  else Color(ctx.getColor(R.color.black)).toArgb()
+                    }
+                    legend.apply {
+                        isEnabled = true
+
+                        verticalAlignment = Legend.LegendVerticalAlignment.BOTTOM
+                        horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+                        orientation = Legend.LegendOrientation.HORIZONTAL
+
+//                                        setDrawInside(false)
+                        xEntrySpace = 12f
+                        yEntrySpace = 8f
+                        textSize = 12f
+                        form = Legend.LegendForm.SQUARE
                     }
                     xAxis.apply {
                         position = XAxis.XAxisPosition.BOTTOM
@@ -796,6 +968,10 @@ fun CategoryDetailChartByOwner(
                         setCenterAxisLabels(true)
                         textSize = 14f
                         typeface = yekanTypeface
+                        textColor = if(sharedViewModel.isDarkModeEnabled)
+                            Color.White.toArgb()
+                        else
+                            Color(ctx.getColor(R.color.black)).toArgb()
                         valueFormatter = IndexAxisValueFormatter(labels)
                     }
                 }
@@ -815,7 +991,11 @@ fun CategoryDetailChartByOwner(
                     val debtDataSet =
                         BarDataSet(debtsEntries, context.getString(R.string.debt)).apply {
                             color = Color(context.getColor(R.color.secondary_color)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextColor =
+                                if (sharedViewModel.isDarkModeEnabled)
+                                    Color(context.getColor(R.color.white)).toArgb()
+                                else
+                                    Color(context.getColor(R.color.black)).toArgb()
                             valueTextSize = 12f
                             valueTypeface = yekanTypeface
                             valueFormatter = MillionValueFormatter()
@@ -823,7 +1003,11 @@ fun CategoryDetailChartByOwner(
                     val payDataSet =
                         BarDataSet(paysEntries, context.getString(R.string.payments)).apply {
                             color = Color(context.getColor(R.color.teal_700)).toArgb()
-                            valueTextColor = Color(context.getColor(R.color.black)).toArgb()
+                            valueTextColor =
+                                if (sharedViewModel.isDarkModeEnabled)
+                                    Color(context.getColor(R.color.white)).toArgb()
+                                else
+                                    Color(context.getColor(R.color.black)).toArgb()
                             valueTextSize = 12f
                             valueTypeface = yekanTypeface
                             valueFormatter = MillionValueFormatter()

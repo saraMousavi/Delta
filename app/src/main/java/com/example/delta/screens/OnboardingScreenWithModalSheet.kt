@@ -1,7 +1,9 @@
 package com.example.delta.screens
 
+import android.util.Log
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
@@ -20,13 +22,22 @@ import com.google.accompanist.pager.rememberPagerState
 
 import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ContentAlpha
+import androidx.compose.material.LocalContentAlpha
+import androidx.compose.material.LocalContentColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import com.example.delta.AppTheme
+import com.example.delta.LightColorScheme
 import com.example.delta.init.FileManagement
+import com.example.delta.viewmodel.SharedViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreenWithModalSheet(
+    sharedViewModel : SharedViewModel,
     onManualEntry: () -> Unit,
     onImportExcel: () -> Unit,
     roleId: Long?,
@@ -55,123 +66,130 @@ fun OnboardingScreenWithModalSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
     val thisActivity = LocalActivity.current ?: return
-
-    if (showSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
-            sheetState = sheetState,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+    AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+        if (showSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSheet = false },
+                sheetState = sheetState,
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = context.getString(R.string.select_data_input_method),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Text(
-                    text = context.getString(R.string.template_download),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable {
-                        val fileManager = FileManagement()
-                        fileManager.openTemplateExcel(
-                            activity = thisActivity,
-                            rawResourceId = R.raw.export_delta_template,
-                            fileName = "export_delta_template.xlsx",
-                            authority = "${thisActivity.packageName}.fileprovider"
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = context.getString(R.string.select_data_input_method),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Text(
+                        text = context.getString(R.string.template_download),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            val fileManager = FileManagement()
+                            fileManager.openTemplateExcel(
+                                activity = thisActivity,
+                                rawResourceId = R.raw.export_delta_template,
+                                fileName = "export_delta_template.xlsx",
+                                authority = "${thisActivity.packageName}.fileprovider"
+                            )
+                        },
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = {
+                            showSheet = false
+                            onImportExcel()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = context.getString(R.string.import_from_excel),
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                    },
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                    }
 
-                Spacer(Modifier.height(4.dp))
-                Button(
-                    onClick = {
-                        showSheet = false
-                        onImportExcel()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text(
-                        text = context.getString(R.string.import_from_excel),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        showSheet = false
-                        onManualEntry()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text(
-                        text = context.getString(R.string.enter_data_manually),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            showSheet = false
+                            onManualEntry()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = context.getString(R.string.enter_data_manually),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
         }
-    }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        HorizontalPager(
-            count = pages.size,
-            state = pagerState,
-            modifier = Modifier.weight(1f)
-        ) { page ->
-            OnboardingPageContent(page = pages[page])
-        }
+        Column(
+            modifier = Modifier.fillMaxSize()
+                .background(color = if(sharedViewModel.isDarkModeEnabled) Color(0xFF121212) else Color.White),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            HorizontalPager(
+                count = pages.size,
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { page ->
+                OnboardingPageContent(page = pages[page])
+            }
 
-        HorizontalPagerIndicator(
-            pagerState = pagerState,
-            modifier = Modifier.padding(16.dp)
-        )
+            HorizontalPagerIndicator(
+                pagerState = pagerState,
+                modifier = Modifier.padding(16.dp),
+                activeColor = if(sharedViewModel.isDarkModeEnabled) LightColorScheme.onSecondary else
+                    LocalContentColor.current.copy(alpha = LocalContentAlpha.current),
+                inactiveColor =  if(sharedViewModel.isDarkModeEnabled) Color(0xFF8F9BB3) else
+                    LocalContentColor.current.copy(ContentAlpha.disabled),
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        if (pagerState.currentPage == pages.size - 1) {
-            when (roleId) {
-                1L, 3L -> {
-                    Button(
-                        onClick = { showSheet = true },
-                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-                    ) {
-                        Text(
-                            text = context.getString(R.string.start),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+            if (pagerState.currentPage == pages.size - 1) {
+                when (roleId) {
+                    1L, 3L -> {
+                        Button(
+                            onClick = { showSheet = true },
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+                        ) {
+                            Text(
+                                text = context.getString(R.string.start),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                     }
-                }
-                else -> {
-                    Button(
-                        onClick = onFinish,
-                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-                    ) {
-                        Text(
-                            text = context.getString(R.string.finish),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+
+                    else -> {
+                        Button(
+                            onClick = onFinish,
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+                        ) {
+                            Text(
+                                text = context.getString(R.string.finish),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(52.dp))
                     }
-                    Spacer(modifier = Modifier.height(52.dp))
                 }
             }
         }

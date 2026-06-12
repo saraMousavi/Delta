@@ -43,4 +43,5 @@ data class Costs(
     @ColumnInfo(name = "capital_flag") var capitalFlag: Boolean?= false,
     @ColumnInfo(name = "invoice_flag") var invoiceFlag: Boolean?= false,
     @ColumnInfo(name = "due_date") val dueDate: String, // Due date of the debt
+    @ColumnInfo(name = "payment_date") val paymentDate: String?= "", // payment date of the debt
 ) : Parcelable

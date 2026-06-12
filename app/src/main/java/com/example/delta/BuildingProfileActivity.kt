@@ -1,15 +1,23 @@
 package com.example.delta
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.Activity.RESULT_OK
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,15 +31,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -60,17 +69,21 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -108,7 +121,6 @@ import com.example.delta.data.entity.Buildings
 import com.example.delta.data.entity.CityComplexes
 import com.example.delta.data.entity.Costs
 import com.example.delta.data.entity.Earnings
-import com.example.delta.data.entity.PhonebookEntry
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.User
 import com.example.delta.enums.CalculateMethod
@@ -122,29 +134,28 @@ import com.example.delta.extentions.findActivity
 import com.example.delta.factory.BuildingsViewModelFactory
 import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
 import com.example.delta.init.AuthUtils.AuthorizationFieldsBuildingProfile
-import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
 import com.example.delta.init.AuthUtils.AuthorizationObjects
 import com.example.delta.init.IranianLocations
 import com.example.delta.init.NumberCommaTransformation
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
+import com.example.delta.server.JsonParser.OwnerWithUnitsDto
 import com.example.delta.viewmodel.BuildingsViewModel
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
 import com.example.delta.volley.Building.BuildingFullDto
 import com.example.delta.volley.BuildingType
 import com.example.delta.volley.BuildingUsage
-import com.example.delta.volley.CityComplex
 import com.example.delta.volley.Cost
-import com.example.delta.volley.Earning
 import com.example.delta.volley.Owner
 import com.example.delta.volley.Tenant
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import kotlin.math.roundToLong
+import kotlin.text.isDigit
 
+var NEED_REFRESH: Boolean = false
 class BuildingProfileActivity : ComponentActivity() {
 
 
@@ -156,6 +167,7 @@ class BuildingProfileActivity : ComponentActivity() {
     var buildingTypeName: String = ""
     var buildingUsageName: String = ""
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -166,6 +178,19 @@ class BuildingProfileActivity : ComponentActivity() {
             finish()
             return
         }
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    val resultIntent = Intent().apply {
+                        putExtra("NEED_REFRESH", NEED_REFRESH)
+                    }
+                    setResult(RESULT_OK, resultIntent)
+                    finish()
+                }
+            }
+        )
 
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
@@ -278,7 +303,7 @@ class BuildingProfileActivity : ComponentActivity() {
 
 
         val tabs = listOfNotNull(
-            BuildingTabItem(context.getString(R.string.overview), BuildingTabType.OVERVIEW),
+            BuildingTabItem(context.getString(R.string.buildings_info), BuildingTabType.OVERVIEW),
             if (currentRoleId==7L || unitPerm == PermissionLevel.WRITE || unitPerm == PermissionLevel.FULL ) {
                 BuildingTabItem(context.getString(R.string.units), BuildingTabType.UNITS)
             } else null,
@@ -292,15 +317,15 @@ class BuildingProfileActivity : ComponentActivity() {
             if (currentRoleId==7L || fundPerm == PermissionLevel.WRITE || fundPerm == PermissionLevel.FULL ) {
                 BuildingTabItem(context.getString(R.string.funds), BuildingTabType.FUNDS)
             } else null,
-            if (currentRoleId==7L  || transactionPerm == PermissionLevel.READ || transactionPerm == PermissionLevel.WRITE || transactionPerm == PermissionLevel.FULL ) {
+            if (currentRoleId==7L  || transactionPerm == PermissionLevel.WRITE || transactionPerm == PermissionLevel.FULL ) {
                 BuildingTabItem(
-                    context.getString(R.string.transaction),
+                    context.getString(R.string.finance_history),
                     BuildingTabType.TRANSACTIONS
                 )
             } else null,
             if (currentRoleId==7L || currentRoleId==9L || currentRoleId==10L || phonePerm == PermissionLevel.READ || phonePerm == PermissionLevel.WRITE || phonePerm == PermissionLevel.FULL ) {
                 BuildingTabItem(
-                    context.getString(R.string.phone_number),
+                    context.getString(R.string.phone_book),
                     BuildingTabType.PHONEBOOK_TAB
                 )
             } else null,
@@ -317,7 +342,12 @@ class BuildingProfileActivity : ComponentActivity() {
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { finish() }) {
+                        IconButton(onClick = { val resultIntent = Intent().apply {
+                            putExtra("NEED_REFRESH", NEED_REFRESH)
+                        }
+                            setResult(RESULT_OK, resultIntent)
+                            finish()
+                        }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
@@ -325,23 +355,21 @@ class BuildingProfileActivity : ComponentActivity() {
             }
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 BuildingProfileSectionSelector(
                     tabs = tabs,
                     selectedIndex = selectedTab,
                     onTabSelected = { selectedTab = it },
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
                 when (tabs.getOrNull(selectedTab)?.type) {
                     BuildingTabType.OVERVIEW -> {
                         OverviewTab(
                             sharedViewModel = sharedViewModel,
                             building = building,
                             onUpdateBuilding = { updatedBuilding, selectedCostName, hasCalculatedCharge, fileIds ->
-                                Building().updateBuilding(
-                                    context = context,
+
+                                Building(context).updateBuilding(
                                     building = updatedBuilding,
                                     selectedCostNames = selectedCostName,
                                     replaceCosts = !hasCalculatedCharge,
@@ -353,6 +381,12 @@ class BuildingProfileActivity : ComponentActivity() {
                                                 context.getString(R.string.success_update),
                                                 Toast.LENGTH_SHORT
                                             ).show()
+                                            NEED_REFRESH = true
+                                            sharedViewModel.loadBuildingFromServer(
+                                                context = context,
+                                                buildingId = building.buildingId,
+                                                fiscalYear = null
+                                            )
                                         }
                                     },
                                     onError = { e ->
@@ -384,7 +418,8 @@ class BuildingProfileActivity : ComponentActivity() {
                                     }
                                 context.startActivity(intent)
                             }
-                        })
+                        }
+                    )
 
                     BuildingTabType.TRANSACTIONS -> TransactionHistoryTab(building, sharedViewModel)
                     BuildingTabType.PHONEBOOK_TAB -> PhonebookTab(
@@ -419,23 +454,31 @@ fun OverviewTab(
     val allCosts by sharedViewModel.costsList.collectAsState()
     val chargesCost by sharedViewModel.chargesCost.collectAsState()
 
-    val costApi = remember { Cost() }
+    val costApi = remember { Cost(context) }
     val addNewLabel = context.getString(R.string.addNew)
 
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var allChargeCosts by remember { mutableStateOf<List<Costs>>(emptyList()) }
     val hasCalculatedCharges = chargesCost.any { it.tempAmount != 0.0 }
-
+    var showDeleteDialog by remember{mutableStateOf(false)}
+    var showDeleteBuildingUsageDialog by remember{mutableStateOf(false)}
+    var showDeleteBuildingTypeDialog by remember{mutableStateOf(false)}
+    var deletedCost by remember{mutableStateOf<Costs?>(null)}
+    var deletedBuildingUsage by remember{mutableStateOf<BuildingUsages?>(null)}
+    var deletedBuildingType by remember{mutableStateOf<BuildingTypes?>(null)}
     val buildingFiles by sharedViewModel.buildingFiles.collectAsState()
     val fileIdsForUpdate = remember(buildingFiles) {
         buildingFiles.map { it.fileId }
     }
 
+    var phoneError by remember { mutableStateOf(false) }
+    var mobileError by remember { mutableStateOf(false) }
+
+
     val base = allCosts
         .filter { it.fundType == FundType.OPERATIONAL }
         .filter { it.chargeFlag == true }
         .filter { it.tempAmount == 0.0 }
-
     val buildingId = building.buildingId
 
     val defaults = base.filter {
@@ -446,23 +489,20 @@ fun OverviewTab(
         it.forBuildingId == buildingId &&
                 (it.buildingId == buildingId || it.buildingId == 0L || it.buildingId == null)
     }
-
     val pickedPerName = scoped
         .groupBy { it.costName }
         .mapNotNull { (_, list) ->
             list.firstOrNull { it.buildingId == buildingId && it.forBuildingId == buildingId }
                 ?: list.firstOrNull { (it.buildingId == 0L || it.buildingId == null) && it.forBuildingId == buildingId }
         }
-
     allChargeCosts = (pickedPerName + defaults).distinctBy { it.costName }
-
-    Log.d("allChargeCosts", allChargeCosts.toString())
     LaunchedEffect(chargesCost) {
         selectedCostNames = chargesCost
             .filter { it.chargeFlag == true }
             .filter { it.tempAmount == 0.0 }
             .map { it.costName }
     }
+
 
     var showChargeCostDialog by remember { mutableStateOf(false) }
 
@@ -478,9 +518,21 @@ fun OverviewTab(
         cityComplexes.find { it.complexId == editableBuilding.complexId }
     }
 
+    var maxUnitsError by remember { mutableStateOf(false) }
+    var maxInsertedUnits by remember { mutableStateOf<Int>(0) }
     LaunchedEffect(Unit) {
         sharedViewModel.loadOverviewData(context = context, buildingId = building.buildingId)
+        com.example.delta.volley.Units().fetchUnitsForBuilding(
+            context = context,
+            buildingId = building.buildingId,
+            onSuccess = { list ->
+                maxInsertedUnits = list.size
+            },
+            onError = {
+            }
+        )
     }
+
 
     val buildingTypeNameTrigger = context.getString(R.string.city_complex)
 
@@ -488,11 +540,39 @@ fun OverviewTab(
     var showBuildingTypeDialog by remember { mutableStateOf(false) }
     var showBuildingUsageDialog by remember { mutableStateOf(false) }
 
-    val serialHasError = remember(editableBuilding.serialNumber) {
-        editableBuilding.serialNumber.isNotBlank() &&
-                !validation.isValidDeedSerial(editableBuilding.serialNumber)
+    val canSave = remember(editableBuilding) {
+        !maxUnitsError &&
+        editableBuilding.name.isNotBlank() &&
+                editableBuilding.buildingTypeId != null &&
+                editableBuilding.buildingUsageId != null &&
+                editableBuilding.street.isNotBlank() &&
+                editableBuilding.postCode.isNotBlank() &&
+                editableBuilding.phone.isNotBlank() &&
+                editableBuilding.floorCount.isNotBlank() &&
+                editableBuilding.unitCount.isNotBlank() &&
+                editableBuilding.mobileNumber.isNotBlank() &&
+                Validation().isValidPostalCode(editableBuilding.postCode)
     }
-    val canSave = !serialHasError
+
+    val chipItems =
+        if (allChargeCosts.any { it.costName == addNewLabel }) {
+            allChargeCosts
+        } else {
+            allChargeCosts + Costs(
+                costName = addNewLabel,
+                chargeFlag = true,
+                fundType = FundType.OPERATIONAL,
+                responsible = Responsible.TENANT,
+                paymentLevel = PaymentLevel.UNIT,
+                calculateMethod = CalculateMethod.EQUAL,
+                period = Period.YEARLY,
+                dueDate = "",
+                tempAmount = 0.0,
+                costFor = "",
+                documentNumber = "",
+                forBuildingId = 0
+            )
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -537,15 +617,57 @@ fun OverviewTab(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Spacer(Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = editableBuilding.floorCount.toString(),
-                                    onValueChange = {
-                                        editableBuilding = editableBuilding.copy(floorCount = it.toInt())
-                                    },
-                                    label = { RequiredLabel(context.getString(R.string.floor_count)) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Column {
+                                        Row {
+                                            OutlinedTextField(
+                                                value = editableBuilding.floorCount.toString(),
+                                                onValueChange = { input ->
+                                                    if (input.isEmpty() || input.all { it.isDigit() }) {
+                                                        editableBuilding =
+                                                            editableBuilding.copy(floorCount = input)
+                                                    }
+
+                                                },
+                                                label = { RequiredLabel(context.getString(R.string.floor_count)) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            OutlinedTextField(
+                                                value = editableBuilding.unitCount.toString(),
+                                                onValueChange = { input ->
+                                                    if (input.isEmpty() || input.all { it.isDigit() }) {
+                                                        editableBuilding =
+                                                            editableBuilding.copy(unitCount = input)
+                                                        val maxUnits = input.toIntOrNull() ?: 0
+                                                        maxUnitsError = (maxUnits < maxInsertedUnits && maxUnits > 0)
+                                                    }
+                                                },
+                                                isError = maxUnitsError,
+                                                label = { RequiredLabel(context.getString(R.string.unit_ount)) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        Row{
+                                            if (maxUnitsError) {
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(
+                                                    text = context.getString(R.string.its_less_than_iserted_units),
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                             } else {
                                 Text(
                                     text = "${context.getString(R.string.building_name)}: ${editableBuilding.name}",
@@ -557,32 +679,22 @@ fun OverviewTab(
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = "${context.getString(R.string.floor_count)}: ${editableBuilding.floorCount}",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "${context.getString(R.string.floor_count)}: ${editableBuilding.floorCount}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = "${context.getString(R.string.unit_ount)}: ${editableBuilding.unitCount}",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+
                             }
-                            Spacer(Modifier.height(8.dp))
-                            if (isEditing) {
-                                OutlinedTextField(
-                                    value = editableBuilding.street,
-                                    onValueChange = {
-                                        editableBuilding = editableBuilding.copy(street = it)
-                                    },
-                                    label = {
-                                        Text(
-                                            context.getString(R.string.address),
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            } else {
-                                Text(
-                                    text = "${context.getString(R.string.address)}: ${editableBuilding.street}",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
+
                             Spacer(Modifier.height(8.dp))
                             if (isEditing) {
                                 OutlinedTextField(
@@ -596,11 +708,80 @@ fun OverviewTab(
                                             style = MaterialTheme.typography.bodyLarge
                                         )
                                     },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 )
                             } else {
                                 Text(
                                     text = "${context.getString(R.string.post_code)}: ${editableBuilding.postCode}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+                            if (isEditing) {
+                                OutlinedTextField(
+                                    value = editableBuilding.phone,
+                                    onValueChange = {
+                                        editableBuilding = editableBuilding.copy(phone = it)
+                                        phoneError = !validation.isValidPhone(it)
+                                    },
+                                    isError = phoneError,
+                                    label = {
+                                        Text(
+                                            context.getString(R.string.phone_number),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
+                                if (phoneError) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = context.getString(R.string.invalid_phone_number),
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "${context.getString(R.string.phone_number)}: ${editableBuilding.phone}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+                            if (isEditing) {
+                                OutlinedTextField(
+                                    value = editableBuilding.mobileNumber,
+                                    onValueChange = {
+                                        editableBuilding = editableBuilding.copy(mobileNumber = it)
+                                        mobileError = !validation.isValidIranMobile(it)
+                                    },
+                                    label = {
+                                        Text(
+                                            context.getString(R.string.mobile_number),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    isError = mobileError,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
+                                if (mobileError) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = context.getString(R.string.invalid_mobile_number),
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "${context.getString(R.string.mobile_number)}: ${editableBuilding.mobileNumber}",
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -664,6 +845,28 @@ fun OverviewTab(
                                     )
                                 }
                             }
+
+                            Spacer(Modifier.height(8.dp))
+                            if (isEditing) {
+                                OutlinedTextField(
+                                    value = editableBuilding.street,
+                                    onValueChange = {
+                                        editableBuilding = editableBuilding.copy(street = it)
+                                    },
+                                    label = {
+                                        Text(
+                                            context.getString(R.string.address),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                Text(
+                                    text = "${context.getString(R.string.address)}: ${editableBuilding.street}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                 }
@@ -706,68 +909,66 @@ fun OverviewTab(
                                     modifier = Modifier.fillMaxWidth(),
                                     itemLabel = { it.buildingTypeName },
                                     showDeleteFor = { type ->
-                                        val c = buildingTypes.firstOrNull { it.buildingTypeName == type.buildingTypeName }
+                                        val c = buildingTypes
+                                            .filter { it.forBuildingId == building.buildingId}
+                                            .firstOrNull { it.buildingTypeName == type.buildingTypeName }
+                                        val a = buildingTypes
+                                            .filter { it.addedBeforeCreateBuilding == true}
+                                            .firstOrNull { it.buildingTypeName == type.buildingTypeName }
                                         val bId = c?.forBuildingId ?: 0L
-                                        val tempBuildingType = c?.addedBeforeCreateBuilding
-                                        bId == building.buildingId || tempBuildingType == true
+                                        bId == building.buildingId || a != null
                                     },
                                     onDeleteRequest = { type ->
-                                        BuildingType().deleteBuildingType(
-                                            context,
-                                            type.buildingTypeId,
-                                            onSuccess = {
-                                                sharedViewModel.updateBuildingType(buildingTypes - type)
-                                            },
-                                            onError = {}
-                                        )
+                                        showDeleteBuildingTypeDialog = true
+                                        deletedBuildingType = type
                                     }
                                 )
 
-                                if (selectedBuildingType?.buildingTypeName == buildingTypeNameTrigger) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    ExposedDropdownMenuBoxExample(
-                                        sharedViewModel = sharedViewModel,
-                                        items = cityComplexes.filter {
-                                            it.forBuildingId == null ||
-                                                    it.forBuildingId == 0L ||
-                                                    it.forBuildingId == building.buildingId
-                                        } + CityComplexes(
-                                            complexId = 0L,
-                                            name = addNewLabel,
-                                            address = null
-                                        ),
-                                        selectedItem = selectedCityComplex,
-                                        onItemSelected = { selected ->
-                                            if (selected.complexId == 0L &&
-                                                selected.name == addNewLabel
-                                            ) {
-                                                showAddCityComplexDialog = true
-                                            } else {
-                                                editableBuilding =
-                                                    editableBuilding.copy(complexId = selected.complexId)
-                                            }
-                                        },
-                                        label = context.getString(R.string.city_complex),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        itemLabel = { it.name },
-                                        showDeleteFor = { complex ->
-                                            val c = cityComplexes.firstOrNull { it.name == complex.name }
-                                            val bId = c?.forBuildingId ?: 0L
-                                            val tempCityComplex = c?.addedBeforeCreateBuilding
-                                            bId == building.buildingId || tempCityComplex == true
-                                        },
-                                        onDeleteRequest = { cityComplex ->
-                                            CityComplex().deleteCityComplex(
-                                                context,
-                                                cityComplex.complexId,
-                                                onSuccess = {
-                                                    sharedViewModel.updateCityComplex(cityComplexes - cityComplex)
-                                                },
-                                                onError = {}
-                                            )
-                                        }
-                                    )
-                                }
+//                                if (selectedBuildingType?.buildingTypeName == buildingTypeNameTrigger) {
+//                                    Spacer(modifier = Modifier.height(8.dp))
+//                                    ExposedDropdownMenuBoxExample(
+//                                        sharedViewModel = sharedViewModel,
+//                                        items = cityComplexes.filter {
+//                                            it.forBuildingId == null ||
+//                                                    it.forBuildingId == 0L ||
+//                                                    it.forBuildingId == building.buildingId
+//                                        } + CityComplexes(
+//                                            complexId = 0L,
+//                                            name = addNewLabel,
+//                                            address = null
+//                                        ),
+//                                        selectedItem = selectedCityComplex,
+//                                        onItemSelected = { selected ->
+//                                            if (selected.complexId == 0L &&
+//                                                selected.name == addNewLabel
+//                                            ) {
+//                                                showAddCityComplexDialog = true
+//                                            } else {
+//                                                editableBuilding =
+//                                                    editableBuilding.copy(complexId = selected.complexId)
+//                                            }
+//                                        },
+//                                        label = context.getString(R.string.city_complex),
+//                                        modifier = Modifier.fillMaxWidth(),
+//                                        itemLabel = { it.name },
+//                                        showDeleteFor = { complex ->
+//                                            val c = cityComplexes.firstOrNull { it.name == complex.name }
+//                                            val bId = c?.forBuildingId ?: 0L
+//                                            val tempCityComplex = c?.addedBeforeCreateBuilding
+//                                            bId == building.buildingId || tempCityComplex == true
+//                                        },
+//                                        onDeleteRequest = { cityComplex ->
+//                                            CityComplex().deleteCityComplex(
+//                                                context,
+//                                                cityComplex.complexId,
+//                                                onSuccess = {
+//                                                    sharedViewModel.updateCityComplex(cityComplexes - cityComplex)
+//                                                },
+//                                                onError = {}
+//                                            )
+//                                        }
+//                                    )
+//                                }
 
                                 Spacer(Modifier.height(8.dp))
 
@@ -796,20 +997,18 @@ fun OverviewTab(
                                     modifier = Modifier.fillMaxWidth(),
                                     itemLabel = { it.buildingUsageName },
                                     showDeleteFor = { usage ->
-                                        val c = buildingUsages.firstOrNull { it.buildingUsageName == usage.buildingUsageName }
+                                        val c = buildingUsages
+                                            .filter { it.forBuildingId == building.buildingId}
+                                            .firstOrNull { it.buildingUsageName == usage.buildingUsageName }
+                                        val a = buildingUsages
+                                            .filter { it.addedBeforeCreateBuilding == true}
+                                            .firstOrNull { it.buildingUsageName == usage.buildingUsageName }
                                         val bId = c?.forBuildingId ?: 0L
-                                        val tempBuildingUsage = c?.addedBeforeCreateBuilding
-                                        bId == building.buildingId || tempBuildingUsage == true
+                                        bId == building.buildingId || a != null
                                     },
                                     onDeleteRequest = { usage ->
-                                        BuildingUsage().deleteBuildingUsage(
-                                            context,
-                                            usage.buildingUsageId,
-                                            onSuccess = {
-                                                sharedViewModel.updateBuildingUsage(buildingUsages - usage)
-                                            },
-                                            onError = {}
-                                        )
+                                        showDeleteBuildingUsageDialog = true
+                                        deletedBuildingUsage = usage
                                     }
                                 )
                             } else {
@@ -825,13 +1024,6 @@ fun OverviewTab(
 
                                         Text(
                                             text = "${context.getString(R.string.building_usage)}: ${selectedBuildingUsage?.buildingUsageName ?: "-"}",
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
-                                    }
-                                    if (selectedBuildingType?.buildingTypeName == buildingTypeNameTrigger) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "${context.getString(R.string.city_complex_name)}: ${selectedCityComplex?.name ?: "-"}",
                                             style = MaterialTheme.typography.bodyLarge
                                         )
                                     }
@@ -861,26 +1053,6 @@ fun OverviewTab(
                             }
 
                             if (isEditing) {
-                                val chipItems =
-                                    if (allChargeCosts.any { it.costName == addNewLabel }) {
-                                        allChargeCosts
-                                    } else {
-                                        allChargeCosts + Costs(
-                                            costName = addNewLabel,
-                                            chargeFlag = true,
-                                            fundType = FundType.OPERATIONAL,
-                                            responsible = Responsible.TENANT,
-                                            paymentLevel = PaymentLevel.UNIT,
-                                            calculateMethod = CalculateMethod.EQUAL,
-                                            period = Period.YEARLY,
-                                            dueDate = "",
-                                            tempAmount = 0.0,
-                                            costFor = "",
-                                            documentNumber = "",
-                                            forBuildingId = 0
-                                        )
-                                    }
-
 
                                 ChipGroupShared(
                                     selectedItems = selectedCostNames,
@@ -935,20 +1107,8 @@ fun OverviewTab(
                                     },
                                     onDeleteRequest = { costName ->
                                         val c = chipItems.firstOrNull { it.costName == costName }
-                                        Cost().deleteCostWithLinked(
-                                            context,
-                                            buildingId = building.buildingId,
-                                            costId = c!!.costId,
-                                            onSuccess = {
-                                                selectedCostNames = selectedCostNames - c.costName
-                                                val updated = chipItems - c
-                                                sharedViewModel.updateCosts(updated)
-                                            },
-                                            onNotFound = {
-
-                                            },
-                                            onError = {}
-                                        )
+                                        deletedCost = c
+                                        showDeleteDialog = true
                                     }
                                 )
                             } else {
@@ -982,7 +1142,7 @@ fun OverviewTab(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     OutlinedButton(
@@ -1040,7 +1200,152 @@ fun OverviewTab(
             }
         }
     }
+    if(showDeleteDialog){
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.delete_cost),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        Cost(context).deleteCostWithLinked(
+                            costId = deletedCost!!.costId,
+                            buildingId = buildingId,
+                            onSuccess = {
+                                selectedCostNames = selectedCostNames - deletedCost!!.costName
+                                val updated = chipItems - deletedCost!!
+                                sharedViewModel.updateCosts(updated)
+                            },
+                            onError = {},
+                            onNotFound = {}
+                        )
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.delete),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialog = false }
+                ) {
+                    Text(
+                        text = LocalContext.current.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
+    }
 
+    if(showDeleteBuildingTypeDialog){
+        AlertDialog(
+            onDismissRequest = { showDeleteBuildingTypeDialog = false },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.delete_buildingtype),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteBuildingTypeDialog = false
+                        BuildingType().deleteBuildingType(
+                            context,
+                            deletedBuildingType!!.buildingTypeId,
+                            onSuccess = {
+                                sharedViewModel.updateBuildingType(buildingTypes - deletedBuildingType!!)
+                            },
+                            onError = {}
+                        )
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.delete),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteBuildingTypeDialog = false }
+                ) {
+                    Text(
+                        text = LocalContext.current.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
+    }
+
+    if(showDeleteBuildingUsageDialog){
+        AlertDialog(
+            onDismissRequest = { showDeleteBuildingUsageDialog = false },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.delete_buildingusage),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteBuildingUsageDialog = false
+                        BuildingUsage().deleteBuildingUsage(
+                            context,
+                            deletedBuildingUsage!!.buildingUsageId,
+                            onSuccess = {
+                                sharedViewModel.updateBuildingUsage(buildingUsages - deletedBuildingUsage!!)
+                            },
+                            onError = {}
+                        )
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.delete),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteBuildingUsageDialog = false }
+                ) {
+                    Text(
+                        text = LocalContext.current.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
+    }
     if (showAddCityComplexDialog) {
         AddCityComplexDialog(
             onDismiss = { showAddCityComplexDialog = false },
@@ -1072,13 +1377,22 @@ fun OverviewTab(
                     buildingTypeName = newItem,
                     addedBeforeCreateBuilding = true
                 )
-                sharedViewModel.insertBuildingTypeRemote(
-                    context = context,
-                    buildingTypes = newBuildingType
-                ) { inserted ->
-                    if (inserted != null) {
-                        showBuildingTypeDialog = false
-                        editableBuilding = editableBuilding.copy(buildingTypeId = inserted.buildingTypeId)
+                if(buildingTypes.filter {
+                        it.forBuildingId == null ||
+                                it.forBuildingId == 0L ||
+                                it.forBuildingId == building.buildingId
+                    }.any{ it.buildingTypeName == newBuildingType.buildingTypeName}){
+                    Toast.makeText(context, context.getString(R.string.repeated_item), Toast.LENGTH_LONG).show()
+                } else {
+                    sharedViewModel.insertBuildingTypeRemote(
+                        context = context,
+                        buildingTypes = newBuildingType
+                    ) { inserted ->
+                        if (inserted != null) {
+                            showBuildingTypeDialog = false
+                            editableBuilding =
+                                editableBuilding.copy(buildingTypeId = inserted.buildingTypeId)
+                        }
                     }
                 }
             }
@@ -1094,13 +1408,22 @@ fun OverviewTab(
                     buildingUsageName = name,
                     addedBeforeCreateBuilding = true
                 )
-                sharedViewModel.insertBuildingUsageRemote(
-                    context = context,
-                    buildingUsages = newBuildingUsage
-                ) { inserted ->
-                    if (inserted != null) {
-                        showBuildingUsageDialog = false
-                        editableBuilding = editableBuilding.copy(buildingUsageId = inserted.buildingUsageId)
+                if(buildingUsages.filter {
+                        it.forBuildingId == null ||
+                                it.forBuildingId == 0L ||
+                                it.forBuildingId == building.buildingId
+                    }.any{ it.buildingUsageName == newBuildingUsage.buildingUsageName}){
+                    Toast.makeText(context, context.getString(R.string.repeated_item), Toast.LENGTH_LONG).show()
+                } else {
+                    sharedViewModel.insertBuildingUsageRemote(
+                        context = context,
+                        buildingUsages = newBuildingUsage
+                    ) { inserted ->
+                        if (inserted != null) {
+                            showBuildingUsageDialog = false
+                            editableBuilding =
+                                editableBuilding.copy(buildingUsageId = inserted.buildingUsageId)
+                        }
                     }
                 }
             }
@@ -1109,6 +1432,7 @@ fun OverviewTab(
 
     if (showChargeCostDialog) {
         AddNewCostDialog(
+            fundType = FundType.OPERATIONAL,
             onDismiss = { showChargeCostDialog = false },
             onConfirm = { newCostName ->
                 val newCost = Costs(
@@ -1125,19 +1449,21 @@ fun OverviewTab(
                     documentNumber = "",
                     forBuildingId = building.buildingId
                 )
-                costApi.createGlobalCost(
-                    context = context,
-                    cost = newCost,
-                    onSuccess = { created ->
-                        sharedViewModel.appendGlobalCost(created)
-                        selectedCostNames = selectedCostNames + created.costName
-                        Log.d("selectedCostNames", selectedCostNames.toString())
-                        showChargeCostDialog = false
-                    },
-                    onError = {
-                        showChargeCostDialog = false
-                    }
-                )
+                if(chipItems.any{it.costName == newCostName}){
+                    Toast.makeText(context, context.getString(R.string.repeated_cost), Toast.LENGTH_LONG).show()
+                } else {
+                    costApi.createGlobalCost(
+                        cost = newCost,
+                        onSuccess = { created ->
+                            sharedViewModel.appendGlobalCost(created)
+                            selectedCostNames = selectedCostNames + created.costName
+                            showChargeCostDialog = false
+                        },
+                        onError = {
+                            showChargeCostDialog = false
+                        }
+                    )
+                }
             }
         )
     }
@@ -1165,11 +1491,12 @@ fun FundsTab(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val perms = sharedViewModel.rolePermissions
-
     val operationalPerm = perms.permissionFor(
         AuthorizationObjects.BUILDING_PROFILE,
         AuthorizationFieldsBuildingProfile.CREATE_OPERATIONAL_COST_BUTTON
     )
+
+
 
     val earningPerm = perms.permissionFor(
         AuthorizationObjects.BUILDING_PROFILE,
@@ -1184,6 +1511,7 @@ fun FundsTab(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             sharedViewModel.loadFundsForBuilding(context, building.buildingId)
             sharedViewModel.loadFundBalances(context, building.buildingId)
+
         }
     }
 
@@ -1202,16 +1530,15 @@ fun FundsTab(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabTitles = listOf(
         context.getString(R.string.incomes),
-        context.getString(R.string.capital_costs),
-        context.getString(R.string.operational_costs)
+        context.getString(R.string.capital_costs_doc),
+        context.getString(R.string.operational_costs_doc)
     )
 
-    var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
+    var ownersWithUnits by remember { mutableStateOf<List<OwnerWithUnitsDto>>(emptyList()) }
 
 
     fun loadOwners() {
-        Owner().getOwnersWithUnitsByBuilding(
-            context = context,
+        Owner(context).getOwnersWithUnitsByBuilding(
             buildingId = building.buildingId,
             onSuccess = { list ->
                 ownersWithUnits = list
@@ -1292,6 +1619,16 @@ fun FundsTab(
 
                 when (selectedTab) {
                     0 -> {
+                        val refreshLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.StartActivityForResult()
+                        ) { result ->
+                            if (result.resultCode == Activity.RESULT_OK) {
+                                val shouldRefresh = result.data?.getBooleanExtra("NEED_REFRESH_EARNING", false) ?: false
+                                if (shouldRefresh) {
+                                    sharedViewModel.loadNotInvoicedEarnings(context, building.buildingId)
+                                }
+                            }
+                        }
                         EarningsSection(
                             buildingId = building.buildingId,
                             sharedViewModel = sharedViewModel,
@@ -1337,7 +1674,7 @@ fun FundsTab(
                                 val intent = Intent(context, EarningDetailActivity::class.java)
                                 intent.putExtra("extra_earning_id", earning.earningsId)
                                 intent.putExtra("extra_building_id", building.buildingId)
-                                context.startActivity(intent)
+                                refreshLauncher.launch(intent)
                             }
                         )
                     }
@@ -1354,13 +1691,16 @@ fun FundsTab(
                                     modifier = Modifier.padding(8.dp)
                                 ) {
                                     items(capitalCosts) { cost ->
-                                        CostListItemWithDetailText(cost = cost,
+                                        CostListItemWithDetailText(
+                                            selectedTab = selectedTab,
+                                            sharedViewModel = sharedViewModel,
+                                            cost = cost,
                                             onUpdateClick = {
                                             selectedCost = cost
                                             showCapitalEditDialog = true
-                                        },
+                                            },
                                         onDeleteClick = { cost ->
-                                            sharedViewModel.deleteCost(context, cost.costId, onDone = {
+                                            sharedViewModel.deleteCost(cost.costId, onDone = {
                                                 coroutineScope.launch {
                                                     snackBarHostState.showSnackbar(
                                                         context.getString(R.string.success_delete)
@@ -1397,12 +1737,12 @@ fun FundsTab(
                                                         }
                                                     },
                                                     onError = { e ->
+                                                        Log.e("InvoiceError", e.toString())
                                                         coroutineScope.launch {
                                                             snackBarHostState.showSnackbar(
                                                                 context.getString(R.string.insufficient_fund_balance)
                                                             )
                                                         }
-                                                        Log.e("InvoiceError", e.toString())
                                                     })
                                             })
                                     }
@@ -1425,13 +1765,15 @@ fun FundsTab(
                                 ) {
                                     items(operationalCosts) { cost ->
                                         CostListItemWithDetailText(
+                                            selectedTab = selectedTab,
+                                            sharedViewModel = sharedViewModel,
                                             cost = cost,
                                             onUpdateClick = {
                                                 selectedCost = cost
                                                 showOperationalEditDialog = true
                                             },
                                             onDeleteClick = { cost ->
-                                                sharedViewModel.deleteCost(context, cost.costId, onDone = {
+                                                sharedViewModel.deleteCost(cost.costId, onDone = {
                                                     coroutineScope.launch {
                                                         snackBarHostState.showSnackbar(
                                                             context.getString(R.string.success_delete)
@@ -1469,12 +1811,12 @@ fun FundsTab(
                                                         }
                                                     },
                                                     onError = { e ->
+                                                        Log.e("InvoiceError", e.toString())
                                                         coroutineScope.launch {
                                                             snackBarHostState.showSnackbar(
                                                                 context.getString(R.string.insufficient_operational_fund_balance)
                                                             )
                                                         }
-                                                        Log.e("InvoiceError", e.toString())
                                                     }
                                                 )
                                             }
@@ -1608,8 +1950,30 @@ fun FundsTab(
                                         context.getString(R.string.failed)
                                 }
                                 earningsDialogError = msg
-                            } catch (_: Exception) {
-                                earningsDialogError = context.getString(R.string.failed)
+                            } catch (e: Exception) {
+                                val msg = when (e.message) {
+                                    "period-range-too-short" ->
+                                        context.getString(R.string.earning_period_too_short)
+
+                                    "invalid-date-format-expected-YYYY/MM/DD" ->
+                                        context.getString(R.string.invalid_date_format)
+
+                                    "startDate-must-be-before-or-equal-endDate" ->
+                                        context.getString(R.string.startdate_before_enddate)
+
+                                    "invalid-buildingId" ->
+                                        context.getString(R.string.invalid_building_id)
+
+                                    "invalid-amount" ->
+                                        context.getString(R.string.invalid_amount)
+
+                                    "earnings-conflict-with-existing-credits" ->
+                                        context.getString(R.string.earnings_conflict_error)
+
+                                    else ->
+                                        context.getString(R.string.failed)
+                                }
+                                earningsDialogError = msg
                             }
                         }
                     },
@@ -1640,6 +2004,7 @@ fun FundsTab(
                                         context,
                                         building.buildingId
                                     )
+
                                     showCapitalEditDialog = false
                                 },
                                 onError = { e ->
@@ -1681,23 +2046,43 @@ fun FundsTab(
                                                     context.getString(R.string.success_update)
                                                 )
                                             }
-                                            sharedViewModel.loadNotInvoicedEarnings(context, building.buildingId)
+                                            sharedViewModel.getNotInvoicedEarnings(context, building.buildingId)
+                                            sharedViewModel.loadFundBalances(context, building.buildingId)
+                                            sharedViewModel.loadFundsForBuilding(
+                                                context,
+                                                building.buildingId
+                                            )
+                                            showEditEarningDialog = false
+                                            earningsDialogError = null
                                         },
                                         onError = { e ->
-                                            coroutineScope.launch {
-                                                snackBarHostState.showSnackbar(
-                                                    context.getString(R.string.failed)
-                                                )
-                                            }
+                                               val msg = when (e.message) {
+                                                    "period-range-too-short" ->
+                                                        context.getString(R.string.earning_period_too_short)
+
+                                                    "invalid-date-format-expected-YYYY/MM/DD" ->
+                                                        context.getString(R.string.invalid_date_format)
+
+                                                    "startDate-must-be-before-or-equal-endDate" ->
+                                                        context.getString(R.string.startdate_before_enddate)
+
+                                                    "invalid-buildingId" ->
+                                                        context.getString(R.string.invalid_building_id)
+
+                                                    "invalid-amount" ->
+                                                        context.getString(R.string.invalid_amount)
+
+                                                    "earnings-conflict-with-existing-credits" ->
+                                                        context.getString(R.string.earnings_conflict_error)
+
+                                                    else ->
+                                                        context.getString(R.string.failed)
+                                                }
+                                                earningsDialogError = msg
                                             Log.e("UpdateEarning", e.toString())
                                         }
                                     )
-                                    sharedViewModel.loadFundBalances(context, building.buildingId)
-                                    sharedViewModel.loadFundsForBuilding(
-                                        context,
-                                        building.buildingId
-                                    )
-                                    showEditEarningDialog = false
+
 
                                 } catch (e: IllegalStateException) {
                                     val msg = when (e.message) {
@@ -1723,8 +2108,30 @@ fun FundsTab(
                                             context.getString(R.string.failed)
                                     }
                                     earningsDialogError = msg
-                                } catch (_: Exception) {
-                                    earningsDialogError = context.getString(R.string.failed)
+                                } catch (e: Exception) {
+                                    val msg = when (e.message) {
+                                        "period-range-too-short" ->
+                                            context.getString(R.string.earning_period_too_short)
+
+                                        "invalid-date-format-expected-YYYY/MM/DD" ->
+                                            context.getString(R.string.invalid_date_format)
+
+                                        "startDate-must-be-before-or-equal-endDate" ->
+                                            context.getString(R.string.startdate_before_enddate)
+
+                                        "invalid-buildingId" ->
+                                            context.getString(R.string.invalid_building_id)
+
+                                        "invalid-amount" ->
+                                            context.getString(R.string.invalid_amount)
+
+                                        "earnings-conflict-with-existing-credits" ->
+                                            context.getString(R.string.earnings_conflict_error)
+
+                                        else ->
+                                            context.getString(R.string.failed)
+                                    }
+                                    earningsDialogError = msg
                                 }
                             }
                         },
@@ -1784,6 +2191,7 @@ fun FundsTab(
             if (buildingViewModel.showCapitalCostDialog.value) {
                 AddCapitalCostDialog(
                 sharedViewModel = sharedViewModel,
+                    buildingId = building.buildingId,
                 onDismiss = { buildingViewModel.showCapitalCostDialog.value = false },
                     onSave = { selectedCost, costName, amount, period, calculateMethod, calculatedUnitMethod, responsible, selectedUnits, selectedOwners, dueDate, documentNumber, message ->
                     coroutineScope.launch {
@@ -1860,6 +2268,8 @@ fun FundsTab(
 
 @Composable
 fun CostListItemWithDetailText(
+    selectedTab:Int,
+    sharedViewModel: SharedViewModel,
     cost: Costs,
     onUpdateClick: () -> Unit,
     onDetailClick: () -> Unit,
@@ -1868,6 +2278,17 @@ fun CostListItemWithDetailText(
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val perms = sharedViewModel.rolePermissions
+    val operationalPayPerm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.PAY_OPERATIONAL_DOC_BUTTON
+    )
+
+    val capitalPayPerm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.PAY_CAPITAL_DOC_BUTTON
+    )
 
     Card(
         modifier = Modifier
@@ -1934,12 +2355,26 @@ fun CostListItemWithDetailText(
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Button(onClick = onDetailClick) {
-                    Text(
-                        text = context.getString(R.string.payment),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                if(selectedTab == 1){
+                    if(capitalPayPerm == PermissionLevel.WRITE || capitalPayPerm == PermissionLevel.FULL) {
+                        Button(onClick = onDetailClick) {
+                            Text(
+                                text = context.getString(R.string.payment),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                } else if(selectedTab == 2 ){
+                    if(operationalPayPerm == PermissionLevel.WRITE || operationalPayPerm == PermissionLevel.FULL) {
+                        Button(onClick = onDetailClick) {
+                            Text(
+                                text = context.getString(R.string.payment),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
                 }
+
             }
         }
         if (showDeleteDialog) {
@@ -2025,6 +2460,15 @@ fun CostListItemWithDetailText(
             )
         }
 
+    val tenantDetailsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            loadTenants()
+        }
+    }
+
+
         LaunchedEffect(building.buildingId) {
             loadTenants()
         }
@@ -2079,6 +2523,7 @@ fun CostListItemWithDetailText(
                                             context.getString(R.string.success_delete),
                                             Toast.LENGTH_SHORT
                                         ).show()
+                                        NEED_REFRESH = true
                                         loadTenants()
                                     },
                                     onError = { err ->
@@ -2094,13 +2539,16 @@ fun CostListItemWithDetailText(
                             relation = dto.tenantUnit,
                             user = dto.user,
                             unit = unit,
-                            onClick = {
-                                    val intent = Intent(context, TenantsDetailsActivity::class.java)
-                                    intent.putExtra("UNIT_DATA", unit.unitId)
-                                    intent.putExtra("TENANT_DATA", dto.tenantUnit.tenantId)
-                                    intent.putExtra("BUILDING_ID", building.buildingId)
-                                    context.startActivity(intent)
+                            owner = dto.owner,
+                            onClick = { hasOwnerAuth ->
+                                val intent = Intent(context, TenantsDetailsActivity::class.java)
+                                intent.putExtra("UNIT_DATA", unit.unitId)
+                                intent.putExtra("TENANT_DATA", dto.tenantUnit.tenantId)
+                                intent.putExtra("BUILDING_ID", building.buildingId)
+                                intent.putExtra("hasOwnerAuth", hasOwnerAuth)
+                                tenantDetailsLauncher.launch(intent)
                             }
+
                         )
                     }
                 }
@@ -2117,6 +2565,10 @@ fun CostListItemWithDetailText(
                 }
 
             if (showTenantDialog && !unitsLoading) {
+                if(units.isEmpty()){
+                    showTenantDialog = false
+                    Toast.makeText(context, context.getString(R.string.no_units_with_owner), Toast.LENGTH_LONG).show()
+                } else {
                 TenantDialog(
                     sharedViewModel = sharedViewModel,
                     units = units,
@@ -2130,6 +2582,7 @@ fun CostListItemWithDetailText(
                             onSuccess = { createdDto ->
                                 tenantsWithUnit = tenantsWithUnit + createdDto
                                 showTenantDialog = false
+                                NEED_REFRESH = true
                                 Toast.makeText(
                                     context,
                                     context.getString(R.string.insert_tenant_successfully),
@@ -2165,13 +2618,14 @@ fun CostListItemWithDetailText(
                     }
                 )
 
-
+}
             }
         }
     }
 
 
 
+@RequiresApi(Build.VERSION_CODES.M)
 @Composable
 fun EarningsSection(
     buildingId: Long,
@@ -2185,6 +2639,8 @@ fun EarningsSection(
     val earnings by sharedViewModel
         .getNotInvoicedEarnings(context = context, buildingId)
         .collectAsState(initial = emptyList())
+
+
 
     Column(modifier = modifier.padding(16.dp)) {
         if (earnings.isEmpty()) {
@@ -2310,7 +2766,7 @@ fun EarningsSection(
                                     Text(
                                         text = context.getString(R.string.detail),
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = Color(context.getColor(R.color.grey))
+                                        color = if (sharedViewModel.isDarkModeEnabled) LightColorScheme.background else Color(context.getColor(R.color.grey))
                                     )
                                 }
                             }
@@ -2406,6 +2862,30 @@ fun EarningsSection(
                             sharedViewModel = sharedViewModel,
                             unit = unit,
                             building = building,
+                            onDeleteUnit = { deletedUnit ->
+                                unitsApi.deleteUnit(
+                                    context = context,
+                                    unit = deletedUnit,
+                                    onSuccess = {
+                                        units = units - deletedUnit
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.delete_success),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        NEED_REFRESH = true
+                                    },
+                                    onError = { error ->
+                                        val message = when (error) {
+                                            "unit-has-owner" -> context.getString(R.string.unit_has_owner)
+                                            "unit-not-found" -> context.getString(R.string.failed)
+                                            else -> context.getString(R.string.failed)
+                                        }
+                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                    }
+
+                                )
+                            },
                             onUpdateUnit = { updatedUnit ->
                                 unitsApi.updateUnit(
                                     context = context,
@@ -2432,6 +2912,9 @@ fun EarningsSection(
                             }
                         )
                     }
+                    item{
+                        Spacer(Modifier.height(100.dp))
+                    }
                 }
             }
             val perms = sharedViewModel.rolePermissions
@@ -2453,46 +2936,58 @@ fun EarningsSection(
 
 
             if (showUnitDialog) {
-                UnitDialog(
-                    units = units,
-                    onDismiss = { showUnitDialog = false },
-                    floorCount = building.floorCount,
-                    onAddUnit = { newUnit ->
-                        unitsApi.insertUnitForBuilding(
-                            context = context,
-                            buildingId = building.buildingId,
-                            unit = newUnit,
-                            onSuccess = { createdUnit ->
-                                units = units + createdUnit
-                                showUnitDialog = false
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.insert_unit_successfully),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            },
-                            onError = { e ->
-                                try {
-                                    val json = JSONObject(e.message ?: "")
-                                    val translated = translateServerError(
-                                        json.optString("message"),
-                                        json.optJSONObject("errors")
-                                    )
+                val maxUnits = building.unitCount.toIntOrNull() ?: 0
 
-                                    Toast.makeText(context, translated, Toast.LENGTH_LONG).show()
-
-                                } catch (_: Exception) {
+                if (units.size >= maxUnits && maxUnits > 0) {
+                    showUnitDialog = false
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.maximum_unit_is_inserted_for_this_building),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    UnitDialog(
+//                    units = units,
+                        onDismiss = { showUnitDialog = false },
+                        onAddUnit = { newUnit ->
+                            unitsApi.insertUnitForBuilding(
+                                context = context,
+                                buildingId = building.buildingId,
+                                unit = newUnit,
+                                onSuccess = { createdUnit ->
+                                    units = units + createdUnit
+                                    showUnitDialog = false
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.failed),
+                                        context.getString(R.string.insert_unit_successfully),
                                         Toast.LENGTH_SHORT
                                     ).show()
-                                }
-                            }
+                                    NEED_REFRESH = true
+                                },
+                                onError = { e ->
+                                    try {
+                                        val json = JSONObject(e.message ?: "")
+                                        val translated = translateServerError(
+                                            json.optString("message"),
+                                            json.optJSONObject("errors")
+                                        )
 
-                        )
-                    }
-                )
+                                        Toast.makeText(context, translated, Toast.LENGTH_LONG).show()
+
+                                    } catch (_: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+
+                            )
+                        }
+                    )
+                }
+
             }
         }
     }
@@ -2537,120 +3032,210 @@ fun EarningsSection(
         return if (details.isBlank()) main else "$main\n$details"
     }
 
-    @Composable
-    fun UnitItem(
-        sharedViewModel: SharedViewModel,
-        building: Buildings,
-        unit: Units,
-        onUpdateUnit: (Units) -> Unit
-    ) {
-        val context = LocalContext.current
-        var showEditDialog by remember { mutableStateOf(false) }
-        val perms = sharedViewModel.rolePermissions
+@Composable
+fun UnitItem(
+    sharedViewModel: SharedViewModel,
+    building: Buildings,
+    unit: Units,
+    onUpdateUnit: (Units) -> Unit,
+    onDeleteUnit: (Units) -> Unit
+) {
+    val context = LocalContext.current
+    var showEditDialog by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
-        val perm = perms.permissionFor(
-            AuthorizationObjects.BUILDING_PROFILE,
-            AuthorizationFieldsBuildingProfile.CREATE_UNIT_BUTTON
-        )
-        Card(
+    val perms = sharedViewModel.rolePermissions
+    val perm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.CREATE_UNIT_BUTTON
+    )
+
+    val canEdit = perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .clickable {
+                if (canEdit) {
+                    showEditDialog = true
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.auth_cancel),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp)
-                .clickable(onClick = {
-                    if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
-                        showEditDialog = true
-                    } else {
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.auth_cancel),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "${context.getString(R.string.unit_name)}: ${unit.unitNumber}",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${context.getString(R.string.area)}:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = unit.area,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.width(8.dp))
 
-                    Text(
-                        text = "${context.getString(R.string.number_of_room)}:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = unit.numberOfRooms,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.width(8.dp))
+                if (canEdit) {
+                    Box(
+                        modifier = Modifier.wrapContentSize(Alignment.Center)
+                    ) {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null
+                            )
+                        }
 
-                    Text(
-                        text = "${context.getString(R.string.number_of_parking)}:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = unit.numberOfParking,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = context.getString(R.string.edit),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    if (canEdit) {
+                                        showEditDialog = true
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.auth_cancel),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            )
+
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                thickness = 1.dp
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text(context.getString(R.string.delete)) },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
             }
-        }
 
-        if (showEditDialog) {
-            EditUnitDialog(
-                unit = unit,
-                floorCount = building.floorCount,
-                onDismiss = { showEditDialog = false },
-                onUpdateUnit = { updatedUnit ->
-                    onUpdateUnit(updatedUnit)
-                    showEditDialog = false
-                }
-            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${context.getString(R.string.area)}:",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = unit.area,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    text = "${context.getString(R.string.number_of_room)}:",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = unit.numberOfRooms,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    text = "${context.getString(R.string.number_of_parking)}:",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = unit.numberOfParking,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 
+    if (showEditDialog) {
+        EditUnitDialog(
+            unit = unit,
+            onDismiss = { showEditDialog = false },
+            onUpdateUnit = { updatedUnit ->
+                onUpdateUnit(updatedUnit)
+                showEditDialog = false
+            }
+        )
+    }
 
-    @Composable
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(context.getString(R.string.delete)) },
+            text = { Text(context.getString(R.string.are_you_sure)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteUnit(unit)
+                    }
+                ) { Text(context.getString(R.string.delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(context.getString(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+
+@Composable
     fun TransactionHistoryTab(building: Buildings, sharedViewModel: SharedViewModel) {
         val context = LocalContext.current
         val buildingId = building.buildingId
         val invoicedCosts by sharedViewModel.pendingCostsForBuilding.collectAsState()
-        LaunchedEffect(buildingId) {
+        val receivedEarnings by sharedViewModel.receivedEarningsForBuilding.collectAsState()
+
+    LaunchedEffect(buildingId) {
             sharedViewModel.loadFundsForBuilding(context, buildingId)
+            sharedViewModel.loadReceivedEarningsForBuilding(context, buildingId)
         }
 
         val capitalInvoicedCosts = remember(invoicedCosts) {
@@ -2663,8 +3248,9 @@ fun EarningsSection(
 
         var selectedTab by remember { mutableStateOf(0) }
         val tabTitles = listOf(
-            context.getString(R.string.capital_funds),
-            context.getString(R.string.operation_funds)
+            context.getString(R.string.earnings),
+            context.getString(R.string.capital_costs),
+            context.getString(R.string.operational_costs)
         )
 
         Column(
@@ -2703,6 +3289,22 @@ fun EarningsSection(
 
             when (selectedTab) {
                 0 -> {
+                    if (receivedEarnings.isEmpty()) {
+                        Text(
+                            text = context.getString(R.string.no_fully_invoiced_earning),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(receivedEarnings, key = { it.earningsId }) { e ->
+                                TransactionEarningItemBordered(earning = e)
+                            }
+                        }
+                    }
+                }
+                1 -> {
                     if (capitalInvoicedCosts.isEmpty()) {
                         Text(
                             text = context.getString(R.string.no_transactions_recorded),
@@ -2715,12 +3317,12 @@ fun EarningsSection(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(capitalInvoicedCosts) { cost ->
-                                TransactionCostItemBordered(cost = cost, context = context)
+                                TransactionCostItemBordered(cost = cost, context = context, sharedViewModel = sharedViewModel)
                             }
                         }
                     }
                 }
-                1 -> {
+                2 -> {
                     if (operationalInvoicedCosts.isEmpty()) {
                         Text(
                             text = context.getString(R.string.no_transactions_recorded),
@@ -2733,7 +3335,7 @@ fun EarningsSection(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(operationalInvoicedCosts) { cost ->
-                                TransactionCostItemBordered(cost = cost, context = context)
+                                TransactionCostItemBordered(cost = cost, context = context, sharedViewModel = sharedViewModel)
                             }
                         }
                     }
@@ -2741,9 +3343,82 @@ fun EarningsSection(
             }
         }
     }
+@Composable
+fun TransactionEarningItemBordered(
+    earning: Earnings
+) {
+    val context = LocalContext.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .border(
+                width = 0.7.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(6.dp)
+            ),
+        color = Color.Transparent,
+        shadowElevation = 0.dp,
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+
+            Column {
+                Text(
+                    text = earning.earningsName,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "${formatNumberWithCommas(earning.amount)} ${context.getString(R.string.toman)}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
+            Column {
+                val isNone = earning.period == Period.NONE
+
+                if (isNone) {
+                    Text(
+                        text = "${context.getString(R.string.date)}: ${earning.startDate}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "${context.getString(R.string.start_date)}: ${earning.startDate}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "${context.getString(R.string.end_date)}: ${earning.endDate}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "${context.getString(R.string.period)}: ${earning.period.getDisplayName(context)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 
     @Composable
-    fun TransactionCostItemBordered(cost: Costs, context: android.content.Context) {
+    fun TransactionCostItemBordered(cost: Costs, context: Context, sharedViewModel: SharedViewModel) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2774,7 +3449,9 @@ fun EarningsSection(
                 }
                 Column {
                     Text(
-                        text = "${context.getString(R.string.due)}: ${cost.dueDate}",
+                        text = "${context.getString(R.string.payment_date)}: ${cost.paymentDate?.let{
+                            sharedViewModel.gregorianToPersian(it)
+                        }}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2802,10 +3479,10 @@ fun EarningsSection(
         val context = LocalContext.current
         val buildingId = building.buildingId
 
-        var selectedTab by remember { mutableStateOf(0) }
+        var selectedTab by remember { mutableIntStateOf(0) }
         val tabTitles = listOf(
-            context.getString(R.string.emergency_calls).uppercase(),
-            context.getString(R.string.buildings_member).uppercase()
+            context.getString(R.string.buildings_member).uppercase(),
+                    context.getString(R.string.emergency_calls).uppercase()
         )
 
         LaunchedEffect(buildingId) {
@@ -2877,30 +3554,6 @@ fun EarningsSection(
 
                 when (selectedTab) {
                     0 -> {
-                        // Emergency Numbers tab content
-                        if (emergencyNumbers.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = context.getString(R.string.no_phone_recorded),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(emergencyNumbers) { entry ->
-                                    PhonebookEntryItem(
-                                        entry,
-//                                        permissionLevel,
-                                        sharedViewModel
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    1 -> {
                         // Residents (Tenants) tab content
                         if (residents.isEmpty()) {
                             Box(
@@ -2924,6 +3577,30 @@ fun EarningsSection(
                             }
                         }
                     }
+                    1 -> {
+                        // Emergency Numbers tab content
+                        if (emergencyNumbers.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = context.getString(R.string.no_phone_recorded),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(emergencyNumbers) { entry ->
+                                    PhonebookEntryItem(
+                                        entry,
+//                                        permissionLevel,
+                                        sharedViewModel
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // FABs, conditionally show one depending on selected tab
@@ -2935,7 +3612,7 @@ fun EarningsSection(
                 horizontalAlignment = Alignment.End
             ) {
 
-                if (selectedTab == 0) {
+                if (selectedTab == 1) {
                     if(perm == PermissionLevel.FULL || perm == PermissionLevel.WRITE) {
                         FloatingActionButton(
                             onClick = { showAddDialog = true },
@@ -2962,15 +3639,24 @@ fun EarningsSection(
             )
         }
     }
-
 @Composable
 fun PhonebookEntryItem(
-    entry: PhonebookEntry,
+    entry: com.example.delta.data.entity.PhonebookEntry,
     sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
-    var showDeleteDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    val perms = sharedViewModel.rolePermissions
+
+    val perm = perms.permissionFor(
+        AuthorizationObjects.BUILDING_PROFILE,
+        AuthorizationFieldsBuildingProfile.CREATE_PHONE_ENTRY_BUTTON
+    )
 
     Surface(
         modifier = Modifier
@@ -2998,23 +3684,97 @@ fun PhonebookEntryItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+
+            Column{
                 Text(entry.name, style = MaterialTheme.typography.bodyLarge)
 
                 if (entry.type == "resident") {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        entry.roleLabel?.trim().orEmpty(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+
+                    if (entry.roles.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            entry.roles.forEach { r ->
+                                Text(
+                                    text = r.roleLabel.trim(),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = entry.roleLabel?.trim().orEmpty(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
-            Text(
-                entry.phoneNumber,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyLarge
-            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    entry.phoneNumber,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                if (entry.type == "emergency") {
+                    if(perm == PermissionLevel.FULL || perm == PermissionLevel.WRITE) {
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier
+                                .background(Color.White)
+                                .width(180.dp)
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = context.getString(R.string.edit),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    showEditDialog = true
+                                }
+                            )
+
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                thickness = 1.dp
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = context.getString(R.string.delete),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
+                    }
+                }
+            }
         }
     }
 
@@ -3036,9 +3796,7 @@ fun PhonebookEntryItem(
                             showDeleteDialog = false
                         }
                     }
-                ) {
-                    Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge)
-                }
+                ) { Text(context.getString(R.string.delete), style = MaterialTheme.typography.bodyLarge) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
@@ -3047,88 +3805,94 @@ fun PhonebookEntryItem(
             }
         )
     }
-}
 
-@Composable
-    fun AddPhonebookEntryDialog(
-        buildingId: Long,
-        onDismiss: () -> Unit,
-        onConfirm: (PhonebookEntry) -> Unit
-    ) {
-        var name by remember { mutableStateOf("") }
-        var phone by remember { mutableStateOf("") }
-//        var type by remember { mutableStateOf("resident") }
-        var context = LocalContext.current
-        var selectedType by remember { mutableStateOf(context.getString(R.string.tenants)) }
-//        var selectedTypeList by remember { mutableStateOf("resident") }
-
-        val type = when (selectedType) {
-//            context.getString(R.string.tenants) -> "resident"
-            context.getString(R.string.emergency_calls) -> "emergency"
-            else -> "emergency"
-        }
-
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text(context.getString(R.string.add_new_phone), style = MaterialTheme.typography.bodyLarge) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text(context.getString(R.string.name), style = MaterialTheme.typography.bodyLarge) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        label = {
-                            Text(
-                                context.getString(R.string.phone_number),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-
-                        ChipGroupShared(
-                            selectedItems = listOf(selectedType),
-                            onSelectionChange = { newSelection ->
-                                // Since singleSelection = true, newSelection will be a single-item list
-                                if (newSelection.isNotEmpty()) {
-                                    selectedType = newSelection.first()
-                                }
-                            },
-                            items = listOf(context.getString(R.string.emergency_calls)),
-                            label = context.getString(R.string.select_type)
-                        )
-
-                    }
+    if (showEditDialog) {
+        AddPhonebookEntryDialog(
+            buildingId = entry.buildingId,
+            initial = entry,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { edited ->
+                coroutineScope.launch {
+                    sharedViewModel.updatePhonebookEntry(context, edited)
+                    showEditDialog = false
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onConfirm(
-                            PhonebookEntry(
-                                buildingId = buildingId,
-                                name = name,
-                                phoneNumber = phone,
-                                type = type
-                            )
-                        )
-                    }
-                ) { Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge) }
-            },
-            dismissButton = {
-                Button(onClick = onDismiss) { Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge) }
             }
         )
     }
+}
+
+@Composable
+fun AddPhonebookEntryDialog(
+    buildingId: Long,
+    initial: com.example.delta.data.entity.PhonebookEntry? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (com.example.delta.data.entity.PhonebookEntry) -> Unit
+) {
+    val context = LocalContext.current
+
+    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
+    var phone by remember { mutableStateOf(initial?.phoneNumber.orEmpty()) }
+
+    AlertDialog(
+        onDismissRequest = {},
+        title = {
+            Text(
+                text = if (initial == null)
+                    context.getString(R.string.add_new_phone_emergency)
+                else
+                    context.getString(R.string.edit),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(context.getString(R.string.name), style = MaterialTheme.typography.bodyLarge) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = { Text(context.getString(R.string.phone_number), style = MaterialTheme.typography.bodyLarge) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val result = com.example.delta.data.entity.PhonebookEntry(
+                        entryId = initial?.entryId ?: 0L,
+                        buildingId = buildingId,
+                        userId = initial?.userId,
+                        name = name.trim(),
+                        phoneNumber = phone.trim(),
+                        type = "emergency",
+                        isEmergency = true,
+                        unitId = initial?.unitId,
+                        roleLabel = initial?.roleLabel,
+                        roles = initial?.roles ?: emptyList()
+                    )
+                    onConfirm(result)
+                },
+                enabled = name.trim().isNotEmpty() && phone.trim().isNotEmpty()
+            ) {
+                Text(
+                    text = if (initial == null) context.getString(R.string.insert) else context.getString(R.string.edit),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    )
+}
 
     @Composable
     fun OwnersTab(
@@ -3136,11 +3900,11 @@ fun PhonebookEntryItem(
         sharedViewModel: SharedViewModel
     ) {
         val context = LocalContext.current
-        val ownerApi = remember { Owner() }
+        val ownerApi = remember { Owner(context) }
         val unitsApi = remember { com.example.delta.volley.Units() }
 
         var showOwnerDialog by remember { mutableStateOf(false) }
-        var ownersWithUnits by remember { mutableStateOf<List<Owner.OwnerWithUnitsDto>>(emptyList()) }
+        var ownersWithUnits by remember { mutableStateOf<List<OwnerWithUnitsDto>>(emptyList()) }
         var loading by remember { mutableStateOf(false) }
 
         var units by remember { mutableStateOf<List<Units>>(emptyList()) }
@@ -3163,17 +3927,19 @@ fun PhonebookEntryItem(
         fun loadOwners() {
             loading = true
             ownerApi.getOwnersWithUnitsByBuilding(
-                context = context,
                 buildingId = building.buildingId,
                 onSuccess = { list ->
                     ownersWithUnits = list
                     loading = false
                 },
-                onError = {
+                onError = { e->
                     loading = false
+                    Log.e("eee", "loadOwners failed", e)
+                    e.printStackTrace()
+
                     Toast.makeText(
                         context,
-                        it.message ?: context.getString(R.string.failed),
+                        e.message ?: context.getString(R.string.failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -3218,12 +3984,18 @@ fun PhonebookEntryItem(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(ownersWithUnits) { ownerDto ->
+                        val ownerDetailsLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.StartActivityForResult()
+                        ) { result ->
+                            if (result.resultCode == RESULT_OK) {
+                                loadOwners()
+                            }
+                        }
                         OwnerItem(
                             ownerUnit = ownerDto,
                             sharedViewModel = sharedViewModel,
                             onDelete = { ownerUnitsList, userRoleCrossRefs ->
                                 ownerApi.deleteOwner(
-                                    context = context,
                                     buildingId = building.buildingId,
                                     ownerId = ownerDto.user!!.userId,
                                     onSuccess = {
@@ -3232,6 +4004,7 @@ fun PhonebookEntryItem(
                                             context.getString(R.string.success_delete),
                                             Toast.LENGTH_SHORT
                                         ).show()
+                                        NEED_REFRESH = true
                                         loadOwners()
                                     },
                                     onError = { e ->
@@ -3250,12 +4023,19 @@ fun PhonebookEntryItem(
                                             msg,
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                    }
+                                    },
 
                                 )
                             },
                             activity = context.findActivity(),
-                            buildingId = building.buildingId
+                            buildingId = building.buildingId,
+                            onClick = { hasOwnerAuth ->
+                                val intent = Intent(context, OwnerDetailsActivity::class.java)
+                                intent.putExtra("ownerId", ownerDto.user!!.userId)
+                                intent.putExtra("buildingId", building.buildingId)
+                                intent.putExtra("hasOwnerAuth", hasOwnerAuth)
+                                ownerDetailsLauncher.launch(intent)
+                            }
                         )
                     }
                 }
@@ -3273,64 +4053,77 @@ fun PhonebookEntryItem(
 
 
             if (showOwnerDialog) {
-                OwnerDialog(
-                    sharedViewModel = sharedViewModel,
-                    units = units,
-                    dangSums = dangSumsMap,
-                    onDismiss = { showOwnerDialog = false },
-                    onAddOwner = { firstName,
-                                   lastName,
-                                   address,
-                                   email,
-                                   phoneNumber,
-                                   mobileNumber,
-                                   isManager,
-                                   isResident,
-                                   selectedUnits ->
+                if(units.isEmpty()){
+                    showOwnerDialog = false
+                    Toast.makeText(context, context.getString(R.string.first_compete_units), Toast.LENGTH_LONG).show()
+                } else {
+                    var selectableUnits  = units.filter { u ->
+                        val usedDang = dangSumsMap[u.unitId] ?: 0.0
+                        usedDang < 6.0
+                    }
+                    if (selectableUnits.isEmpty()){
+                        showOwnerDialog = false
+                        Toast.makeText(context, context.getString(R.string.units_are_finished),
+                            Toast.LENGTH_LONG).show()
+                    } else {
+                        OwnerDialog(
+                            units = units,
+                            dangSums = dangSumsMap,
+                            onDismiss = { showOwnerDialog = false },
+                            onAddOwner = { firstName,
+                                           lastName,
+//                                           address,
+//                                           email,
+//                                           phoneNumber,
+                                           mobileNumber,
+                                           isManager,
+//                                   isResident,
+                                           selectedUnits ->
 
-                        val newUser = User(
-                            userId = 0L,
-                            mobileNumber = mobileNumber,
-                            password = "",
-                            firstName = firstName,
-                            lastName = lastName,
-                            email = email,
-                            gender = Gender.entries.first(),
-                            profilePhoto = "",
-                            nationalCode = "",
-                            address = address,
-                            phoneNumber = phoneNumber,
-                            birthday = ""
-                        )
+                                val newUser = User(
+                                    userId = 0L,
+                                    mobileNumber = mobileNumber,
+                                    password = "",
+                                    firstName = firstName,
+                                    lastName = lastName,
+                                    email = "",
+                                    gender = Gender.entries.first(),
+                                    profilePhoto = "",
+                                    nationalCode = "",
+                                    address = "",
+                                    phoneNumber = "",
+                                    birthday = ""
+                                )
 
-                        ownerApi.insertOwnerWithUnits(
-                            context = context,
-                            units = selectedUnits,
-                            user = newUser,
-                            isManager = isManager,
-                            isResident = isResident,
-                            buildingId = building.buildingId,
-                            onSuccess = {
-                                showOwnerDialog = false
+                                ownerApi.insertOwnerWithUnits(
+                                    units = selectedUnits,
+                                    user = newUser,
+                                    isManager = isManager,
+//                            isResident = isResident,
+                                    buildingId = building.buildingId,
+                                    onSuccess = {
+                                        showOwnerDialog = false
 
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.insert_owner_successfully),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-
-                                loadOwners()
-                            },
-                            onError = { e ->
-                                Toast.makeText(
-                                    context,
-                                    e.message ?: context.getString(R.string.failed),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.insert_owner_successfully),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        NEED_REFRESH = true
+                                        loadOwners()
+                                    },
+                                    onError = { e ->
+                                        Toast.makeText(
+                                            context,
+                                            e.message ?: context.getString(R.string.failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
                             }
                         )
                     }
-                )
+                }
             }
         }
     }
@@ -3338,6 +4131,9 @@ fun PhonebookEntryItem(
 enum class DateField {
     START, END
 }
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EarningsDialog(
     building: Buildings,
@@ -3360,11 +4156,11 @@ fun EarningsDialog(
         .collectAsState(initial = emptyList())
 
     var localEarnings by remember { mutableStateOf<List<Earnings>>(emptyList()) }
-    LaunchedEffect(defaultEarnings) {
-        localEarnings = defaultEarnings
-    }
+    LaunchedEffect(defaultEarnings) { localEarnings = defaultEarnings }
 
     val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
     val earningsList = remember(localEarnings, context) {
         localEarnings + Earnings(
@@ -3379,13 +4175,17 @@ fun EarningsDialog(
     }
 
     var selectedEarning by remember { mutableStateOf<Earnings?>(null) }
-
-    val coroutineScope = rememberCoroutineScope()
     val isPeriodNone = selectedPeriod == Period.NONE
 
     fun numericAmount(): Double {
         val normalized = amount.replace(",", "").persianToEnglishDigits()
         return normalized.toDoubleOrNull() ?: 0.0
+    }
+
+    fun formatWithComma(input: String): String {
+        if (input.isBlank()) return ""
+        val clean = input.replace(",", "").persianToEnglishDigits()
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
     }
 
     val isValid = remember(
@@ -3396,29 +4196,41 @@ fun EarningsDialog(
         val amountValid = amount.isNotBlank() && amountVal > 0.0
         val periodValid = selectedPeriod != null
         val startDateValid = startDate.isNotBlank()
-        val isEndDateValid = if (isPeriodNone) true else endDate.isNotBlank()
-        earningNameValid && amountValid && periodValid && startDateValid && isEndDateValid
+        val endDateValid = if (isPeriodNone) true else endDate.isNotBlank()
+        earningNameValid && amountValid && periodValid && startDateValid && endDateValid
     }
 
-    fun formatWithComma(input: String): String {
-        if (input.isBlank()) return ""
-        val clean = input.replace(",", "").persianToEnglishDigits()
-        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
-    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = { onDismiss() },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
 
-    AlertDialog(
-        onDismissRequest = { },
-        title = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
-                "${context.getString(R.string.add_new_earning)} ${building.name}",
-                style = MaterialTheme.typography.bodyLarge
+                text = "${context.getString(R.string.add_new_earning)} ${building.name}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
                     ExposedDropdownMenuBoxExample(
                         sharedViewModel = sharedViewModel,
                         items = earningsList,
@@ -3446,8 +4258,7 @@ fun EarningsDialog(
                         },
                         onDeleteRequest = { earning ->
                             sharedViewModel.deleteEarningSafe(context, earning.earningsId, onDone = {
-                                localEarnings = (localEarnings - earning)
-                                    .distinctBy { it.earningsName.trim() }
+                                localEarnings = (localEarnings - earning).distinctBy { it.earningsName.trim() }
                                 selectedEarning = null
                             })
                         }
@@ -3470,8 +4281,7 @@ fun EarningsDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val amountDouble = numericAmount()
-                    val amountInWords =
-                        NumberCommaTransformation().numberToWords(context, amountDouble.toLong())
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountDouble.toLong())
                     Text(
                         text = "$amountInWords ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
@@ -3508,9 +4318,7 @@ fun EarningsDialog(
                                     focusManager.clearFocus()
                                     activeDateField = DateField.START
                                 }
-                            ) {
-                                Icon(Icons.Default.DateRange, contentDescription = null)
-                            }
+                            ) { Icon(Icons.Default.DateRange, contentDescription = null) }
                         }
                     )
 
@@ -3529,18 +4337,14 @@ fun EarningsDialog(
                                         focusManager.clearFocus()
                                         activeDateField = DateField.END
                                     }
-                                ) {
-                                    Icon(Icons.Default.DateRange, contentDescription = null)
-                                }
+                                ) { Icon(Icons.Default.DateRange, contentDescription = null) }
                             }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                }
 
-                if (!errorMessage.isNullOrBlank()) {
-                    item { Spacer(Modifier.height(8.dp)) }
-                    item {
+                    if (!errorMessage.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = errorMessage,
                             style = MaterialTheme.typography.bodyMedium,
@@ -3550,61 +4354,69 @@ fun EarningsDialog(
                 }
             }
 
-            if (showAddNewEarningNameDialog) {
-                AddNewEarningNameDialog(
-                    buildingId = building.buildingId,
-                    onDismiss = { showAddNewEarningNameDialog = false },
-                    onSave = { earning ->
-                        val normalized = earning.copy(
-                            buildingId = earning.buildingId,
-                            forBuildingId = earning.forBuildingId,
-                            addedBeforeCreateBuilding = earning.addedBeforeCreateBuilding
-                        )
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
 
-                        localEarnings = (localEarnings + normalized)
-                            .distinctBy { it.earningsName.trim() }
-
-                        selectedEarning = normalized
-                        earningsName = normalized.earningsName
-
-                        coroutineScope.launch {
-                            sharedViewModel.insertNewEarnings(context, normalized)
-                            showAddNewEarningNameDialog = false
-                        }
-                    },
-
-                    earningNameExists = { _, cName ->
-                        sharedViewModel.earningNameExists(context, null, cName).first()
-                    }
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    val finalAmount = numericAmount()
-                    val newEarning = Earnings(
-                        earningsId = sharedViewModel.selectedEarnings?.earningsId ?: 0,
-                        buildingId = building.buildingId,
-                        earningsName = earningsName,
-                        amount = finalAmount,
-                        period = selectedPeriod ?: Period.MONTHLY,
-                        startDate = startDate,
-                        endDate = if (isPeriodNone) "" else endDate
-                    )
-                    onConfirm(newEarning)
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                OutlinedButton(
+                    onClick = { onDismiss() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val finalAmount = numericAmount()
+                        val newEarning = Earnings(
+                            earningsId = sharedViewModel.selectedEarnings?.earningsId ?: 0,
+                            buildingId = building.buildingId,
+                            earningsName = earningsName,
+                            amount = finalAmount,
+                            period = selectedPeriod ?: Period.MONTHLY,
+                            startDate = startDate,
+                            endDate = if (isPeriodNone) "" else endDate
+                        )
+                        onConfirm(newEarning)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
+
+    if (showAddNewEarningNameDialog) {
+        AddNewEarningNameDialog(
+            buildingId = building.buildingId,
+            onDismiss = { showAddNewEarningNameDialog = false },
+            onSave = { earning ->
+                val normalized = earning.copy(
+                    buildingId = earning.buildingId,
+                    forBuildingId = earning.forBuildingId,
+                    addedBeforeCreateBuilding = earning.addedBeforeCreateBuilding
+                )
+
+                localEarnings = (localEarnings + normalized).distinctBy { it.earningsName.trim() }
+                selectedEarning = normalized
+                earningsName = normalized.earningsName
+
+                coroutineScope.launch {
+                    sharedViewModel.insertNewEarnings(context, normalized)
+                    showAddNewEarningNameDialog = false
+                }
+            },
+            earningNameExists = { _, cName ->
+                sharedViewModel.earningNameExists(context, null, cName).first()
+            }
+        )
+    }
 
     if (activeDateField != null) {
         PersianDatePickerDialogContent(
@@ -3622,6 +4434,7 @@ fun EarningsDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditEarningsDialog(
     earnings: Earnings,
@@ -3632,7 +4445,7 @@ fun EditEarningsDialog(
     sharedViewModel: SharedViewModel
 ) {
     var earningsName by remember { mutableStateOf(earnings.earningsName) }
-    var amount by remember { mutableStateOf(formatWithComma(earnings.amount.toLong().toString()))}
+    var amount by remember { mutableStateOf(formatWithComma(earnings.amount.toLong().toString())) }
     var selectedPeriod by remember { mutableStateOf<Period?>(earnings.period) }
     var startDate by remember { mutableStateOf(earnings.startDate) }
     var endDate by remember { mutableStateOf(earnings.endDate) }
@@ -3641,13 +4454,12 @@ fun EditEarningsDialog(
     var showAddNewEarningNameDialog by remember { mutableStateOf(false) }
     var activeDateField by remember { mutableStateOf<DateField?>(null) }
     val focusManager = LocalFocusManager.current
+
     val defaultEarnings by sharedViewModel.getFixedEarnings(context, building.buildingId)
         .collectAsState(initial = emptyList())
 
     var localEarnings by remember { mutableStateOf<List<Earnings>>(emptyList()) }
-    LaunchedEffect(defaultEarnings) {
-        localEarnings = defaultEarnings
-    }
+    LaunchedEffect(defaultEarnings) { localEarnings = defaultEarnings }
 
     val earningsList = remember(localEarnings, context) {
         localEarnings + Earnings(
@@ -3661,60 +4473,64 @@ fun EditEarningsDialog(
         )
     }
 
-
-    var selectedEarning by remember {
-        mutableStateOf<Earnings?>(earnings)
-    }
-
+    var selectedEarning by remember { mutableStateOf<Earnings?>(earnings) }
     val coroutineScope = rememberCoroutineScope()
     val isPeriodNone = selectedPeriod == Period.NONE
 
     fun numericAmount(): Double {
-        val normalized = amount
-            .replace(",", "")
-            .persianToEnglishDigits()
+        val normalized = amount.replace(",", "").persianToEnglishDigits()
         return normalized.toDoubleOrNull() ?: 0.0
     }
 
+    fun formatWithComma(input: String): String {
+        if (input.isBlank()) return ""
+        val clean = input.replace(",", "").persianToEnglishDigits()
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
+    }
+
     val isValid = remember(
-        earningsName,
-        amount,
-        selectedPeriod,
-        startDate,
-        endDate,
-        isPeriodNone
+        earningsName, amount, selectedPeriod, startDate, endDate, isPeriodNone
     ) {
         val earningNameValid = earningsName.isNotBlank()
         val amountVal = numericAmount()
         val amountValid = amount.isNotBlank() && amountVal > 0.0
         val periodValid = selectedPeriod != null
         val startDateValid = startDate.isNotBlank()
-        val isEndDateValid = if (isPeriodNone) true else endDate.isNotBlank()
-
-        earningNameValid && amountValid && periodValid && startDateValid && isEndDateValid
+        val endDateValid = if (isPeriodNone) true else endDate.isNotBlank()
+        earningNameValid && amountValid && periodValid && startDateValid && endDateValid
     }
 
-    fun formatWithComma(input: String): String {
-        if (input.isBlank()) return ""
-        val clean = input.replace(",", "").persianToEnglishDigits()
-        return clean.toLongOrNull()
-            ?.let { "%,d".format(it) }
-            ?: input
-    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = { onDismiss() },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
 
-    AlertDialog(
-        onDismissRequest = { },
-        title = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
-                "${context.getString(R.string.edit_earning)} ${building.name}",
-                style = MaterialTheme.typography.bodyLarge
+                text = "${context.getString(R.string.edit_earning)} ${building.name}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
                     ExposedDropdownMenuBoxExample(
                         sharedViewModel = sharedViewModel,
                         items = earningsList,
@@ -3726,9 +4542,7 @@ fun EditEarningsDialog(
                                 selectedEarning = selected
                                 earningsName = selected.earningsName
                                 if (selected.amount > 0.0) {
-                                    amount = formatWithComma(
-                                        selected.amount.toLong().toString()
-                                    )
+                                    amount = formatWithComma(selected.amount.toLong().toString())
                                 }
                                 selectedPeriod = selected.period
                             }
@@ -3744,8 +4558,7 @@ fun EditEarningsDialog(
                         },
                         onDeleteRequest = { earning ->
                             sharedViewModel.deleteEarningSafe(context, earning.earningsId, onDone = {
-                                localEarnings = (localEarnings - earning)
-                                    .distinctBy { it.earningsName.trim() }
+                                localEarnings = (localEarnings - earning).distinctBy { it.earningsName.trim() }
                                 selectedEarning = null
                             })
                         }
@@ -3756,15 +4569,9 @@ fun EditEarningsDialog(
                     OutlinedTextField(
                         value = amount,
                         onValueChange = { value ->
-                            val cleaned = value
-                                .replace(",", "")
-                                .persianToEnglishDigits()
-
-                            if (cleaned.isEmpty()) {
-                                amount = ""
-                            } else if (cleaned.matches(Regex("^\\d*$"))) {
-                                amount = formatWithComma(cleaned)
-                            }
+                            val cleaned = value.replace(",", "").persianToEnglishDigits()
+                            if (cleaned.isEmpty()) amount = ""
+                            else if (cleaned.matches(Regex("^\\d*$"))) amount = formatWithComma(cleaned)
                         },
                         label = { RequiredLabel(context.getString(R.string.amount)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -3774,11 +4581,7 @@ fun EditEarningsDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val amountDouble = numericAmount()
-                    val amountInWords =
-                        NumberCommaTransformation().numberToWords(
-                            context,
-                            amountDouble.toLong()
-                        )
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountDouble.toLong())
                     Text(
                         text = "$amountInWords ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
@@ -3803,11 +4606,8 @@ fun EditEarningsDialog(
                         onValueChange = { },
                         label = {
                             RequiredLabel(
-                                if (!isPeriodNone) {
-                                    context.getString(R.string.start_date)
-                                } else {
-                                    context.getString(R.string.date)
-                                }
+                                if (!isPeriodNone) context.getString(R.string.start_date)
+                                else context.getString(R.string.date)
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -3818,12 +4618,7 @@ fun EditEarningsDialog(
                                     focusManager.clearFocus()
                                     activeDateField = DateField.START
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DateRange,
-                                    contentDescription = null
-                                )
-                            }
+                            ) { Icon(Icons.Default.DateRange, contentDescription = null) }
                         }
                     )
 
@@ -3833,9 +4628,7 @@ fun EditEarningsDialog(
                         OutlinedTextField(
                             value = endDate,
                             onValueChange = { },
-                            label = {
-                                RequiredLabel(context.getString(R.string.end_date))
-                            },
+                            label = { RequiredLabel(context.getString(R.string.end_date)) },
                             modifier = Modifier.fillMaxWidth(),
                             readOnly = true,
                             trailingIcon = {
@@ -3844,21 +4637,14 @@ fun EditEarningsDialog(
                                         focusManager.clearFocus()
                                         activeDateField = DateField.END
                                     }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null
-                                    )
-                                }
+                                ) { Icon(Icons.Default.DateRange, contentDescription = null) }
                             }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                }
 
-                if (!errorMessage.isNullOrBlank()) {
-                    item { Spacer(Modifier.height(8.dp)) }
-                    item {
+                    if (!errorMessage.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = errorMessage,
                             style = MaterialTheme.typography.bodyMedium,
@@ -3868,66 +4654,69 @@ fun EditEarningsDialog(
                 }
             }
 
-            if (showAddNewEarningNameDialog) {
-                AddNewEarningNameDialog(
-                    buildingId = building.buildingId,
-                    onDismiss = { showAddNewEarningNameDialog = false },
-                    onSave = { earning ->
-                        val normalized = earning.copy(
-                            buildingId = earning.buildingId,
-                            forBuildingId = earning.forBuildingId,
-                            addedBeforeCreateBuilding = earning.addedBeforeCreateBuilding
-                        )
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
 
-                        localEarnings = (localEarnings + normalized)
-                            .distinctBy { it.earningsName.trim() }
-
-                        selectedEarning = normalized
-                        earningsName = normalized.earningsName
-
-                        coroutineScope.launch {
-                            sharedViewModel.insertNewEarnings(context, normalized)
-                            showAddNewEarningNameDialog = false
-                        }
-                    },
-                    earningNameExists = { _, cName ->
-                        sharedViewModel.earningNameExists(context, null, cName).first()
-                    }
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    val finalAmount = numericAmount()
-                    val newEarning = Earnings(
-                        earningsId = earnings.earningsId,
-                        buildingId = building.buildingId,
-                        earningsName = earningsName,
-                        amount = finalAmount,
-                        period = selectedPeriod ?: Period.MONTHLY,
-                        startDate = startDate,
-                        endDate = if(isPeriodNone) "" else endDate
-                    )
-                    onConfirm(newEarning)
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.edit),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                OutlinedButton(
+                    onClick = { onDismiss() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val finalAmount = numericAmount()
+                        val newEarning = Earnings(
+                            earningsId = earnings.earningsId,
+                            buildingId = building.buildingId,
+                            earningsName = earningsName,
+                            amount = finalAmount,
+                            period = selectedPeriod ?: Period.MONTHLY,
+                            startDate = startDate,
+                            endDate = if (isPeriodNone) "" else endDate
+                        )
+                        onConfirm(newEarning)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.edit), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
+
+    if (showAddNewEarningNameDialog) {
+        AddNewEarningNameDialog(
+            buildingId = building.buildingId,
+            onDismiss = { showAddNewEarningNameDialog = false },
+            onSave = { earning ->
+                val normalized = earning.copy(
+                    buildingId = earning.buildingId,
+                    forBuildingId = earning.forBuildingId,
+                    addedBeforeCreateBuilding = earning.addedBeforeCreateBuilding
+                )
+
+                localEarnings = (localEarnings + normalized).distinctBy { it.earningsName.trim() }
+                selectedEarning = normalized
+                earningsName = normalized.earningsName
+
+                coroutineScope.launch {
+                    sharedViewModel.insertNewEarnings(context, normalized)
+                    showAddNewEarningNameDialog = false
+                }
+            },
+            earningNameExists = { _, cName ->
+                sharedViewModel.earningNameExists(context, null, cName).first()
+            }
+        )
+    }
 
     if (activeDateField != null) {
         PersianDatePickerDialogContent(
@@ -3945,7 +4734,7 @@ fun EditEarningsDialog(
     }
 }
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddOperationalCostDialog(
     buildingId: Long,
@@ -3959,19 +4748,18 @@ fun AddOperationalCostDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
     val chargesCost by sharedViewModel.costsList.collectAsState()
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
-//    val addNewCostLabel = context.getString(R.string.add_new_cost)
-    Log.d("chargesCost", chargesCost.toString())
+
     LaunchedEffect(chargesCost) {
         selectedCostNames = chargesCost
             .filter { it.chargeFlag == true }
             .filter { it.fundType == FundType.OPERATIONAL }
             .filter { it.tempAmount == 0.0 }
-            .filter { it.buildingId == null  || it.buildingId == 0L }
+            .filter { c -> isGlobalNoForBuilding(c) || isForThisBuilding(c, buildingId) }
             .map { it.costName }
-        Log.d("selectedCostNames", selectedCostNames.toString())
     }
 
     LaunchedEffect(buildingId) {
@@ -3992,7 +4780,11 @@ fun AddOperationalCostDialog(
         )
     }
 
-    val overviewState by produceState<BuildingFullDto?>(initialValue = null, key1 = buildingId, key2 = fiscalYear) {
+    val overviewState by produceState<BuildingFullDto?>(
+        initialValue = null,
+        key1 = buildingId,
+        key2 = fiscalYear
+    ) {
         value = sharedViewModel.loadBuildingOverview(
             context = context,
             buildingId = buildingId,
@@ -4000,10 +4792,8 @@ fun AddOperationalCostDialog(
         )
     }
 
-
     var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var selectedCostLabel by remember { mutableStateOf<String?>(null) }
-
     var customCostTitle by remember { mutableStateOf<String?>(null) }
 
     var totalAmount by remember { mutableStateOf("") }
@@ -4033,15 +4823,14 @@ fun AddOperationalCostDialog(
     fun formatWithComma(input: String): String {
         if (input.isBlank()) return ""
         val clean = input.replace(",", "")
-        return clean.toLongOrNull()
-            ?.let { "%,d".format(it) }
-            ?: input
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
     }
 
     val amountDouble = totalAmount.replace(",", "").toDoubleOrNull() ?: 0.0
 
     val isValid = remember(
         selectedCost,
+        documentNumber,
         customCostTitle,
         costName,
         totalAmount,
@@ -4050,189 +4839,198 @@ fun AddOperationalCostDialog(
     ) {
         val clean = totalAmount.replace(",", "")
         val isCostNameValid = costName.isNotBlank()
-        val isAmountValid =
-            clean.isNotBlank() && clean.toDoubleOrNull()?.let { it > 0.0 } == true
+        val isAmountValid = clean.isNotBlank() && clean.toDoubleOrNull()?.let { it > 0.0 } == true
         val isDueDateValid = dueDate.isNotBlank()
-        isCostNameValid && isAmountValid && isDueDateValid &&
-        selectedCost != null
+        val isDocValid = documentNumber.isNotBlank()
+        isCostNameValid && isAmountValid && isDueDateValid && isDocValid && selectedCost != null
     }
 
-    AlertDialog(
-        onDismissRequest = {},
-        title = {
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { it != SheetValue.Hidden }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = { },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
-                text = context.getString(R.string.add_new_cost),
+                text = context.getString(R.string.add_new_operational_doc),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
             ) {
-                LazyColumn {
-                    item {
-                        OutlinedTextField(
-                            value = costName,
-                            onValueChange = { costName = it },
-                            label = { RequiredLabel(context.getString(R.string.cost_description)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-                        )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    ChipGroupShared(
+                        selectedItems = selectedCostLabel?.let { listOf(it) } ?: emptyList(),
+                        onSelectionChange = { newSelection ->
+                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
+                            selectedCostLabel = label
+                            val cost = chargesCost.firstOrNull { it.costFor == label }
+                            selectedCost = cost
+                        },
+                        items = selectedCostNames.distinctBy { it },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.cost_for),
+                        singleSelection = true
+                    )
 
-                        Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                        ChipGroupShared(
-                            selectedItems = selectedCostLabel?.let { listOf(it) } ?: emptyList(),
-                            onSelectionChange = { newSelection ->
-                                val label = newSelection.firstOrNull() ?: return@ChipGroupShared
-                                selectedCostLabel = label
-                                val cost = chargesCost.firstOrNull { it.costFor == label }
-                                selectedCost = cost
-                                if (cost != null && cost.tempAmount > 0.0) {
-                                    totalAmount =
-                                        formatWithComma(cost.tempAmount.toLong().toString())
-                                    selectedPeriod = cost.period
+                    OutlinedTextField(
+                        value = costName,
+                        onValueChange = { costName = it },
+                        label = { RequiredLabel(context.getString(R.string.cost_description)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = totalAmount,
+                        onValueChange = { value ->
+                            val cleaned = value.replace(",", "")
+                            if (cleaned.isEmpty()) totalAmount = ""
+                            else if (cleaned.matches(Regex("^\\d*$"))) totalAmount = formatWithComma(cleaned)
+                        },
+                        label = { RequiredLabel(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
+                    Text(
+                        text = "$amountInWords ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = documentNumber,
+                        onValueChange = { documentNumber = it },
+                        label = { RequiredLabel(context.getString(R.string.document_number)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = dueDate,
+                        onValueChange = { },
+                        label = { RequiredLabel(context.getString(R.string.due)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        readOnly = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    showDatePicker = true
                                 }
-                            },
-                            items = selectedCostNames,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            label = context.getString(R.string.cost_for),
-                            singleSelection = true
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = totalAmount,
-                            onValueChange = { value ->
-                                val cleaned = value.replace(",", "")
-                                if (cleaned.isEmpty()) {
-                                    totalAmount = ""
-                                } else if (cleaned.matches(Regex("^\\d*$"))) {
-                                    totalAmount = formatWithComma(cleaned)
-                                }
-                            },
-                            label = { Text(context.getString(R.string.amount)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
-                        val amountInWords =
-                            NumberCommaTransformation().numberToWords(context, amountVal)
-                        Text(
-                            text = "$amountInWords ${context.getString(R.string.toman)}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = documentNumber,
-                            onValueChange = { documentNumber = it },
-                            label = { RequiredLabel(context.getString(R.string.document_number)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = dueDate,
-                            onValueChange = { },
-                            label = {
-                                RequiredLabel(
-                                    context.getString(R.string.due)
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        showDatePicker = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null
-                                    )
-                                }
+                            ) {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
                             }
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    val amount = amountDouble
-
-                    coroutineScope.launch {
-                        try {
-                            val newCost = Costs(
-                                buildingId = buildingId,
-                                costName = costName,
-                                tempAmount = amount,
-                                period = selectedPeriod ?: Period.NONE,
-                                calculateMethod = calculateUnitMethod,
-                                paymentLevel = PaymentLevel.UNIT,
-                                responsible = responsibleEnum,
-                                fundType = fixedFundType,
-                                chargeFlag = false,
-                                capitalFlag = false,
-                                invoiceFlag = false,
-                                dueDate = dueDate,
-                                costFor = selectedCost?.costFor ?: "",
-                                documentNumber = documentNumber
-                            )
-
-                            sharedViewModel.insertCostToServer(
-                                context = context,
-                                costs = listOf(newCost),
-                                debts = emptyList(),
-                                buildingId = buildingId,
-                                onSuccess = {
-                                    onSave(context.getString(R.string.cost_insert_doc))
-                                },
-                                onError = { e ->
-                                    onShowSnackbar(context.getString(R.string.failed))
-                                }
-                            )
-                        } catch (e: Exception) {
-                            Log.e("failed", e.toString())
-                            onShowSnackbar(context.getString(R.string.failed))
                         }
-                    }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
             }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val amount = amountDouble
+                        coroutineScope.launch {
+                            try {
+                                val newCost = Costs(
+                                    buildingId = buildingId,
+                                    costName = costName,
+                                    tempAmount = amount,
+                                    period = selectedPeriod ?: Period.NONE,
+                                    calculateMethod = calculateUnitMethod,
+                                    paymentLevel = PaymentLevel.UNIT,
+                                    responsible = responsibleEnum,
+                                    fundType = fixedFundType,
+                                    chargeFlag = false,
+                                    capitalFlag = false,
+                                    invoiceFlag = false,
+                                    dueDate = dueDate,
+                                    costFor = selectedCost?.costFor ?: "",
+                                    documentNumber = documentNumber
+                                )
+
+                                sharedViewModel.insertCostToServer(
+                                    context = context,
+                                    costs = listOf(newCost),
+                                    debts = emptyList(),
+                                    buildingId = buildingId,
+                                    onSuccess = { onSave(context.getString(R.string.cost_insert_doc)) },
+                                    onError = { onShowSnackbar(context.getString(R.string.failed)) }
+                                )
+                            } catch (e: Exception) {
+                                Log.e("failed", e.toString())
+                                onShowSnackbar(context.getString(R.string.failed))
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
 
     if (showAddNewCostNameDialog) {
         AddNewCostNameDialog(
@@ -4242,7 +5040,6 @@ fun AddOperationalCostDialog(
             onSave = { newCostName ->
                 customCostTitle = newCostName
                 selectedCost = null
-//                selectedCostLabel = addNewCostLabel
                 showAddNewCostNameDialog = false
             },
             checkCostNameExists = { bId, cName ->
@@ -4263,6 +5060,7 @@ fun AddOperationalCostDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditOperationalCostDialog(
     buildingId: Long,
@@ -4276,58 +5074,44 @@ fun EditOperationalCostDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
     val chargesCost by sharedViewModel.costsList.collectAsState()
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
-//    val addNewCostLabel = context.getString(R.string.edit_operational_doc)
 
     LaunchedEffect(chargesCost) {
         selectedCostNames = chargesCost
             .filter { it.chargeFlag == true }
             .filter { it.fundType == FundType.OPERATIONAL }
             .filter { it.tempAmount == 0.0 }
-            .filter { it.buildingId == null   || it.buildingId == 0L}
+            .filter { c -> isGlobalNoForBuilding(c) || isForThisBuilding(c, updatedCost.buildingId ?: 0L) }
             .map { it.costName }
     }
 
-
     var dueDate by remember { mutableStateOf(updatedCost.dueDate) }
+    val fiscalYear = remember(dueDate) { dueDate.takeIf { it.contains("/") }?.split("/")?.getOrNull(0) }
 
-    val fiscalYear = remember(dueDate) {
-        dueDate.takeIf { it.contains("/") }?.split("/")?.getOrNull(0)
-    }
-
-
-
-//    var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var selectedCostLabel by remember { mutableStateOf<String?>(null) }
-
     var customCostTitle by remember { mutableStateOf<String?>(null) }
-
     var totalAmount by remember { mutableStateOf(formatWithComma(updatedCost.tempAmount.toLong().toString())) }
-
     var costName by remember { mutableStateOf(updatedCost.costName) }
     var documentNumber by remember { mutableStateOf(updatedCost.documentNumber) }
     var costFor by remember { mutableStateOf(updatedCost.costFor) }
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
-
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddNewCostNameDialog by remember { mutableStateOf(false) }
-
-
 
     fun formatWithComma(input: String): String {
         if (input.isBlank()) return ""
         val clean = input.replace(",", "")
-        return clean.toLongOrNull()
-            ?.let { "%,d".format(it) }
-            ?: input
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
     }
 
     val amountDouble = totalAmount.replace(",", "").toDoubleOrNull() ?: 0.0
 
     val isValid = remember(
         updatedCost,
+        documentNumber,
         customCostTitle,
         costName,
         totalAmount,
@@ -4335,175 +5119,189 @@ fun EditOperationalCostDialog(
     ) {
         val clean = totalAmount.replace(",", "")
         val isCostNameValid = costName.isNotBlank()
-        val isAmountValid =
-            clean.isNotBlank() && clean.toDoubleOrNull()?.let { it > 0.0 } == true
+        val isAmountValid = clean.isNotBlank() && clean.toDoubleOrNull()?.let { it > 0.0 } == true
         val isDueDateValid = dueDate.isNotBlank()
-        isCostNameValid && isAmountValid && isDueDateValid
+        val isDocValid = documentNumber.isNotBlank()
+        isCostNameValid && isAmountValid && isDueDateValid && isDocValid
     }
 
-    AlertDialog(
-        onDismissRequest = {},
-        title = {
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { it != SheetValue.Hidden }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = { },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = context.getString(R.string.edit_operational_doc),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
             ) {
-                LazyColumn {
-                    item {
-                        OutlinedTextField(
-                            value = costName,
-                            onValueChange = { costName = it },
-                            label = { RequiredLabel(context.getString(R.string.cost_description)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-                        )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    ChipGroupShared(
+                        selectedItems = costFor.let { listOf(it) },
+                        onSelectionChange = { newSelection ->
+                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
+                            selectedCostLabel = label
+                            costFor = label
+                            chargesCost.firstOrNull { it.costFor == label }
+                        },
+                        items = selectedCostNames.distinctBy { it },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.cost_for),
+                        singleSelection = true
+                    )
 
-                        Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                        ChipGroupShared(
-                            selectedItems = costFor.let { listOf(it) },
-                            onSelectionChange = { newSelection ->
-                                val label = newSelection.firstOrNull() ?: return@ChipGroupShared
-                                selectedCostLabel = label
-                                costFor = label
-                                val cost = chargesCost.firstOrNull { it.costFor == label }
-                                if (cost != null && cost.tempAmount > 0.0) {
-                                    totalAmount =
-                                        formatWithComma(cost.tempAmount.toLong().toString())
-                                    selectedPeriod = cost.period
+                    OutlinedTextField(
+                        value = costName,
+                        onValueChange = { costName = it },
+                        label = { RequiredLabel(context.getString(R.string.cost_description)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = totalAmount,
+                        onValueChange = { value ->
+                            val cleaned = value.replace(",", "")
+                            if (cleaned.isEmpty()) totalAmount = ""
+                            else if (cleaned.matches(Regex("^\\d*$"))) totalAmount = formatWithComma(cleaned)
+                        },
+                        label = { RequiredLabel(context.getString(R.string.amount)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
+                    Text(
+                        text = "$amountInWords ${context.getString(R.string.toman)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = documentNumber,
+                        onValueChange = { documentNumber = it },
+                        label = { RequiredLabel(context.getString(R.string.document_number)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = dueDate,
+                        onValueChange = { },
+                        label = { RequiredLabel(context.getString(R.string.due)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        readOnly = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    showDatePicker = true
                                 }
-                            },
-                            items = selectedCostNames,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            label = context.getString(R.string.cost_for),
-                            singleSelection = true
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = totalAmount,
-                            onValueChange = { value ->
-                                val cleaned = value.replace(",", "")
-                                if (cleaned.isEmpty()) {
-                                    totalAmount = ""
-                                } else if (cleaned.matches(Regex("^\\d*$"))) {
-                                    totalAmount = formatWithComma(cleaned)
-                                }
-                            },
-                            label = { Text(context.getString(R.string.amount)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
-                        val amountInWords =
-                            NumberCommaTransformation().numberToWords(context, amountVal)
-                        Text(
-                            text = "$amountInWords ${context.getString(R.string.toman)}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = documentNumber,
-                            onValueChange = { documentNumber = it },
-                            label = { RequiredLabel(context.getString(R.string.document_number)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge
-
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = dueDate,
-                            onValueChange = { },
-                            label = {
-                                RequiredLabel(
-                                    context.getString(R.string.due)
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        showDatePicker = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null
-                                    )
-                                }
+                            ) {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
                             }
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    val amount = amountDouble
-
-                    coroutineScope.launch {
-                        try {
-                            val newCost = updatedCost.copy(
-                                costName = costName,
-                                tempAmount = amount,
-                                period = selectedPeriod ?: Period.NONE,
-                                calculateMethod = CalculateMethod.NONE,
-                                paymentLevel = PaymentLevel.UNIT,
-                                responsible = Responsible.TENANT,
-                                fundType = fixedFundType,
-                                chargeFlag = false,
-                                capitalFlag = false,
-                                invoiceFlag = false,
-                                dueDate = dueDate,
-                                costFor = costFor,
-                                documentNumber = documentNumber
-                            )
-                            onSave(newCost)
-                        } catch (e: Exception) {
-                            Log.e("failed", e.toString())
-                            onShowSnackbar(context.getString(R.string.failed))
                         }
-                    }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            ) {
-                Text(
-                    text = context.getString(R.string.edit),
-                    style = MaterialTheme.typography.bodyLarge
-                )
             }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val amount = amountDouble
+                        coroutineScope.launch {
+                            try {
+                                val newCost = updatedCost.copy(
+                                    costName = costName,
+                                    tempAmount = amount,
+                                    period = selectedPeriod ?: Period.NONE,
+                                    calculateMethod = CalculateMethod.NONE,
+                                    paymentLevel = PaymentLevel.UNIT,
+                                    responsible = Responsible.TENANT,
+                                    fundType = fixedFundType,
+                                    chargeFlag = false,
+                                    capitalFlag = false,
+                                    invoiceFlag = false,
+                                    dueDate = dueDate,
+                                    costFor = costFor,
+                                    documentNumber = documentNumber
+                                )
+                                onSave(newCost)
+                            } catch (e: Exception) {
+                                Log.e("failed", e.toString())
+                                onShowSnackbar(context.getString(R.string.failed))
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.edit), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
 
     if (showAddNewCostNameDialog) {
         AddNewCostNameDialog(
@@ -4512,7 +5310,6 @@ fun EditOperationalCostDialog(
             onDismiss = { showAddNewCostNameDialog = false },
             onSave = { newCostName ->
                 customCostTitle = newCostName
-//                selectedCostLabel = addNewCostLabel
                 showAddNewCostNameDialog = false
             },
             checkCostNameExists = { bId, cName ->
@@ -4533,11 +5330,21 @@ fun EditOperationalCostDialog(
     }
 }
 
+fun isGlobalNoForBuilding(c: Costs): Boolean {
+    val bOk = (c.buildingId == null || c.buildingId == 0L)
+    val fbEmpty = (c.forBuildingId == null || c.forBuildingId == 0L)
+    return bOk && fbEmpty
+}
+
+fun isForThisBuilding(c: Costs, selectedBId: Long): Boolean {
+    return c.forBuildingId == selectedBId && c.buildingId == 0L
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddCapitalCostDialog(
     sharedViewModel: SharedViewModel,
+    buildingId: Long,
     onDismiss: () -> Unit,
     onSave: (
         Costs,
@@ -4556,11 +5363,14 @@ fun AddCapitalCostDialog(
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
     var selectedCost by remember { mutableStateOf<Costs?>(null) }
     var totalAmount by remember { mutableStateOf("") }
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
-    var selectedResponsible by remember { mutableStateOf(Responsible.OWNER.getDisplayName(context)) }
+    var selectedResponsible by remember {
+        mutableStateOf(Responsible.OWNER.getDisplayName(context))
+    }
     var selectedCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     var selectedUnitCalculateMethod by remember { mutableStateOf(context.getString(R.string.fixed)) }
     val selectedUnits = remember { mutableStateListOf<Units>() }
@@ -4572,17 +5382,16 @@ fun AddCapitalCostDialog(
     var selectedCostLabel by remember { mutableStateOf<String?>(null) }
 
     val costs by sharedViewModel.costsList.collectAsState()
-    Log.d("costs", costs.toString())
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
+
     LaunchedEffect(costs) {
         selectedCostNames = costs
             .filter { it.chargeFlag == false }
             .filter { it.fundType == FundType.CAPITAL }
             .filter { it.tempAmount == 0.0 }
-            .filter { it.buildingId == null  || it.buildingId == 0L}
+            .filter { c -> isGlobalNoForBuilding(c) || isForThisBuilding(c, buildingId) }
             .map { it.costName }
     }
-
 
     val responsibleEnum = when (selectedResponsible) {
         Responsible.OWNER.getDisplayName(context) -> Responsible.OWNER
@@ -4607,30 +5416,69 @@ fun AddCapitalCostDialog(
     fun formatWithComma(input: String): String {
         if (input.isBlank()) return ""
         val clean = input.replace(",", "")
-        return clean.toLongOrNull()
-            ?.let { "%,d".format(it) }
-            ?: input
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
     }
 
     val isValid = selectedCost != null &&
             totalAmount.replace(",", "").isNotBlank() &&
             totalAmount.replace(",", "").toDoubleOrNull()?.let { it > 0.0 } == true &&
-            dueDate.isNotBlank()
+            dueDate.isNotBlank() &&
+            documentNumber.isNotBlank()
 
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { it != SheetValue.Hidden }
+    )
 
-    AlertDialog(
-        onDismissRequest = {},
-        title = {
+    ModalBottomSheet(
+        onDismissRequest = { },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
-                text = context.getString(R.string.add_new_cost),
+                text = context.getString(R.string.add_new_capital_doc),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            LazyColumn {
-                item {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    ChipGroupShared(
+                        selectedItems = selectedCostLabel?.let { listOf(it) } ?: emptyList(),
+                        onSelectionChange = { newSelection ->
+                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
+                            selectedCostLabel = label
+                            val cost = costs.firstOrNull { it.costFor == label }
+                            selectedCost = cost
+                        },
+                        items = selectedCostNames.distinctBy { it },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.cost_for),
+                        singleSelection = true
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = costName,
                         onValueChange = { costName = it },
@@ -4640,36 +5488,13 @@ fun AddCapitalCostDialog(
                     )
 
                     Spacer(Modifier.height(8.dp))
-                    Log.d("selectedCostNames", selectedCostNames.toString())
-                    ChipGroupShared(
-                        selectedItems = selectedCostLabel?.let { listOf(it) } ?: emptyList(),
-                        onSelectionChange = { newSelection ->
-                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
-                            selectedCostLabel = label
-                            val cost = costs.firstOrNull { it.costFor == label }
-                            selectedCost = cost
-                            if (cost != null && cost.tempAmount > 0.0) {
-                                totalAmount = formatWithComma(cost.tempAmount.toLong().toString())
-                                selectedPeriod = cost.period
-                            }
-                        },
-                        items = selectedCostNames,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        label = context.getString(R.string.cost_for),
-                        singleSelection = true
-                    )
-
-                    Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = totalAmount,
                         onValueChange = { value ->
                             val cleaned = value.replace(",", "")
-                            if (cleaned.isEmpty()) {
-                                totalAmount = ""
-                            } else if (cleaned.matches(Regex("^\\d*$"))) {
-                                totalAmount = formatWithComma(cleaned)
-                            }
+                            if (cleaned.isEmpty()) totalAmount = ""
+                            else if (cleaned.matches(Regex("^\\d*$"))) totalAmount = formatWithComma(cleaned)
                         },
                         label = { RequiredLabel(context.getString(R.string.amount)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -4680,8 +5505,7 @@ fun AddCapitalCostDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
-                    val amountInWords =
-                        NumberCommaTransformation().numberToWords(context, amountVal)
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
                     Text(
                         text = "$amountInWords ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
@@ -4713,10 +5537,7 @@ fun AddCapitalCostDialog(
                                     showDatePicker = true
                                 }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.DateRange,
-                                    contentDescription = null
-                                )
+                                Icon(Icons.Default.DateRange, contentDescription = null)
                             }
                         }
                     )
@@ -4724,43 +5545,54 @@ fun AddCapitalCostDialog(
                     Spacer(Modifier.height(8.dp))
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    val cost = selectedCost ?: return@Button
-                    onSave(
-                        cost,
-                        costName,
-                        totalAmount.replace(",", ""),
-                        selectedPeriod ?: Period.NONE,
-                        calculateMethod,
-                        calculateUnitMethod,
-                        responsibleEnum,
-                        selectedUnits.map { it.unitId },
-                        selectedOwners.map { it.userId },
-                        dueDate,
-                        documentNumber,
-                        context.getString(R.string.insert_capital_successfully)
-                    )
-                }
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val cost = selectedCost ?: return@Button
+                        onSave(
+                            cost,
+                            costName,
+                            totalAmount.replace(",", ""),
+                            selectedPeriod ?: Period.NONE,
+                            calculateMethod,
+                            calculateUnitMethod,
+                            responsibleEnum,
+                            selectedUnits.map { it.unitId },
+                            selectedOwners.map { it.userId },
+                            dueDate,
+                            documentNumber,
+                            context.getString(R.string.insert_capital_successfully)
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
 
     if (showDatePicker) {
         PersianDatePickerDialogContent(
@@ -4780,15 +5612,24 @@ fun EditCapitalCostDialog(
     updatedCost: Costs,
     sharedViewModel: SharedViewModel,
     onDismiss: () -> Unit,
-    onSave: (
-        Costs
-    ) -> Unit
+    onSave: (Costs) -> Unit
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
-    var totalAmount by remember { mutableStateOf(formatWithComma(updatedCost.tempAmount.toLong().toString())) }
-    var selectedCostLabel by remember { mutableStateOf<String?>(updatedCost.costFor.takeIf { it.isNotBlank() }) }
+    fun formatWithComma(input: String): String {
+        if (input.isBlank()) return ""
+        val clean = input.replace(",", "")
+        return clean.toLongOrNull()?.let { "%,d".format(it) } ?: input
+    }
+
+    var totalAmount by remember {
+        mutableStateOf(formatWithComma(updatedCost.tempAmount.toLong().toString()))
+    }
+    var selectedCostLabel by remember {
+        mutableStateOf<String?>(updatedCost.costFor.takeIf { it.isNotBlank() })
+    }
 
     var selectedPeriod by remember { mutableStateOf<Period?>(Period.MONTHLY) }
     val selectedUnits = remember { mutableStateListOf<Units>() }
@@ -4800,49 +5641,83 @@ fun EditCapitalCostDialog(
     var documentNumber by remember { mutableStateOf(updatedCost.documentNumber) }
 
     val costs by sharedViewModel.costsList.collectAsState()
-
     var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
+
     LaunchedEffect(costs) {
         selectedCostNames = costs
             .filter { it.chargeFlag == false }
             .filter { it.fundType == FundType.CAPITAL }
             .filter { it.tempAmount == 0.0 }
-            .filter { it.buildingId == null  || it.buildingId == 0L}
+            .filter { c ->
+                isGlobalNoForBuilding(c) || isForThisBuilding(c, updatedCost.buildingId ?: 0L)
+            }
             .map { it.costName }
     }
 
-
-    fun formatWithComma(input: String): String {
-        if (input.isBlank()) return ""
-        val clean = input.replace(",", "")
-        return clean.toLongOrNull()
-            ?.let { "%,d".format(it) }
-            ?: input
-    }
-
-    val isValid = remember(costName, costFor, totalAmount, dueDate) {
+    val isValid = remember(costName, costFor, totalAmount, dueDate, documentNumber) {
         val clean = totalAmount.replace(",", "")
         costName.isNotBlank() &&
                 costFor.isNotBlank() &&
                 clean.isNotBlank() &&
+                documentNumber.isNotBlank() &&
                 (clean.toDoubleOrNull() ?: 0.0) > 0.0 &&
                 dueDate.isNotBlank()
     }
 
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { it != SheetValue.Hidden }
+    )
 
-    AlertDialog(
-        onDismissRequest = {},
-        title = {
+    ModalBottomSheet(
+        onDismissRequest = { },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = context.getString(R.string.edit_capital_doc),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            LazyColumn {
-                item {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    ChipGroupShared(
+                        selectedItems = costFor.let { listOf(it) },
+                        onSelectionChange = { newSelection ->
+                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
+                            selectedCostLabel = label
+                            costFor = label
+                            costs.firstOrNull { it.costFor == label }
+                        },
+                        items = selectedCostNames.distinctBy { it },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        label = context.getString(R.string.cost_for),
+                        singleSelection = true
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = costName,
                         onValueChange = { costName = it },
@@ -4853,37 +5728,12 @@ fun EditCapitalCostDialog(
 
                     Spacer(Modifier.height(8.dp))
 
-                    ChipGroupShared(
-                        selectedItems = costFor.let { listOf(it) },
-                        onSelectionChange = { newSelection ->
-                            val label = newSelection.firstOrNull() ?: return@ChipGroupShared
-                            selectedCostLabel = label
-                            costFor = label
-                            val cost = costs.firstOrNull { it.costFor == label }
-//                            selectedCost = cost
-//                            Log.d("selectedCost", selectedCost.toString())
-                            if (cost != null && cost.tempAmount > 0.0) {
-                                totalAmount = formatWithComma(cost.tempAmount.toLong().toString())
-                                selectedPeriod = cost.period
-                            }
-                        },
-                        items = selectedCostNames,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        label = context.getString(R.string.cost_for),
-                        singleSelection = true
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
                     OutlinedTextField(
-                        value = totalAmount.toString(),
+                        value = totalAmount,
                         onValueChange = { value ->
                             val cleaned = value.replace(",", "")
-                            if (cleaned.isEmpty()) {
-                                totalAmount = ""
-                            } else if (cleaned.matches(Regex("^\\d*$"))) {
-                                totalAmount = formatWithComma(cleaned)
-                            }
+                            if (cleaned.isEmpty()) totalAmount = ""
+                            else if (cleaned.matches(Regex("^\\d*$"))) totalAmount = formatWithComma(cleaned)
                         },
                         label = { RequiredLabel(context.getString(R.string.amount)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -4893,9 +5743,8 @@ fun EditCapitalCostDialog(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val amountVal = totalAmount.toLongOrNull() ?: 0L
-                    val amountInWords =
-                        NumberCommaTransformation().numberToWords(context, amountVal)
+                    val amountVal = totalAmount.replace(",", "").toLongOrNull() ?: 0L
+                    val amountInWords = NumberCommaTransformation().numberToWords(context, amountVal)
                     Text(
                         text = "$amountInWords ${context.getString(R.string.toman)}",
                         style = MaterialTheme.typography.bodyLarge
@@ -4927,10 +5776,7 @@ fun EditCapitalCostDialog(
                                     showDatePicker = true
                                 }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.DateRange,
-                                    contentDescription = null
-                                )
+                                Icon(Icons.Default.DateRange, contentDescription = null)
                             }
                         }
                     )
@@ -4938,33 +5784,47 @@ fun EditCapitalCostDialog(
                     Spacer(Modifier.height(8.dp))
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                enabled = isValid,
-                onClick = {
-                    var newCost = updatedCost.copy( costName = costName, tempAmount = totalAmount.replace(",","").toDouble()
-                    , dueDate = dueDate, documentNumber = documentNumber, costFor = costFor)
-                    onSave(
-                        newCost
-                    )
-                }
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.edit),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    enabled = isValid,
+                    onClick = {
+                        val newCost = updatedCost.copy(
+                            costName = costName,
+                            tempAmount = totalAmount.replace(",", "").toDouble(),
+                            dueDate = dueDate,
+                            documentNumber = documentNumber,
+                            costFor = costFor
+                        )
+                        onSave(newCost)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.edit), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    )
+    }
 
     if (showDatePicker) {
         PersianDatePickerDialogContent(
@@ -5159,7 +6019,7 @@ fun BuildingProfileSectionSelector(
     modifier: Modifier = Modifier
 ) {
     LazyRow(
-        modifier = modifier.padding(vertical = 4.dp, horizontal = 8.dp),
+        modifier = modifier.padding(vertical = 2.dp, horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         itemsIndexed(tabs) { index, tab ->

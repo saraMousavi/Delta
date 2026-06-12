@@ -1,5 +1,6 @@
 package com.example.delta
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -7,6 +8,7 @@ import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -50,6 +55,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +63,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -70,6 +77,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,6 +100,7 @@ import com.example.delta.data.entity.Notification
 import com.example.delta.enums.NotificationType
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.extentions.findActivity
+import com.example.delta.init.AppFirebaseMessagingService.NotificationEventBus
 import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
 import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
 import com.example.delta.init.AuthUtils.AuthorizationObjects
@@ -194,6 +203,11 @@ fun DetailDrawer(
             ) {
                 // *** Right drawer: Main Menu drawer wrapped in RTL to open from Right ***
                 val currentRoleId = Preference().getRoleId(context)
+                LaunchedEffect(currentRoleId) {
+                    if (currentRoleId != 0L) {
+                        sharedViewModel.loadRolePermissions(context, currentRoleId)
+                    }
+                }
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     ModalNavigationDrawer(
                         drawerContent = {
@@ -234,27 +248,27 @@ fun DetailDrawer(
                                         .verticalScroll(rememberScrollState()),
                                     horizontalAlignment = Alignment.Start
                                 ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Image(
-                                            painter = painterResource(id = imageId),
-                                            contentDescription = "My Image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(120.dp)
-                                                .clip(CircleShape)
-                                        )
-                                    }
-                                    Spacer(Modifier.height(12.dp))
+//                                    Box(
+//                                        modifier = Modifier.fillMaxSize(),
+//                                        contentAlignment = Alignment.Center
+//                                    ) {
+//                                        Image(
+//                                            painter = painterResource(id = imageId),
+//                                            contentDescription = "My Image",
+//                                            contentScale = ContentScale.Crop,
+//                                            modifier = Modifier
+//                                                .size(120.dp)
+//                                                .clip(CircleShape)
+//                                        )
+//                                    }
+                                    Spacer(Modifier.height(8.dp))
 
                                     // Your NavigationDrawerItems below
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.account)) },
                                         selected = false,
                                         onClick = {
-                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                            if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
                                                 Toast.makeText(
                                                     context,
                                                     context.getString(R.string.auth_cancel),
@@ -278,11 +292,54 @@ fun DetailDrawer(
                                     )
                                     Spacer(Modifier.height(4.dp))
 
+                                    // Your NavigationDrawerItems below
+                                    NavigationDrawerItem(
+                                        label = { Text(context.getString(R.string.user_management)) },
+                                        selected = false,
+                                        onClick = {
+                                            if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.auth_cancel),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                val perms = sharedViewModel.rolePermissions
+                                                val perm = perms.permissionFor(
+                                                    AuthorizationObjects.HOME,
+                                                    AuthorizationFieldsHome.CREATE_BUILDING_BUTTON
+                                                )
+                                                if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+                                                    context.startActivity(
+                                                        Intent(
+                                                            context,
+                                                            UserManagementActivity::class.java
+                                                        )
+                                                    )
+                                                } else {
+                                                    Toast.makeText(
+                                                        context,
+                                                        context.getString(R.string.auth_for_manager),
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+
+                                            }
+                                        },
+                                        icon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.edit_password)) },
                                         selected = false,
                                         onClick = {
-                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                            if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
                                                 Toast.makeText(
                                                     context,
                                                     context.getString(R.string.auth_cancel),
@@ -305,7 +362,7 @@ fun DetailDrawer(
                                         label = { Text(context.getString(R.string.wallet)) },
                                         selected = false,
                                         onClick = {
-                                            if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                            if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
                                                 Toast.makeText(
                                                     context,
                                                     context.getString(R.string.auth_cancel),
@@ -357,7 +414,7 @@ fun DetailDrawer(
                                         Spacer(Modifier.height(4.dp))
                                     }
                                     NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.dark_mode)) },
+                                        label = {if (isDarkModeEnabled){ Text(context.getString(R.string.light_mode)) } else { Text(context.getString(R.string.dark_mode))}},
                                         selected = false,
                                         onClick = {
                                             sharedViewModel.isDarkModeEnabled = !isDarkModeEnabled
@@ -374,18 +431,18 @@ fun DetailDrawer(
                                             )
                                         }
                                     )
-                                    Spacer(Modifier.height(4.dp))
-                                    NavigationDrawerItem(
-                                        label = { Text(context.getString(R.string.sharing)) },
-                                        selected = false,
-                                        onClick = {},
-                                        icon = {
-                                            Icon(
-                                                imageVector = Icons.Default.Share,
-                                                contentDescription = null
-                                            )
-                                        }
-                                    )
+//                                    Spacer(Modifier.height(4.dp))
+//                                    NavigationDrawerItem(
+//                                        label = { Text(context.getString(R.string.sharing)) },
+//                                        selected = false,
+//                                        onClick = {},
+//                                        icon = {
+//                                            Icon(
+//                                                imageVector = Icons.Default.Share,
+//                                                contentDescription = null
+//                                            )
+//                                        }
+//                                    )
                                     Spacer(Modifier.height(4.dp))
                                     NavigationDrawerItem(
                                         label = { Text(context.getString(R.string.app_info)) },
@@ -416,6 +473,7 @@ fun DetailDrawer(
                                         selected = false,
                                         onClick = { val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
                                             prefs.edit { putBoolean("is_logged_in", false) }
+                                            prefs.edit { putLong("role_id", -1L) }
                                             context.startActivity(Intent(context, LoginPage::class.java))
                                             context.findActivity()?.finish()
 
@@ -732,6 +790,7 @@ fun DetailDrawer(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     OnboardingScreenWithModalSheet(
+                                        sharedViewModel = sharedViewModel,
                                         onManualEntry = {
                                         },
                                         onImportExcel = {
@@ -758,6 +817,11 @@ fun DetailDrawer(
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
 
+                                        Text(
+                                            text = context.getString(R.string.import_excel_info),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Text(
                                             text = context.getString(R.string.template_download),
                                             color = MaterialTheme.colorScheme.primary,
@@ -800,6 +864,7 @@ fun DetailDrawer(
     }
 }
 
+@SuppressLint("SuspiciousIndentation")
 @Composable
 fun NotificationsDrawerContent(
     sharedViewModel: SharedViewModel,
@@ -811,29 +876,44 @@ fun NotificationsDrawerContent(
     val context = LocalContext.current
     val userId = Preference().getUserId(context)
 
+    var refreshTick by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(userId) {
-        if (userId != 0L) {
+        if (userId == 0L) return@LaunchedEffect
+/*@todo*/
+//        NotificationEventBus.events.collect {
             sharedViewModel.refreshNotificationsForUser(userId)
-        }
+            sharedViewModel.refreshUnreadCount()
+//        }
     }
 
     val onRead: (Long) -> Unit = { notificationId ->
         if (userId != 0L) {
             sharedViewModel.markNotificationReadForUser(userId, notificationId)
+            onNotificationRead(notificationId)
+            refreshTick++
         }
     }
 
     if (showDialog) {
         NotificationCreationDialog(
             onDismiss = { showDialog = false },
-            onCreate = { notification, selectedOwnerIds, selectedTenantIds ->
-                val targetUserIds = selectedOwnerIds + selectedTenantIds
+            onCreate = { notification, selectedOwnerIds, selectedTenantIds, selectedBuildingId ->
+                if (userId == 0L) return@NotificationCreationDialog
+
+                val targetUserIds =
+                    (selectedOwnerIds + selectedTenantIds + userId).distinct()
+
                 sharedViewModel.sendNotificationToUsers(
                     notification = notification,
                     targetUserIds = targetUserIds,
-                    buildingId = null
+                    buildingId = selectedBuildingId
                 )
+
                 showDialog = false
+
+                // force refresh list + badge
+                refreshTick++
             },
             sharedViewModel = sharedViewModel
         )
@@ -845,35 +925,33 @@ fun NotificationsDrawerContent(
             .verticalScroll(rememberScrollState())
             .padding(8.dp)
     ) {
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+
         val perms = sharedViewModel.rolePermissions
         val perm = perms.permissionFor(
             AuthorizationObjects.HOME,
             AuthorizationFieldsHome.NOTIFICATION_BUTTON
         )
-        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL ) {
-            Row {
-                Button(
-                    onClick = { showDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = context.getString(R.string.create_notification),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
+
+        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
+            Button(
+                onClick = { showDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = context.getString(R.string.create_notification),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
 
         Spacer(Modifier.height(12.dp))
+
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                context.getString(R.string.manager_notification),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(context.getString(R.string.manager_notification), style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
 
             if (managerNotifications.isEmpty()) {
@@ -896,10 +974,7 @@ fun NotificationsDrawerContent(
 
             Spacer(Modifier.height(24.dp))
 
-            Text(
-                text = context.getString(R.string.system_notification),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(context.getString(R.string.system_notification), style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
 
             if (systemNotifications.isEmpty()) {
@@ -935,6 +1010,7 @@ fun NotificationCard(
     var expanded by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(expanded) {
         if (expanded && !isRead) {
@@ -943,7 +1019,8 @@ fun NotificationCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth().padding(8.dp),
         elevation = if (isRead)
             CardDefaults.cardElevation(defaultElevation = 0.dp)
         else
@@ -952,39 +1029,59 @@ fun NotificationCard(
             containerColor = if (isRead) Color.LightGray else MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .clickable { expanded = !expanded }
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+
+            if (!isRead) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(Color.Red, shape = CircleShape)
+                )
+            }
+            Column(modifier = Modifier
+                    .padding(16.dp)
+                .clickable { expanded = !expanded }
             ) {
+
+                    var senderInfo = context.getString(R.string.sender) +
+                            " " + notification.senderName + " - " + context.getString(R.string.building) + " " + notification.buildingName
+                    Text(
+                        text = senderInfo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
                     text = notification.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f)
+                    style = MaterialTheme.typography.bodyMedium
                 )
+                Spacer(Modifier.height(8.dp))
 
-                if (!isRead) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(Color.Red, shape = CircleShape)
-                    )
-                }
+                Text(
+                    text = if (expanded) {
+                        notification.message
+                    } else {
+                        notification.message.take(100) +
+                                if (notification.message.length > 100) "..." else ""
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2
+                )
+            }
 
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options"
-                    )
-                }
-
+            IconButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options"
+                )
+            }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false }
@@ -998,32 +1095,64 @@ fun NotificationCard(
                         },
                         onClick = {
                             menuExpanded = false
-                            scope.launch {
-                                sharedViewModel.deleteUserNotificationCrossRef(
-                                    userId = userId,
-                                    notificationId = notification.notificationId
-                                )
-                            }
+                            showDeleteDialog = true
+
                         }
                     )
                 }
+
+
+
+
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.delete_owner),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.are_you_sure),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteDialog = false
+                                scope.launch {
+                                    sharedViewModel.deleteUserNotificationCrossRef(
+                                        userId = userId,
+                                        notificationId = notification.notificationId
+                                    )
+                                }
+                            }
+                        ) {
+                            Text(
+                                LocalContext.current.getString(R.string.delete),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showDeleteDialog = false }
+                        ) {
+                            Text(
+                                text = LocalContext.current.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                )
             }
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                text = if (expanded) {
-                    notification.message
-                } else {
-                    notification.message.take(100) +
-                            if (notification.message.length > 100) "..." else ""
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (expanded) Int.MAX_VALUE else 2
-            )
         }
     }
 }
+
 
 
 data class OwnerForNotificationUi(
@@ -1040,10 +1169,11 @@ data class TenantForNotificationUi(
     val unitNumbers: String?
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCreationDialog(
     onDismiss: () -> Unit,
-    onCreate: (notification: Notification, selectedOwnerIds: List<Long>, selectedTenantIds: List<Long>) -> Unit,
+    onCreate: (notification: Notification, selectedOwnerIds: List<Long>, selectedTenantIds: List<Long>, buildingId: Long) -> Unit,
     sharedViewModel: SharedViewModel
 ) {
     val context = LocalContext.current
@@ -1059,12 +1189,10 @@ fun NotificationCreationDialog(
         if (!mobileNumber.isNullOrBlank()) {
             buildingsLoading = true
             buildingsError = null
-            Building().fetchBuildingsWithResidents(
-                context = context,
+            Building(context).fetchBuildingsWithResidents(
                 mobileNumber = mobileNumber.trim(),
                 onSuccess = { list ->
                     buildingsWithResidents = list
-                    Log.d("buildingsWithResidents", buildingsWithResidents.toString())
                     buildingsLoading = false
                     if (list.isNotEmpty() && selectedBuildingId == null) {
                         selectedBuildingId = list.first().building.buildingId
@@ -1161,341 +1289,334 @@ fun NotificationCreationDialog(
     val isUserSelected = isAnyOwnerSelected || isAnyTenantSelected
     val isFormValid = isTitleValid && isMessageValid && isBuildingSelected && isUserSelected
 
-    AlertDialog(
-        onDismissRequest = {},
-        confirmButton = {
-            Button(
-                onClick = { onCreate(notification, selectedOwnerIds.toList(), selectedTenantIds.toList()) },
-                enabled = isFormValid
-            ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        title = {
-            Text(
-                text = context.getString(R.string.create_notification),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    fun ownerRowText(owner: OwnerForNotificationUi): String {
+        val unit = owner.unitNumbers?.takeIf { it.isNotBlank() } ?: "-"
+        return "${owner.firstName} ${owner.lastName} - ${context.getString(R.string.unit)} $unit"
+    }
+
+    fun tenantRowText(tenant: TenantForNotificationUi): String {
+        val unit = tenant.unitNumbers?.takeIf { it.isNotBlank() } ?: "-"
+        return "${tenant.firstName} ${tenant.lastName} - ${context.getString(R.string.unit)} $unit"
+    }
+
+    @Composable
+    fun PeopleSectionCard(
+        titleText: String,
+        emptyText: String,
+        peopleCount: Int,
+        allSelected: Boolean,
+        onToggleAll: (Boolean) -> Unit,
+        content: @Composable () -> Unit
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = context.getString(R.string.title),
-                            style = MaterialTheme.typography.bodyLarge
+                            text = titleText,
+                            style = MaterialTheme.typography.titleMedium
                         )
-                    },
-                    isError = !isTitleValid,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = message,
-                    onValueChange = { message = it },
-                    label = {
                         Text(
-                            text = context.getString(R.string.message),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
-                    isError = !isMessageValid,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    maxLines = 6
-                )
-                Spacer(Modifier.height(8.dp))
-
-                var expandedTypeDropdown by remember { mutableStateOf(false) }
-//                Box {
-//                    OutlinedTextField(
-//                        value = type.name,
-//                        onValueChange = {},
-//                        label = {
-//                            Text(
-//                                text = context.getString(R.string.type),
-//                                style = MaterialTheme.typography.bodyLarge
-//                            )
-//                        },
-//                        readOnly = true,
-//                        trailingIcon = {
-//                            IconButton(onClick = { expandedTypeDropdown = true }) {
-//                                Icon(
-//                                    Icons.Default.ArrowDropDown,
-//                                    contentDescription = context.getString(R.string.select_type)
-//                                )
-//                            }
-//                        },
-//                        modifier = Modifier.fillMaxWidth()
-//                    )
-//                    DropdownMenu(
-//                        expanded = expandedTypeDropdown,
-//                        onDismissRequest = { expandedTypeDropdown = false }
-//                    ) {
-//                        NotificationType.entries.forEach { enumType ->
-//                            DropdownMenuItem(
-//                                text = { Text(enumType.name) },
-//                                onClick = {
-//                                    type = enumType
-//                                    expandedTypeDropdown = false
-//                                }
-//                            )
-//                        }
-//                    }
-//                }
-
-//                Spacer(Modifier.height(16.dp))
-
-                Text(
-                    text = context.getString(R.string.building_select),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(Modifier.height(8.dp))
-
-                when {
-                    buildingsLoading -> {
-                        CircularProgressIndicator()
-                    }
-
-                    buildingsError != null -> {
-                        Text(
-                            text = buildingsError ?: "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Red
+                            text = "${context.getString(R.string.count)}: $peopleCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    buildings.isEmpty() -> {
-                        Text(
-                            text = context.getString(R.string.no_building_recorded),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Gray
-                        )
-                    }
-
-                    else -> {
-                        buildings.forEach { building ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedBuildingId = building.buildingId }
-                                    .padding(vertical = 6.dp)
-                                    .background(
-                                        if (selectedBuildingId == building.buildingId) {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        } else {
-                                            Color.Transparent
-                                        }
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = selectedBuildingId == building.buildingId,
-                                    onClick = { selectedBuildingId = building.buildingId }
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = building.name,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                if (selectedBuildingId != null) {
-                    Text(
-                        text = context.getString(R.string.owners),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    if (owners.isEmpty()) {
-                        Text(
-                            text = context.getString(R.string.no_owner_recorded),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Gray
-                        )
-                    } else {
-                        val allOwnersSelected =
-                            selectedOwnerIds.size == owners.size && owners.isNotEmpty()
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clickable {
-                                    selectedOwnerIds = if (allOwnersSelected) {
-                                        emptySet()
-                                    } else {
-                                        owners.map { it.id }.toSet()
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    if (peopleCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
-                                checked = allOwnersSelected,
-                                onCheckedChange = { checked ->
-                                    selectedOwnerIds = if (checked) {
-                                        owners.map { it.id }.toSet()
-                                    } else {
-                                        emptySet()
-                                    }
-                                }
+                                checked = allSelected,
+                                onCheckedChange = { checked -> onToggleAll(checked) }
                             )
-                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = context.getString(R.string.all_owners),
-                                style = MaterialTheme.typography.bodyLarge
+                                text = context.getString(R.string.select_all),
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                        }
-
-                        owners.forEach { owner ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedOwnerIds =
-                                            if (selectedOwnerIds.contains(owner.id)) {
-                                                selectedOwnerIds - owner.id
-                                            } else {
-                                                selectedOwnerIds + owner.id
-                                            }
-                                    }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = selectedOwnerIds.contains(owner.id),
-                                    onCheckedChange = { checked ->
-                                        selectedOwnerIds =
-                                            if (checked) {
-                                                selectedOwnerIds + owner.id
-                                            } else {
-                                                selectedOwnerIds - owner.id
-                                            }
-                                    }
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "${owner.firstName} ${owner.lastName} - " +
-                                            "${context.getString(R.string.unit)} ${owner.unitNumbers ?: "-"}",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
                         }
                     }
                 }
 
                 Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
 
-                if (selectedBuildingId != null) {
+                if (peopleCount == 0) {
                     Text(
-                        text = context.getString(R.string.tenants),
-                        style = MaterialTheme.typography.bodyMedium
+                        text = emptyText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
                     )
-                    Spacer(Modifier.height(8.dp))
-
-                    if (tenants.isEmpty()) {
-                        Text(
-                            text = context.getString(R.string.no_tenant_recorded),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Gray
-                        )
-                    } else {
-                        val allTenantsSelected =
-                            selectedTenantIds.size == tenants.size && tenants.isNotEmpty()
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clickable {
-                                    selectedTenantIds = if (allTenantsSelected) {
-                                        emptySet()
-                                    } else {
-                                        tenants.map { it.id }.toSet()
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = allTenantsSelected,
-                                onCheckedChange = { checked ->
-                                    selectedTenantIds = if (checked) {
-                                        tenants.map { it.id }.toSet()
-                                    } else {
-                                        emptySet()
-                                    }
-                                }
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = context.getString(R.string.all_tenants),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-
-                        tenants.forEach { tenant ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedTenantIds =
-                                            if (selectedTenantIds.contains(tenant.id)) {
-                                                selectedTenantIds - tenant.id
-                                            } else {
-                                                selectedTenantIds + tenant.id
-                                            }
-                                    }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = selectedTenantIds.contains(tenant.id),
-                                    onCheckedChange = { checked ->
-                                        selectedTenantIds =
-                                            if (checked) {
-                                                selectedTenantIds + tenant.id
-                                            } else {
-                                                selectedTenantIds - tenant.id
-                                            }
-                                    }
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "${tenant.firstName} ${tenant.lastName} - " +
-                                            "${context.getString(R.string.unit)} ${tenant.unitNumbers ?: "-"}",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 10.dp)
+                    ) {
+                        content()
                     }
                 }
             }
         }
-    )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = { onDismiss() },
+        sheetState = sheetState
+    ) {
+        val scrollState = rememberScrollState()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text(
+                text = context.getString(R.string.create_notification),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text(context.getString(R.string.title), style = MaterialTheme.typography.bodyLarge) },
+                        isError = !isTitleValid,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        label = { Text(context.getString(R.string.message), style = MaterialTheme.typography.bodyLarge) },
+                        isError = !isMessageValid,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        maxLines = 6
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = context.getString(R.string.building_select),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    when {
+                        buildingsLoading -> {
+                            CircularProgressIndicator()
+                        }
+
+                        buildingsError != null -> {
+                            Text(
+                                text = buildingsError ?: "",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+
+                        buildings.isEmpty() -> {
+                            Text(
+                                text = context.getString(R.string.no_building_recorded),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.Gray
+                            )
+                        }
+
+                        else -> {
+                            buildings.forEach { building ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedBuildingId = building.buildingId }
+                                        .padding(vertical = 6.dp)
+                                        .background(
+                                            if (selectedBuildingId == building.buildingId) {
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            } else {
+                                                Color.Transparent
+                                            }
+                                        ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selectedBuildingId == building.buildingId,
+                                        onClick = { selectedBuildingId = building.buildingId }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(text = building.name, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    if (selectedBuildingId != null) {
+                        val allOwnersSelected = owners.isNotEmpty() && selectedOwnerIds.size == owners.size
+                        PeopleSectionCard(
+                            titleText = context.getString(R.string.owners),
+                            emptyText = context.getString(R.string.no_owner_recorded),
+                            peopleCount = owners.size,
+                            allSelected = allOwnersSelected,
+                            onToggleAll = { checked ->
+                                selectedOwnerIds = if (checked) owners.map { it.id }.toSet() else emptySet()
+                            }
+                        ) {
+                            owners.forEach { owner ->
+                                val checked = selectedOwnerIds.contains(owner.id)
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedOwnerIds =
+                                                if (checked) selectedOwnerIds - owner.id
+                                                else selectedOwnerIds + owner.id
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = { isChecked ->
+                                            selectedOwnerIds =
+                                                if (isChecked) selectedOwnerIds + owner.id
+                                                else selectedOwnerIds - owner.id
+                                        }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${owner.firstName} ${owner.lastName}",
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Text(
+                                            text = "${context.getString(R.string.unit)} ${owner.unitNumbers ?: "-"}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 44.dp),
+                                    thickness = 0.7.dp
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        val allTenantsSelected = tenants.isNotEmpty() && selectedTenantIds.size == tenants.size
+                        PeopleSectionCard(
+                            titleText = context.getString(R.string.members),
+                            emptyText = context.getString(R.string.no_tenant_recorded),
+                            peopleCount = tenants.size,
+                            allSelected = allTenantsSelected,
+                            onToggleAll = { checked ->
+                                selectedTenantIds = if (checked) tenants.map { it.id }.toSet() else emptySet()
+                            }
+                        ) {
+                            tenants.forEach { tenant ->
+                                val checked = selectedTenantIds.contains(tenant.id)
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedTenantIds =
+                                                if (checked) selectedTenantIds - tenant.id
+                                                else selectedTenantIds + tenant.id
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = { isChecked ->
+                                            selectedTenantIds =
+                                                if (isChecked) selectedTenantIds + tenant.id
+                                                else selectedTenantIds - tenant.id
+                                        }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${tenant.firstName} ${tenant.lastName}",
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Text(
+                                            text = "${context.getString(R.string.unit)} ${tenant.unitNumbers ?: "-"}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 44.dp),
+                                    thickness = 0.7.dp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onDismiss() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.cancel), style = MaterialTheme.typography.bodyLarge)
+                }
+
+                Button(
+                    onClick = {
+                        val bId = selectedBuildingId ?: return@Button
+                        onCreate(notification, selectedOwnerIds.toList(), selectedTenantIds.toList(), bId)
+                    },
+                    enabled = isFormValid,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(context.getString(R.string.insert), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
+    }
 }
 

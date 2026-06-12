@@ -19,19 +19,29 @@ import kotlin.coroutines.resumeWithException
 import kotlin.text.substringAfter
 
 class AuthObjectFieldCross {
-    private val baseUrl = "http://217.144.107.231:3000/authObjectFieldCross"
+    private val baseUrl = "http://185.129.197.6:443/authObjectFieldCross"
 
     suspend fun insertRoleAuthListSuspend(
         context: Context,
-        list: List<RoleAuthorizationObjectFieldCrossRef>
+        list: List<RoleAuthorizationObjectFieldCrossRef>,
+        userId: Long,
+        roleId: Long,
+        buildingId: Long,
+        objectId: Long
     ) = suspendCancellableCoroutine { cont ->
         val queue = Volley.newRequestQueue(context)
-        val payloadArray = listToJsonArray(list) { authObjectFieldCrossToJson(it) }
 
-        val req = object : JsonArrayRequest(
+        val items = JSONArray().apply {
+            list.forEach { put(authObjectFieldCrossToJson(it, userId, buildingId)) }
+        }
+
+        val payload = JSONObject().apply {
+            put("items", items)
+        }
+        val req = object : JsonObjectRequest(
             Method.POST,
             baseUrl,
-            payloadArray,
+            payload,
             { _ ->
                 if (cont.isActive) cont.resume(Unit)
             },
@@ -40,21 +50,21 @@ class AuthObjectFieldCross {
                 if (cont.isActive) cont.resumeWithException(ex)
             }
         ) {
-            override fun getBodyContentType(): String =
-                "application/json; charset=utf-8"
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
         }
 
         queue.add(req)
     }
 
-
     suspend fun deleteObjectForRoleSuspend(
         context: Context,
+        userId: Long,
         roleId: Long,
+        buildingId: Long,
         objectId: Long
     ) = suspendCancellableCoroutine { cont ->
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl/by-object?roleId=$roleId&objectId=$objectId"
+        val url = "$baseUrl/by-object?userId=$userId&roleId=$roleId&buildingId=$buildingId&objectId=$objectId"
 
         val req = object : JsonObjectRequest(
             Method.DELETE,
@@ -74,12 +84,15 @@ class AuthObjectFieldCross {
 
     suspend fun deleteSingleFieldSuspend(
         context: Context,
+        userId: Long,
         roleId: Long,
+        buildingId: Long,
         objectId: Long,
         fieldId: Long
     ) = suspendCancellableCoroutine { cont ->
         val queue = Volley.newRequestQueue(context)
-        val url = "$baseUrl/by-field?roleId=$roleId&objectId=$objectId&fieldId=$fieldId"
+        val url =
+            "$baseUrl/by-field?userId=$userId&roleId=$roleId&buildingId=$buildingId&objectId=$objectId&fieldId=$fieldId"
 
         val req = object : JsonObjectRequest(
             Method.DELETE,
@@ -109,7 +122,6 @@ class AuthObjectFieldCross {
             put("items", authObjectFieldCrossJsonArray)
         }
 
-        Log.d("AuthorizationObjectVolley", "Payload: $payload")
 
         val request = object : JsonObjectRequest(
             Method.POST, baseUrl, payload,
@@ -125,8 +137,7 @@ class AuthObjectFieldCross {
                 onError(ex)
             }
         ) {
-            override fun getBodyContentType(): String =
-                "application/json; charset=utf-8"
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
         }
 
         queue.add(request)
@@ -155,10 +166,12 @@ class AuthObjectFieldCross {
         queue.add(request)
     }
 
-    fun authObjectFieldCrossToJson(authObjectFieldCross: RoleAuthorizationObjectFieldCrossRef): JSONObject {
+    fun authObjectFieldCrossToJson(authObjectFieldCross: RoleAuthorizationObjectFieldCrossRef, userId: Long, buildingId: Long): JSONObject {
         return JSONObject().apply {
-            put("objectId", authObjectFieldCross.objectId)
+            put("userId", userId)
             put("roleId", authObjectFieldCross.roleId)
+            put("buildingId", buildingId)
+            put("objectId", authObjectFieldCross.objectId)
             put("fieldId", authObjectFieldCross.fieldId)
             put("permissionLevel", authObjectFieldCross.permissionLevel.toString())
         }
@@ -174,7 +187,7 @@ class AuthObjectFieldCross {
 
     private fun formatVolleyError(tag: String, error: VolleyError): Exception {
         val resp = error.networkResponse
-        if (resp != null) {
+        return if (resp != null) {
             val status = resp.statusCode
             val charset = resp.headers?.get("Content-Type")
                 ?.substringAfter("charset=", "UTF-8")
@@ -189,11 +202,11 @@ class AuthObjectFieldCross {
             Log.e(tag, "Headers: ${resp.headers}")
             Log.e(tag, "Body: $body")
 
-            return Exception("HTTP $status: $body")
+            Exception("HTTP $status: $body")
         } else {
             val klass = error::class.java.simpleName
             Log.e(tag, "No networkResponse ($klass): ${error.message}", error)
-            return Exception("$klass: ${error.message ?: error.toString()}")
+            Exception("$klass: ${error.message ?: error.toString()}")
         }
     }
 
@@ -206,7 +219,7 @@ class AuthObjectFieldCross {
                 PermissionLevel.valueOf(
                     o.optString("cross_ref_permissionLevel", "READ")
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 PermissionLevel.READ
             }
 
@@ -221,6 +234,8 @@ class AuthObjectFieldCross {
                 roleId = o.optLong("cross_ref_roleId"),
                 objectId = o.optLong("cross_ref_objectId"),
                 fieldId = o.optLong("cross_ref_fieldId"),
+                userId = o.optLong("userId"),
+                buildingId = o.optLong("buildingId"),
                 permissionLevel = perm
             )
 
@@ -236,12 +251,22 @@ class AuthObjectFieldCross {
     fun fetchFieldsWithPermissionsForUser(
         context: Context,
         userId: Long,
+        roleId: Long,
+        buildingId: Long? = null,
         onSuccess: (List<FieldWithPermission>) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/user-fields?userId=$userId"
+        val url = buildString {
+            append("$baseUrl/user-fields?")
+            append("userId=$userId")
+            append("&roleId=$roleId")
+            if (buildingId != null) {
+                append("&buildingId=$buildingId")
+            }
+        }
 
         val queue = Volley.newRequestQueue(context)
+
         val req = JsonArrayRequest(
             Request.Method.GET,
             url,
@@ -255,16 +280,14 @@ class AuthObjectFieldCross {
                 }
             },
             { err ->
-                onError(
-                    formatVolleyError(
-                        "AuthObjectFieldCross(fetchFieldsWithPermissionsForUser)",
-                        err
-                    )
-                )
+                onError(formatVolleyError("AuthObjectFieldCross(fetchFieldsWithPermissionsForUser)", err))
             }
         )
+
         queue.add(req)
     }
+
+
 
     fun fetchFieldsWithPermissionsForRole(
         context: Context,
@@ -289,12 +312,7 @@ class AuthObjectFieldCross {
                 }
             },
             { err ->
-                onError(
-                    formatVolleyError(
-                        "AuthObjectFieldCross(fetchFieldsWithPermissionsForRole)",
-                        err
-                    )
-                )
+                onError(formatVolleyError("AuthObjectFieldCross(fetchFieldsWithPermissionsForRole)", err))
             }
         )
         queue.add(req)
@@ -302,20 +320,20 @@ class AuthObjectFieldCross {
 
     suspend fun fetchFieldsWithPermissionsForUserSuspend(
         context: Context,
-        userId: Long
+        userId: Long,
+        roleId: Long,
+        buildingId: Long? = null,
     ): List<FieldWithPermission> = suspendCancellableCoroutine { cont ->
         fetchFieldsWithPermissionsForUser(
             context = context,
             userId = userId,
+            buildingId = buildingId,
+            roleId = roleId,
             onSuccess = { list ->
-                if (cont.isActive) {
-                    cont.resume(list)
-                }
+                if (cont.isActive) cont.resume(list)
             },
             onError = { e ->
-                if (cont.isActive) {
-                    cont.resumeWithException(e)
-                }
+                if (cont.isActive) cont.resumeWithException(e)
             }
         )
     }
@@ -328,15 +346,91 @@ class AuthObjectFieldCross {
             context = context,
             roleId = roleId,
             onSuccess = { list ->
-                if (cont.isActive) {
-                    cont.resume(list)
-                }
+                if (cont.isActive) cont.resume(list)
             },
             onError = { e ->
-                if (cont.isActive) {
-                    cont.resumeWithException(e)
-                }
+                if (cont.isActive) cont.resumeWithException(e)
             }
         )
     }
+
+    suspend fun replaceObjectPermissionsSuspend(
+        context: Context,
+        userId: Long,
+        roleId: Long,
+        buildingId: Long,
+        objectId: Long,
+        list: List<RoleAuthorizationObjectFieldCrossRef>
+    ) = suspendCancellableCoroutine { cont ->
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/replace-object-permissions"
+
+        val items = JSONArray().apply {
+            list.forEach { put(authObjectFieldCrossToJson(it, userId, buildingId)) }
+        }
+
+        val payload = JSONObject().apply {
+            put("userId", userId)
+            put("roleId", roleId)
+            put("buildingId", buildingId)
+            put("objectId", objectId)
+            put("items", items)
+        }
+        Log.d("payload", payload.toString())
+        val req = object : JsonObjectRequest(
+            Method.PUT,
+            url,
+            payload,
+            { _ -> if (cont.isActive) cont.resume(Unit) },
+            { err ->
+                val ex = formatVolleyError("AuthObjectFieldCross(replaceObjectPermissions)", err)
+                if (cont.isActive) cont.resumeWithException(ex)
+            }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
+    suspend fun addObjectPermissionsSuspend(
+        context: Context,
+        userId: Long,
+        roleId: Long,
+        buildingId: Long,
+        objectId: Long,
+        list: List<RoleAuthorizationObjectFieldCrossRef>
+    ) = suspendCancellableCoroutine { cont ->
+        val queue = Volley.newRequestQueue(context)
+        val url = baseUrl
+
+        val items = JSONArray().apply {
+            list.forEach { put(authObjectFieldCrossToJson(it, userId, buildingId)) }
+        }
+
+        val payload = JSONObject().apply {
+            put("items", items)
+        }
+
+        Log.d("payload", payload.toString())
+
+        val req = object : JsonArrayRequest(
+            Method.POST,
+            url,
+            items,
+            { _ ->
+                if (cont.isActive) cont.resume(Unit)
+            },
+            { err ->
+                val ex = formatVolleyError("AuthObjectFieldCross(addObjectPermissions)", err)
+                if (cont.isActive) cont.resumeWithException(ex)
+            }
+        ) {
+            override fun getBodyContentType(): String = "application/json; charset=utf-8"
+        }
+
+        queue.add(req)
+    }
+
 }
+

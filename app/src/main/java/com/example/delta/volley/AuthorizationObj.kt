@@ -16,7 +16,7 @@ import kotlin.collections.forEach
 import kotlin.coroutines.resumeWithException
 
 class AuthorizationObj {
-    private val baseUrl = "http://217.144.107.231:3000/authorizationObject"
+    private val baseUrl = "http://185.129.197.6:443/authorizationObject"
 
 
     fun insertAuthorizationObject(

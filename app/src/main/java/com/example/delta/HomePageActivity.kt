@@ -1,15 +1,21 @@
 package com.example.delta
 
+import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,9 +29,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,20 +54,30 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,32 +97,60 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.delta.data.entity.BuildingWithCounts
+import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
+import com.example.delta.enums.FundType
 import com.example.delta.enums.Gender
 import com.example.delta.enums.PermissionLevel
 import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
 import com.example.delta.init.AuthUtils.AuthorizationFieldsHome
 import com.example.delta.init.AuthUtils.AuthorizationObjects
 import com.example.delta.init.FileManagement
+import com.example.delta.init.NotificationPermissionHelper
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
 import com.example.delta.permission.Notification
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.volley.Building
+import com.example.delta.volley.Fund
 import com.example.delta.volley.Users
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+
 
 class HomePageActivity : ComponentActivity() {
     val sharedViewModel: SharedViewModel by viewModels()
     private val REQUEST_CODE_PICK_EXCEL = 1001
 
-    private lateinit var notificationHelper: Notification
+    private val showNotificationSettingsDialogState = mutableStateOf(false)
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                ensureGeneralChannel()
+            } else {
+                showNotificationSettingsDialogState.value = true
+            }
+        }
+
+
 
     @Deprecated("Use Activity Result API instead")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -132,25 +179,53 @@ class HomePageActivity : ComponentActivity() {
     @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val roleIdExtra: Long? = intent.getLongExtra("role_id", 0L).let { if (it == 0L) null else it }
 
-        notificationHelper = Notification(
-            caller = this,
-            context = this,
-            onGranted = { ensureGeneralChannel() },
-            onDenied = { }
+        requestNotificationPermissionIfNeeded()
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    finishAffinity()
+                }
+            }
         )
-        notificationHelper.ensurePermission()
 
         enableEdgeToEdge()
         setContent {
+
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
+                val isNetworkAvailable by rememberNetworkState()
+
                 val context = LocalContext.current
                 val userId = remember { Preference().getUserId(context) }
 
                 var user by remember { mutableStateOf<User?>(null) }
                 var isLoadingUser by remember { mutableStateOf(true) }
                 var showMandatoryDialog by remember { mutableStateOf(false) }
+
+                val showNotifDialog by showNotificationSettingsDialogState
+
+                if (showNotifDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showNotificationSettingsDialogState.value = false },
+                        title = { Text(context.getString(R.string.notification_permission_title)) },
+                        text = { Text(context.getString(R.string.notification_permission_desc)) },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showNotificationSettingsDialogState.value = false
+                                    openNotificationSettings(context)
+                                }
+                            ) { Text(context.getString(R.string.go_to_settings)) }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = { showNotificationSettingsDialogState.value = false }
+                            ) { Text(context.getString(R.string.cancel)) }
+                        }
+                    )
+                }
 
                 LaunchedEffect(userId) {
                     isLoadingUser = true
@@ -161,13 +236,12 @@ class HomePageActivity : ComponentActivity() {
                             user = fetched
                             isLoadingUser = false
                             showMandatoryDialog =
-                                fetched.firstName.isNullOrBlank() || fetched.lastName.isNullOrBlank()
+                                fetched.firstName.isBlank() || fetched.lastName.isBlank()
                         },
-                        onError = {
-                            isLoadingUser = false
-                        }
+                        onError = { isLoadingUser = false }
                     )
                 }
+
                 DetailDrawer(
                     title = getString(R.string.menu_title),
                     sharedViewModel = sharedViewModel,
@@ -179,41 +253,134 @@ class HomePageActivity : ComponentActivity() {
                         }
                         startActivityForResult(selectFileIntent, REQUEST_CODE_PICK_EXCEL)
                     }
-                ) { innerPadding ->
-                    Box(
+                ) { drawerPadding ->
+
+                    val navController = rememberNavController()
+
+                    val lifecycleOwner = LocalLifecycleOwner.current
+
+                    val mobileNumber = Preference().getUserMobile(context)
+                    val notAllowedRoleIds = setOf(7L, 9L, 10L)
+
+                    var savedRoles by remember { mutableStateOf<List<Role>>(emptyList()) }
+                    var rolesLoading by remember { mutableStateOf(false) }
+                    var rolesLoaded by remember { mutableStateOf(false) }
+
+                    var activeRoleId by rememberSaveable { mutableLongStateOf(0L) }
+                    var ready by remember { mutableStateOf(false) }
+
+                    val refreshRolesTick by sharedViewModel.rolesReloadTick.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        sharedViewModel.requestRolesReload()
+                    }
+
+
+
+
+                    fun pickInitialRoleId(roles: List<Role>): Long {
+                        val pref = Preference().getRoleId(context)
+                        val prefExists = roles.any { it.roleId == pref }
+                        return when {
+                            pref > 0 && prefExists -> pref
+                            roles.isNotEmpty() -> roles.first().roleId
+                            else -> 0L
+                        }
+                    }
+
+                    LaunchedEffect(isNetworkAvailable, mobileNumber, refreshRolesTick) {
+                        if (!isNetworkAvailable || mobileNumber.isNullOrBlank()) return@LaunchedEffect
+
+                        rolesLoading = true
+                        rolesLoaded = false
+                        ready = false
+                        activeRoleId = 0L
+                        savedRoles = emptyList()
+
+                        Users().getUserRoles(
+                            context = context,
+                            mobileNumber = mobileNumber,
+                            onSuccess = { result ->
+                                savedRoles = result
+                                rolesLoading = false
+                                rolesLoaded = true
+
+                                val initial = pickInitialRoleId(result)
+                                activeRoleId = initial
+                            },
+                            onError = {
+                                rolesLoading = false
+                                rolesLoaded = false
+                                ready = false
+                                Toast.makeText(context, context.getString(R.string.failed), Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    }
+
+
+                    LaunchedEffect(rolesLoaded, activeRoleId) {
+                        if (!rolesLoaded) return@LaunchedEffect
+                        if (activeRoleId <= 0L) return@LaunchedEffect
+
+                        Preference().setRoleId(context, activeRoleId)
+                        sharedViewModel.loadRolePermissions(context, activeRoleId)
+                        ready = true
+                    }
+
+                    val eligibleRoles = savedRoles.filter { it.roleId in notAllowedRoleIds }
+
+                    Scaffold(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        val navController = rememberNavController()
-                        val context = LocalContext.current
-
-                        val effectiveRoleId = roleIdExtra ?: Preference().getRoleId(context)
-                        LaunchedEffect(effectiveRoleId) {
-                            if (effectiveRoleId != 0L) {
-                                sharedViewModel.loadRolePermissions(context, effectiveRoleId)
-                            }
-                        }
-
-                        Scaffold(
-                            bottomBar = {
-                                CurvedBottomNavigation(
-                                    currentRoleId = effectiveRoleId,
-                                    navController = navController,
-                                    items = Screen.items,
-                                    sharedViewModel = sharedViewModel
+                            .padding(drawerPadding),
+                        topBar = {
+                            val navBackStackEntry by navController.currentBackStackEntryAsState()
+                            val isHome = navBackStackEntry
+                                ?.destination
+                                ?.hierarchy
+                                ?.any { it.route == Screen.Home.route } == true
+                            Log.d("eligibleRoles", eligibleRoles.toString())
+                            Log.d("rolesLoaded", rolesLoaded.toString())
+                            if (rolesLoaded && eligibleRoles.isEmpty() && isHome) {
+                                HomeTopBarWithRoleDropdown(
+                                    sharedViewModel = sharedViewModel,
+                                    user = user,
+                                    roles = savedRoles,
+                                    activeRoleId = activeRoleId,
+                                    onRoleChange = { selected -> activeRoleId = selected.roleId }
                                 )
                             }
-                        ) { _ ->
+
+                        },
+                        bottomBar = {
+                            CurvedBottomNavigation(
+                                currentRoleId = activeRoleId,
+                                navController = navController,
+                                items = Screen.items,
+                                sharedViewModel = sharedViewModel
+                            )
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
                             NavHost(
                                 navController = navController,
                                 startDestination = Screen.Home.route
                             ) {
                                 composable(Screen.Home.route) {
-                                    BuildingList(
-                                        roleId = effectiveRoleId,
-                                        sharedViewModel = sharedViewModel
-                                    )
+                                    if (rolesLoaded && ready && activeRoleId > 0L) {
+                                        BuildingList(
+                                            roleId = activeRoleId,
+                                            sharedViewModel = sharedViewModel
+                                        )
+                                    } else {
+                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator()
+                                        }
+                                    }
                                 }
                                 composable(Screen.Settings.route) {
                                     val perms = sharedViewModel.rolePermissions
@@ -227,7 +394,7 @@ class HomePageActivity : ComponentActivity() {
                                         LaunchedEffect(Unit) {
                                             Toast.makeText(
                                                 context,
-                                                context.getString(R.string.auth_cancel),
+                                                context.getString(R.string.auth_for_manager),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -238,57 +405,76 @@ class HomePageActivity : ComponentActivity() {
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text =  context.getString(R.string.auth_cancel),
+                                                text = context.getString(R.string.auth_for_manager),
                                                 style = MaterialTheme.typography.bodyLarge
                                             )
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if (!isLoadingUser && showMandatoryDialog && user != null) {
-                            MandatoryNameDialogInHome(
-                                sharedViewModel = sharedViewModel,
-                                initialUser = user!!,
-                                onSubmit = { updatedUser ->
-                                    val payload = JSONObject().apply {
-                                        put("firstName", updatedUser.firstName)
-                                        put("lastName", updatedUser.lastName)
-                                        put("email", updatedUser.email)
-                                        put("gender", updatedUser.gender)
-                                        put("nationalCode", updatedUser.nationalCode)
-                                        put("address", updatedUser.address)
-                                    }
-
-                                    Users().updateUser(
-                                        context = context,
-                                        userId = userId,
-                                        payload = payload,
-                                        onSuccess = {
-                                            user = updatedUser
-                                            showMandatoryDialog = false
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.success_update),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        },
-                                        onError = { e ->
-                                            Log.e("UserEditError", e.toString())
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.failed),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                            showMandatoryDialog = false
+                            if (!isLoadingUser && showMandatoryDialog && user != null) {
+                                MandatoryNameDialogInHome(
+                                    sharedViewModel = sharedViewModel,
+                                    initialUser = user!!,
+                                    onSubmit = { updatedUser ->
+                                        val payload = JSONObject().apply {
+                                            put("firstName", updatedUser.firstName)
+                                            put("lastName", updatedUser.lastName)
+                                            put("email", updatedUser.email)
+                                            put("gender", updatedUser.gender)
+                                            put("nationalCode", updatedUser.nationalCode)
+                                            put("address", updatedUser.address)
                                         }
-                                    )
-                                }
-                            )
+
+                                        Users().updateUser(
+                                            context = context,
+                                            userId = userId,
+                                            payload = payload,
+                                            onSuccess = {
+                                                user = updatedUser
+                                                showMandatoryDialog = false
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.success_update),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                            onError = {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.failed),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                showMandatoryDialog = false
+                                            }
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!granted) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                ensureGeneralChannel()
+            }
+        } else {
+            ensureGeneralChannel()
+            if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+                showNotificationSettingsDialogState.value = true
             }
         }
     }
@@ -303,6 +489,103 @@ class HomePageActivity : ComponentActivity() {
     }
 }
 
+fun openNotificationSettings(context: Context) {
+    try {
+        val intent = Intent().apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                    action = android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+                else -> {
+                    action = "android.settings.APP_NOTIFICATION_SETTINGS"
+                    putExtra("app_package", context.packageName)
+                    putExtra("app_uid", context.applicationInfo.uid)
+                }
+            }
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.fromParts("package", context.packageName, null)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e2: Exception) {
+            val intent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeTopBarWithRoleDropdown(
+    sharedViewModel: SharedViewModel,
+    user: User?,
+    roles: List<Role>,
+    activeRoleId: Long,
+    onRoleChange: (Role) -> Unit
+) {
+    val selectedRole = remember(roles, activeRoleId) {
+        roles.firstOrNull { it.roleId == activeRoleId } ?: roles.firstOrNull()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = listOfNotNull(user?.firstName, user?.lastName)
+                        .joinToString(" ")
+                        .ifBlank { " " },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                ExposedDropdownMenuBoxExample(
+                    sharedViewModel = sharedViewModel,
+                    items = roles,
+                    selectedItem = selectedRole,
+                    onItemSelected = onRoleChange,
+                    label = stringResource(R.string.choose_role),
+                    modifier = Modifier.fillMaxWidth(),
+                    itemLabel = { it.roleName }
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = stringResource(R.string.role_change_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MandatoryNameDialogInHome(
     sharedViewModel: SharedViewModel,
@@ -310,9 +593,10 @@ private fun MandatoryNameDialogInHome(
     onSubmit: (User) -> Unit
 ) {
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
 
     var firstName by remember { mutableStateOf(initialUser.firstName) }
     var lastName by remember { mutableStateOf(initialUser.lastName) }
@@ -328,113 +612,129 @@ private fun MandatoryNameDialogInHome(
         userState.firstName.trim().isNotEmpty() && userState.lastName.trim().isNotEmpty()
     }
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
         onDismissRequest = { },
-        properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = true
-        ),
-        title = {
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = context.getString(R.string.complete_user_info),
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Column(
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
-                    .verticalScroll(scrollState)
+                    .weight(1f, fill = true)
             ) {
-                UserProfileEditableField(
-                    label = stringResource(id = R.string.first_name),
-                    value = userState.firstName,
-                    onValueChange = { v ->
-                        userState = userState.copy(firstName = v)
-                        firstName = v
-                    },
-                    required = true,
-                    modifier = Modifier.focusRequester(focusRequester)
-                )
-
-                UserProfileEditableField(
-                    label = stringResource(id = R.string.last_name),
-                    value = userState.lastName,
-                    onValueChange = { v ->
-                        userState = userState.copy(lastName = v)
-                        lastName = v
-                    },
-                    required = true
-                )
-
-                UserProfileEditableField(
-                    label = stringResource(id = R.string.email),
-                    value = userState.email.orEmpty(),
-                    onValueChange = { newValue ->
-                        userState = userState.copy(email = newValue)
-                        email = newValue
-                        emailError = if (newValue.isBlank()) {
-                            null
-                        } else if (!Validation().isValidEmail(newValue)) {
-                            context.getString(R.string.invalid_email)
-                        } else {
-                            null
-                        }
-                    },
-                    isError = emailError != null,
-                    errorText = emailError,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Next
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
+                    UserProfileEditableField(
+                        label = stringResource(id = R.string.first_name),
+                        value = userState.firstName,
+                        onValueChange = { v ->
+                            userState = userState.copy(firstName = v)
+                            firstName = v
+                        },
+                        required = true,
+                        modifier = Modifier.focusRequester(focusRequester)
                     )
-                )
 
-                GenderDropdown(
-                    sharedViewModel = sharedViewModel,
-                    selectedGender = userState.gender?.let {
-                        Gender.fromDisplayName(
-                            context,
-                            it.getDisplayName(context)
+                    UserProfileEditableField(
+                        label = stringResource(id = R.string.last_name),
+                        value = userState.lastName,
+                        onValueChange = { v ->
+                            userState = userState.copy(lastName = v)
+                            lastName = v
+                        },
+                        required = true
+                    )
+
+                    UserProfileEditableField(
+                        label = stringResource(id = R.string.email),
+                        value = userState.email.orEmpty(),
+                        onValueChange = { newValue ->
+                            userState = userState.copy(email = newValue)
+                            email = newValue
+                            emailError = if (newValue.isBlank()) {
+                                null
+                            } else if (!Validation().isValidEmail(newValue)) {
+                                context.getString(R.string.invalid_email)
+                            } else {
+                                null
+                            }
+                        },
+                        isError = emailError != null,
+                        errorText = emailError,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
                         )
-                    },
-                    onGenderSelected = { g ->
-                        userState = userState.copy(gender = g)
-                        gender = g
-                    },
-                    label = stringResource(id = R.string.gender),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                UserProfileEditableField(
-                    label = stringResource(id = R.string.national_code),
-                    value = userState.nationalCode.orEmpty(),
-                    onValueChange = { v ->
-                        userState = userState.copy(nationalCode = v)
-                        nationalCode = v
-                    }
-                )
-
-                UserProfileEditableField(
-                    label = stringResource(id = R.string.address),
-                    value = userState.address.orEmpty(),
-                    onValueChange = { v ->
-                        userState = userState.copy(address = v)
-                        address = v
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Done
                     )
-                )
+
+                    GenderDropdown(
+                        sharedViewModel = sharedViewModel,
+                        selectedGender = userState.gender?.let {
+                            Gender.fromDisplayName(
+                                context,
+                                it.getDisplayName(context)
+                            )
+                        },
+                        onGenderSelected = { g ->
+                            userState = userState.copy(gender = g)
+                            gender = g
+                        },
+                        label = stringResource(id = R.string.gender),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    UserProfileEditableField(
+                        label = stringResource(id = R.string.national_code),
+                        value = userState.nationalCode.orEmpty(),
+                        onValueChange = { v ->
+                            userState = userState.copy(nationalCode = v)
+                            nationalCode = v
+                        }
+                    )
+
+                    UserProfileEditableField(
+                        label = stringResource(id = R.string.address),
+                        value = userState.address.orEmpty(),
+                        onValueChange = { v ->
+                            userState = userState.copy(address = v)
+                            address = v
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
-        },
-        confirmButton = {
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
             Button(
                 enabled = canSubmit,
                 onClick = {
                     keyboardController?.hide()
+                    focusManager.clearFocus()
 
                     val updated = userState.copy(
                         firstName = userState.firstName.trim(),
@@ -446,16 +746,18 @@ private fun MandatoryNameDialogInHome(
                     )
 
                     onSubmit(updated)
-                }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
             ) {
                 Text(
                     text = context.getString(R.string.insert),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
-        },
-        dismissButton = {}
-    )
+        }
+    }
 
     LaunchedEffect(Unit) {
         delay(200)
@@ -463,6 +765,7 @@ private fun MandatoryNameDialogInHome(
         keyboardController?.show()
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -477,8 +780,9 @@ fun BuildingList(
     var showGuestDialog by remember { mutableStateOf(false) }
     var buildingUserList by remember { mutableStateOf<List<BuildingWithCounts>>(emptyList()) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
-    Log.d("userId", userId.toString())
+    var hasFetchedBuildings by remember { mutableStateOf(false) }
 
     LaunchedEffect(effectiveRoleId) {
         if (effectiveRoleId == 7L || effectiveRoleId == 10L || effectiveRoleId == 9L) {
@@ -486,6 +790,7 @@ fun BuildingList(
         }
         sharedViewModel.refreshUnreadCount()
     }
+
 
     if (showGuestDialog) {
         AlertDialog(
@@ -528,26 +833,66 @@ fun BuildingList(
 
     val mobile = Preference().getUserMobile(context)
 
-    LaunchedEffect(mobile, effectiveRoleId) {
-        if (mobile == null) return@LaunchedEffect
-        Building().fetchBuildingsForUser(
-            context = context,
+    fun loadBuilding(roleId: Long, mobile : String) {
+        sharedViewModel.refreshNotificationsForUser(userId)
+        Building(context).fetchBuildingsForUser(
             mobileNumber = mobile,
-            roleId = effectiveRoleId,
+            roleId = roleId,
             onSuccess = { list ->
                 buildingUserList = list
                 loadError = null
+                isLoading = false
+                hasFetchedBuildings = true
             },
             onError = { e ->
                 loadError = e.message
                 buildingUserList = emptyList()
+                isLoading = false
+                hasFetchedBuildings = true
             }
         )
     }
 
+    LaunchedEffect(mobile, effectiveRoleId) {
+        if (mobile == null) return@LaunchedEffect
+        hasFetchedBuildings = false
+        isLoading = true
+        loadError = null
+        loadBuilding(effectiveRoleId, mobile)
+    }
+
+    val refreshLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val shouldRefresh = result.data?.getBooleanExtra("NEED_REFRESH", false) ?: false
+            Log.d("shouldRefresh", shouldRefresh.toString())
+            if (shouldRefresh) {
+                val mobileSafe = mobile
+                if (mobileSafe.isNullOrBlank()) return@rememberLauncherForActivityResult
+
+                hasFetchedBuildings = false
+                isLoading = true
+                loadBuilding(effectiveRoleId, mobileSafe)
+                sharedViewModel.requestRolesReload()
+            }
+
+        }
+    }
+
+
     val perms = sharedViewModel.rolePermissions
 
     when {
+        !hasFetchedBuildings || isLoading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
         loadError != null -> {
             Text(
                 text = loadError!!,
@@ -603,7 +948,7 @@ fun BuildingList(
                         } else {
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.auth_cancel),
+                                context.getString(R.string.auth_for_manager),
                                 Toast.LENGTH_SHORT
                             ).show()
 
@@ -635,16 +980,15 @@ fun BuildingList(
                         building = buildingWithTypesAndUsages,
                         sharedViewModel = sharedViewModel,
                         onClick = {
-                            val intent = Intent(context, BuildingProfileActivity::class.java).apply {
-                                putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
-                                putExtra("BUILDING_USAGE_NAME", buildingWithTypesAndUsages.buildingUsageName)
-                                putExtra("BUILDING_DATA", buildingWithTypesAndUsages.buildingId)
-                            }
-                            context.startActivity(intent)
+                                val intent = Intent(context, BuildingProfileActivity::class.java).apply {
+                                    putExtra("BUILDING_TYPE_NAME", buildingWithTypesAndUsages.buildingTypeName)
+                                    putExtra("BUILDING_USAGE_NAME", buildingWithTypesAndUsages.buildingUsageName)
+                                    putExtra("BUILDING_DATA", buildingWithTypesAndUsages.buildingId)
+                                }
+                                refreshLauncher.launch(intent)
                         },
                         onDelete = { buildingId ->
-                            Building().deleteBuilding(
-                                context = context,
+                            Building(context).deleteBuilding(
                                 buildingId = buildingId,
                                 onSuccess = {
                                     Toast
@@ -775,7 +1119,7 @@ fun BuildingCard(
                                             Toast
                                                 .makeText(
                                                     context,
-                                                    context.getString(R.string.auth_cancel),
+                                                    context.getString(R.string.auth_for_manager),
                                                     Toast.LENGTH_SHORT
                                                 )
                                                 .show()

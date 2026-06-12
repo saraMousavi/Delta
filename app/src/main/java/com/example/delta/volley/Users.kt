@@ -10,14 +10,16 @@ import com.example.delta.data.entity.Role
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.enums.Gender
+import com.example.delta.init.Preference
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.Charset
+import kotlin.coroutines.resumeWithException
 
 class Users {
 
-    private val baseUrl = "http://217.144.107.231:3000"
+    private val baseUrl = "http://185.129.197.6:443"
 
     data class UserRoleBuilding(
         val user: User,
@@ -270,6 +272,55 @@ class Users {
     }
 
 
+    fun getUserRoles(
+        context: Context,
+        mobileNumber: String,
+        onSuccess: (List<Role>) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/user/user-roles?mobileNumber=$mobileNumber"
+        val queue = Volley.newRequestQueue(context)
+
+        val req = JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { resp ->
+                try {
+
+
+                    val rolesJson: JSONArray = resp.optJSONArray("roles") ?: JSONArray()
+                    val userRoles = ArrayList<Role>(rolesJson.length())
+
+                    for (i in 0 until rolesJson.length()) {
+                        val r: JSONObject = rolesJson.getJSONObject(i)
+
+                        val roleId = r.optLong("roleId")
+                        val roleNameRaw = r.optString("roleName", "")
+                        val roleDescription = r.optString("roleDescription", "")
+
+                        userRoles.add(
+                            Role(
+                                roleId = roleId,
+                                roleName = roleNameRaw,
+                                roleDescription = roleDescription.ifBlank { roleNameRaw }
+                            )
+                        )
+                    }
+
+                    onSuccess(userRoles)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                    onError(err)
+            }
+        )
+
+        queue.add(req)
+    }
+
 
     fun fetchUserById(
         context: Context,
@@ -316,9 +367,11 @@ class Users {
         mobileNumber: String,
         onSuccess: (UserRoleBuilding) -> Unit,
         onNotFound: () -> Unit,
+        onAccessDenied: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
+        val requesterUserId = Preference().getUserId(context)
+        val url = "$baseUrl/user/by-mobile?mobileNumber=${mobileNumber.trim()}&requesterUserId=$requesterUserId"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -368,7 +421,12 @@ class Users {
                 }
             },
             { err ->
-                onError(formatVolleyError("Users(fetchUserRoleByMobile)", err))
+                val status = err.networkResponse?.statusCode
+                if (status == 403) {
+                    onAccessDenied()
+                } else {
+                    onError(formatVolleyError("Users(fetchUserRoleByMobile)", err))
+                }
             }
         )
 
@@ -382,7 +440,7 @@ class Users {
         onNotFound: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/user/by-mobile?mobileNumber=${mobileNumber.trim()}"
+        val url = "$baseUrl/user/by-mobile-user?mobileNumber=${mobileNumber.trim()}"
         val queue = Volley.newRequestQueue(context)
 
         val req = JsonObjectRequest(
@@ -525,6 +583,35 @@ class Users {
 
             queue.add(req)
         }
+    }
+
+    suspend fun deleteRoleForUserSuspend(
+        context: Context,
+        userId: Long,
+        roleId: Long,
+        buildingId: Long? = null,
+        unitId: Long? = null
+    ) = suspendCancellableCoroutine { cont ->
+        val queue = Volley.newRequestQueue(context)
+
+        val url = buildString {
+            append("$baseUrl/userRoles/by-role?userId=$userId&roleId=$roleId")
+            if (buildingId != null) append("&buildingId=$buildingId")
+            if (unitId != null) append("&unitId=$unitId")
+        }
+
+        val req = object : JsonObjectRequest(
+            Method.DELETE,
+            url,
+            null,
+            { _ -> if (cont.isActive) cont.resume(Unit, onCancellation = null) },
+            { err ->
+                val ex = formatVolleyError("UserRoleApi(deleteRoleForUser)", err)
+                if (cont.isActive) cont.resumeWithException(ex)
+            }
+        ) {}
+
+        queue.add(req)
     }
 
 }

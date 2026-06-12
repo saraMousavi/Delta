@@ -12,19 +12,22 @@ import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
 import com.example.delta.enums.Gender
 import com.example.delta.enums.Roles
+import com.example.delta.server.JsonParser
 import org.json.JSONArray
 import org.json.JSONObject
 
 class Tenant {
-    private val baseUrl = "http://217.144.107.231:3000/tenants"
+    private val baseUrl = "http://185.129.197.6:443/tenants"
 
     data class TenantWithUnitDto(
         val user: User?,
         val unit: Units,
+        val owner: User?,
         val userRole: Building.UserRole,
         val tenantUnit: TenantsUnitsCrossRef,
         val userRoleCrossRefs: List<UserRoleBuildingUnitCrossRef>
     )
+
 
     fun getTenantWithUnit(
         context: Context,
@@ -88,6 +91,8 @@ class Tenant {
                 birthday = userObj.optString("birthday", "")
             )
         } else null
+        val ownerObj = obj.optJSONObject("owner")
+        val owner = ownerObj?.let { JsonParser().parseUser(it) }
 
         val roleNameStr = obj.optString("roleName", "PROPERTY_TENANT")
         val roleEnum = try {
@@ -137,6 +142,7 @@ class Tenant {
 
         return TenantWithUnitDto(
             user = user,
+            owner = owner,
             userRole = userRole,
             tenantUnit = tenantUnits,
             unit = unit,
@@ -146,6 +152,37 @@ class Tenant {
 
 
 
+
+    fun checkOwnerUnitExistsForTenantUnit(
+        context: Context,
+        tenantId: Long,
+        buildingId: Long,
+        unitId: Long,
+        onSuccess: (exists: Boolean, ownerId: Long?) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val url = "$baseUrl/$tenantId/ownerunit-exists?buildingId=$buildingId&unitId=$unitId"
+
+        val req = JsonObjectRequest(
+            Request.Method.GET,
+            url,
+            null,
+            { res ->
+                try {
+                    val exists = res.optBoolean("exists", false)
+                    val ownerIdVal = if (res.isNull("ownerId")) null else res.optLong("ownerId")
+                    onSuccess(exists, ownerIdVal)
+                } catch (e: Exception) {
+                    onError(e)
+                }
+            },
+            { err ->
+                onError(err)
+            }
+        )
+
+        Volley.newRequestQueue(context).add(req)
+    }
 
     fun fetchTenantsWithUnitsByBuilding(
         context: Context,
@@ -165,7 +202,6 @@ class Tenant {
                     val list = mutableListOf<TenantWithUnitDto>()
                     for (i in 0 until arr.length()) {
                         val obj = arr.getJSONObject(i)
-                        Log.d("obj", obj.toString())
                         list += parseTenantWithUnit(obj)
                     }
                     onSuccess(list)
@@ -318,7 +354,6 @@ class Tenant {
             put("rentAmount", rentDebt)
             put("depositAmount", mortgageDebt)
         }
-        Log.d("body-tenant", body.toString())
         val req = object : JsonObjectRequest(
             Request.Method.PUT,
             url,

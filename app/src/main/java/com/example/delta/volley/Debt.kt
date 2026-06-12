@@ -1,161 +1,120 @@
 package com.example.delta.volley
 
 import android.content.Context
-import android.util.Log
+import android.net.Uri
+import com.android.volley.DefaultRetryPolicy
 import com.android.volley.Request
+import com.android.volley.RequestQueue
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.JsonObjectRequest
-import com.android.volley.toolbox.Volley
 import com.example.delta.data.entity.Debts
+import com.example.delta.init.AppRequestQueue
+import com.example.delta.server.JsonMapper
+import com.example.delta.server.JsonParser
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
-import org.json.JSONObject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import androidx.core.net.toUri
+import com.example.delta.server.VolleyErrorMapper
+import com.example.delta.server.toException
 
-class Debt {
-    private val baseUrl = "http://217.144.107.231:3000/debts"
+class Debt(
+    appContext: Context,
+    private val baseUrl: String = "http://185.129.197.6:443/debts",
+    private val queue: RequestQueue = AppRequestQueue.getInstance(appContext.applicationContext).requestQueue,
+    private val mapper: JsonMapper = JsonMapper(),
+    private val parser: JsonParser = JsonParser()
+) {
 
     fun getDebtsForCost(
-        context: Context,
         costId: Long,
         onSuccess: (List<Debts>) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/by-cost?costId=$costId"
-        Log.d("DebtApi", "GET $url")
+        if (costId <= 0L) {
+            onError(IllegalArgumentException("costId is invalid"))
+            return
+        }
 
-        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/by-cost".toUri()
+            .buildUpon()
+            .appendQueryParameter("costId", costId.toString())
+            .build()
+            .toString()
+
         val req = JsonArrayRequest(
             Request.Method.GET,
             url,
             null,
             { arr ->
-                try {
-                    onSuccess(parseDebts(arr))
-                } catch (e: Exception) {
-                    onError(e)
-                }
+                runCatching { parser.parseDebts(arr) }
+                    .onSuccess(onSuccess)
+                    .onFailure { onError(it.toException()) }
             },
-            { err -> onError(formatVolleyError("DebtApi(getDebtsForCost)", err)) }
-        )
+            { err -> onError(VolleyErrorMapper.toException("DebtApi(getDebtsForCost)", err)) }
+        ).apply { applyDefaultPolicy() }
+
         queue.add(req)
     }
 
-    suspend fun getDebtsForCostSuspend(
-        context: Context,
-        costId: Long
-    ): List<Debts> = suspendCancellableCoroutine { cont ->
-        getDebtsForCost(
-            context = context,
-            costId = costId,
-            onSuccess = { list ->
-                Log.d("debtList", list.toString())
-                if (cont.isActive) cont.resume(list, onCancellation = null)
-            },
-            onError = { e ->
-                Log.d("debtError", e.toString())
-                if (cont.isActive) cont.resumeWith(Result.failure(e))
-            }
-        )
-    }
-
-    private fun formatVolleyError(
-        tag: String,
-        error: com.android.volley.VolleyError
-    ): Exception {
-        val resp = error.networkResponse
-        return if (resp != null) {
-            val body = try { String(resp.data ?: ByteArray(0), Charsets.UTF_8) }
-            catch (_: Exception) { String(resp.data ?: ByteArray(0)) }
-            Log.e(tag, "HTTP ${resp.statusCode}: $body")
-            Exception("HTTP ${resp.statusCode}: $body")
-        } else {
-            Log.e(tag, "No networkResponse: ${error.message}", error)
-            Exception(error.toString())
-        }
-    }
-
-    private fun parseDebts(arr: JSONArray): List<Debts> {
-        val list = mutableListOf<Debts>()
-        for (i in 0 until arr.length()) {
-            val o: JSONObject = arr.getJSONObject(i)
-            val d = Debts(
-                debtId      = o.optLong("debtId", 0L),
-                costId      = o.optLong("costId", 0L),
-                unitId      = o.optLong("unitId", 0L),
-                ownerId     = if (o.isNull("ownerId")) null else o.optLong("ownerId"),
-                amount      = o.optDouble("amount", 0.0),
-                description = o.optString("description", ""),
-                paymentFlag = o.optBoolean("paymentFlag", false),
-                dueDate = o.optString("dueDate", ""),
-                buildingId = o.optLong("buildingId", 0L)
+    suspend fun getDebtsForCostSuspend(costId: Long): List<Debts> =
+        suspendCancellableCoroutine { cont ->
+            getDebtsForCost(
+                costId = costId,
+                onSuccess = { if (cont.isActive) cont.resume(it) },
+                onError = { if (cont.isActive) cont.resumeWithException(it) }
             )
-            list += d
         }
-        return list
-    }
-
-
-    suspend fun updateDebtSuspend(
-        context: Context,
-        debt: Debts
-    ): Debts = suspendCancellableCoroutine { cont ->
-        updateDebt(
-            context,
-            debt,
-            onSuccess = { updated ->
-                if (cont.isActive) cont.resume(updated, onCancellation = null)
-            },
-            onError = { e ->
-                if (cont.isActive) cont.resumeWith(Result.failure(e))
-            }
-        )
-    }
-
 
     fun updateDebt(
-        context: Context,
         debt: Debts,
         onSuccess: (Debts) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val url = "$baseUrl/${debt.debtId}"
-        val body = JSONObject().apply {
-            put("paymentFlag", debt.paymentFlag)
-            put("amount", debt.amount)
-            put("description", debt.description)
-            put("dueDate", debt.dueDate)
-            put("ownerId", debt.ownerId)
-            put("unitId", debt.unitId)
-            put("buildingId", debt.buildingId)
-            put("costId", debt.costId)
+        val id = debt.debtId
+        if (id <= 0L) {
+            onError(IllegalArgumentException("debtId is invalid"))
+            return
         }
 
-        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/$id"
+
+        val body = mapper.debtToJson(debt).apply {
+            remove("debtId")
+        }
+
         val req = JsonObjectRequest(
             Request.Method.PUT,
             url,
             body,
             { obj ->
-                try {
-                    val updated = Debts(
-                        debtId = obj.getJSONObject("debt").optLong("debtId"),
-                        costId = obj.getJSONObject("debt").optLong("costId"),
-                        unitId = obj.getJSONObject("debt").optLong("unitId"),
-                        ownerId = if (obj.getJSONObject("debt").isNull("ownerId")) null else obj.getJSONObject("debt").optLong("ownerId"),
-                        amount = obj.getJSONObject("debt").optDouble("amount"),
-                        description = obj.getJSONObject("debt").optString("description"),
-                        paymentFlag = obj.getJSONObject("debt").optBoolean("paymentFlag"),
-                        dueDate = obj.getJSONObject("debt").optString("dueDate"),
-                        buildingId = obj.getJSONObject("debt").optLong("buildingId")
-                    )
-                    onSuccess(updated)
-                } catch (e: Exception) {
-                    onError(e)
-                }
+                runCatching {
+                    val dObj = obj.optJSONObject("debt") ?: obj
+                    parser.parseDebts(JSONArray().put(dObj)).first()
+                }.onSuccess(onSuccess).onFailure { onError(it.toException()) }
             },
-            { err -> onError(formatVolleyError("DebtApi(updateDebt)", err)) }
-        )
+            { err -> onError(VolleyErrorMapper.toException("DebtApi(updateDebt)", err)) }
+        ).apply { applyDefaultPolicy() }
+
         queue.add(req)
     }
 
+    suspend fun updateDebtSuspend(debt: Debts): Debts =
+        suspendCancellableCoroutine { cont ->
+            updateDebt(
+                debt = debt,
+                onSuccess = { if (cont.isActive) cont.resume(it) },
+                onError = { if (cont.isActive) cont.resumeWithException(it) }
+            )
+        }
+
+    private fun Request<*>.applyDefaultPolicy() {
+        retryPolicy = DefaultRetryPolicy(
+            12_000,
+            1,
+            DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
+        )
+        setShouldCache(false)
+    }
 }

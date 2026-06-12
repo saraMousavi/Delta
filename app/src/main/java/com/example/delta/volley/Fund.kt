@@ -18,7 +18,7 @@ import org.json.JSONObject
 import java.util.Locale
 
 class Fund {
-    private val baseUrl = "http://217.144.107.231:3000/funds"
+    private val baseUrl = "http://185.129.197.6:443/funds"
 
 
     private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {
@@ -61,6 +61,7 @@ class Fund {
             url,
             payload,
             { response ->
+                Log.d("response", response.toString())
                 onSuccess(response.toString())
             },
             { error ->
@@ -223,6 +224,7 @@ class Fund {
                             invoiceFlag   = obj.optBoolean("invoiceFlag", false),
                             costFor = obj.optString("costFor"),
                             documentNumber = obj.optString("documentNumber"),
+                            paymentDate = obj.optString("paymentDate"),
                         )
                         costsList += cost
                     }

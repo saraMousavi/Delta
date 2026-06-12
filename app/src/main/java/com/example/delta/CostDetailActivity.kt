@@ -87,7 +87,6 @@ class CostDetailActivity : ComponentActivity() {
 
         // Get cost parcelable passed from intent
         val cost = intent.getParcelableExtra<Parcelable>("COST_DATA") as? Costs
-        Log.d("cost", cost.toString())
         setContent {
             AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -274,9 +273,9 @@ fun DebtCard(
         val ownerId = debt.ownerId
         if (ownerId != null && ownerId > 0 && !ownerLoaded) {
             ownerLoaded = true
-            Owner().getOwnerWithUnits(
-                context = context,
+            Owner(context).getOwnerWithUnits(
                 ownerId = ownerId,
+                buildingId = debt.buildingId,
                 onSuccess = { dto ->
                     val name = listOfNotNull(dto.user?.firstName, dto.user?.lastName)
                         .joinToString(" ")

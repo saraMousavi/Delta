@@ -63,28 +63,6 @@ interface AuthorizationDao {
     @Query("SELECT COUNT(*) FROM authorization_objects")
     suspend fun getCount(): Int
 
-    @Transaction
-    @Query(
-        """
-SELECT 
-    af.*,
-    raf.permissionLevel AS cross_ref_permissionLevel,
-    raf.roleId AS cross_ref_roleId,
-    raf.objectId AS cross_ref_objectId,
-    raf.fieldId AS cross_ref_fieldId,
-    ao.name AS objectName 
-FROM user_role_cross_ref urc
-JOIN role_authorization_object_field_cross_ref raf 
-    ON urc.roleId = raf.roleId
-JOIN authorization_fields af 
-    ON raf.fieldId = af.fieldId
-JOIN authorization_objects ao 
-    ON af.objectId = ao.objectId
-WHERE urc.userId = :userId
-"""
-    )
-    fun getFieldsWithPermissionsForUser(userId: Long): Flow<List<FieldWithPermission>>
-
     @Delete
     suspend fun deleteRoleAuthorizationFieldCrossRef(crossRef: RoleAuthorizationObjectFieldCrossRef)
 

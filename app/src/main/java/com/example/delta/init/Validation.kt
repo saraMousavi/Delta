@@ -50,6 +50,8 @@ class Validation {
                 sharedViewModel.street.isNotBlank() &&
                 sharedViewModel.postCode.isNotBlank() &&
                 sharedViewModel.phone.isNotBlank() &&
+                sharedViewModel.floorCount.isNotBlank() &&
+                sharedViewModel.unitCount.isNotBlank() && sharedViewModel.unitCount.toInt() > 0
                 sharedViewModel.mobileNumber.isNotBlank() &&
                 isValidPostalCode(sharedViewModel.postCode) &&
                 (!sharedViewModel.sameArea ||

@@ -5,6 +5,10 @@ package com.example.delta
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import androidx.core.content.FileProvider
 import android.webkit.MimeTypeMap
@@ -118,6 +122,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.layout.ContentScale
@@ -139,6 +144,7 @@ import com.example.delta.init.AuthUtils.AuthorizationObjects
 import com.example.delta.init.FloorFormatter
 import com.example.delta.init.Preference
 import com.example.delta.volley.BuildingFile
+import com.example.delta.volley.BuildingType
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -266,7 +272,7 @@ data class FloorOption(
 
 fun buildFloorOptionsForBuilding(
     context: Context,
-    floorCount: Int
+    floorCount: Int? = 0
 ): List<FloorOption> {
     val result = mutableListOf<FloorOption>()
 
@@ -278,7 +284,7 @@ fun buildFloorOptionsForBuilding(
     )
 
     // Floors above ground: 1..(floorCount - 1)
-    val aboveCount = (floorCount).coerceAtLeast(0)
+    val aboveCount = (floorCount)?.coerceAtLeast(0) ?: 1
     for (i in 1..aboveCount) {
         val value = FloorFormatter.normalFloor(i)
         result += FloorOption(
@@ -743,6 +749,35 @@ fun ChipGroupShared(
 }
 
 
+@Composable
+fun rememberNetworkState(): androidx.compose.runtime.State<Boolean> {
+    val context = LocalContext.current
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    return produceState(initialValue = false) {
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                value = true
+            }
+
+            override fun onLost(network: Network) {
+                value = false
+            }
+        }
+
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        connectivityManager.registerNetworkCallback(request, callback)
+
+        awaitDispose {
+            connectivityManager.unregisterNetworkCallback(callback)
+        }
+    }
+}
+
 
 @Composable
 fun PasswordTextField(
@@ -885,12 +920,12 @@ fun SettingsScreen(
         onClick = { context.startActivity(Intent(context, CapitalActivity::class.java)) }
     )
 
-    val firstGroup = listOf(
-        NavItem(
-            title = R.string.user_management,
-            icon = Icons.Outlined.Lock,
-            onClick = { context.startActivity(Intent(context, UserManagementActivity::class.java)) }
-        ),
+//    val firstGroup = listOf(
+//        NavItem(
+//            title = R.string.user_management,
+//            icon = Icons.Outlined.Lock,
+//            onClick = { context.startActivity(Intent(context, UserManagementActivity::class.java)) }
+//        ),
 //        NavItem(
 //            title = R.string.supporting,
 //            icon = Icons.Outlined.Support,
@@ -901,7 +936,7 @@ fun SettingsScreen(
 //            icon = Icons.Outlined.AttachMoney,
 //            onClick = { context.startActivity(Intent(context, EarningsActivity::class.java)) }
 //        )
-    )
+//    )
 
 //    val secondGroup = listOf(
 //        NavItem(
@@ -947,32 +982,32 @@ fun SettingsScreen(
             }
 
             // First group grid wrapped in Box to enforce max height
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 130.dp) // adjust based on your content
-                ) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(1),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        userScrollEnabled = false
-                    ) {
-                        items(firstGroup) { item ->
-                            ClickableSettingItem(
-                                title = context.getString(item.title),
-                                icon = item.icon,
-                                onClick = item.onClick,
-                                modifier = Modifier.height(120.dp),
-                                iconOnTop = true
-                            )
-                        }
-                    }
-                }
-            }
+//            item {
+//                Box(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .heightIn(max = 130.dp) // adjust based on your content
+//                ) {
+//                    LazyVerticalGrid(
+//                        columns = GridCells.Fixed(1),
+//                        modifier = Modifier.fillMaxSize(),
+//                        contentPadding = PaddingValues(4.dp),
+//                        verticalArrangement = Arrangement.spacedBy(16.dp),
+//                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+//                        userScrollEnabled = false
+//                    ) {
+////                        items(firstGroup) { item ->
+////                            ClickableSettingItem(
+////                                title = context.getString(item.title),
+////                                icon = item.icon,
+////                                onClick = item.onClick,
+////                                modifier = Modifier.height(120.dp),
+////                                iconOnTop = true
+////                            )
+////                        }
+//                    }
+//                }
+//            }
 
             // Second group grid wrapped in Box to enforce max height
 //            item {
@@ -1021,6 +1056,7 @@ fun ClickableSettingItem(
 ) {
     Card(
         modifier = modifier
+            .height(160.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -1029,9 +1065,10 @@ fun ClickableSettingItem(
         )
     ) {
         if (iconOnTop) {
+
+            // ✅ icon + text centered both vertically & horizontally
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
                     .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -1039,25 +1076,28 @@ fun ClickableSettingItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    modifier = Modifier
-                        .size(40.dp),
+                    modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
+
                 Spacer(modifier = Modifier.height(12.dp))
+
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
+                    textAlign = TextAlign.Center
                 )
             }
+
         } else {
-            // Icon left, title right row for full width charge row
+
             Row(
                 modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
                     imageVector = icon,
@@ -1065,7 +1105,9 @@ fun ClickableSettingItem(
                     modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(16.dp))
+
+                Spacer(modifier = Modifier.width(16.dp))
+
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
@@ -1075,6 +1117,7 @@ fun ClickableSettingItem(
         }
     }
 }
+
 
 
 @Composable
@@ -1161,7 +1204,7 @@ fun CurvedBottomNavigation(
                                 .width(48.dp)
                                 .height(8.dp)
                                 .offset { IntOffset(animatedOffset.x.roundToInt(), 0) }
-                                .clip(WaveIndicatorShape(waveHeight = 16f))
+//                                .clip(WaveIndicatorShape(waveHeight = 16f))
                                 .background(MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -1173,7 +1216,7 @@ fun CurvedBottomNavigation(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(88.dp),
-            shape = CurvedBottomNavShape(),
+//            shape = CurvedBottomNavShape(),
             color = MaterialTheme.colorScheme.surfaceContainerLowest,
             shadowElevation = 8.dp
         ) {
@@ -1211,7 +1254,7 @@ fun CurvedBottomNavigation(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.auth_cancel),
+                                        context.getString(R.string.auth_for_manager),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -1236,7 +1279,7 @@ fun CurvedBottomNavigation(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.auth_cancel),
+                                        context.getString(R.string.auth_for_manager),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -1247,7 +1290,7 @@ fun CurvedBottomNavigation(
                                     AuthorizationFieldsHome.CONTACT_MANAGEMENT_BUTTON
                                 )
                                 if (perm == PermissionLevel.READ || perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL) {
-                                    if(currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
+                                    if(currentRoleId == -1L || currentRoleId == 7L || currentRoleId == 9L || currentRoleId == 10L){
                                         Toast.makeText(
                                             context,
                                             context.getString(R.string.auth_cancel),
@@ -1391,8 +1434,11 @@ fun UploadFile(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val buildingFiles by sharedViewModel.buildingFiles.collectAsState()
-
     val coroutineScope = rememberCoroutineScope()
+
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<UploadedFileEntity?>(null) }
+    var isDeleting by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1404,10 +1450,11 @@ fun UploadFile(
                     "${context.getString(R.string.file_exeed)}: ${maxFileSizeBytes / (1024 * 1024)} MB"
                 return@let
             }
+
             isSaving = true
-            val filename =
-                queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
+            val filename = queryFileName(context, it) ?: "uploaded_${System.currentTimeMillis()}"
             val savedPath = copyUriToInternalStorage(context, it, filename)
+
             if (savedPath != null) {
                 coroutineScope.launch {
                     try {
@@ -1416,7 +1463,6 @@ fun UploadFile(
                             fileUrl = savedPath,
                             buildingId = null,
                             onSuccess = { uploaded ->
-//                                sharedViewModel.addFileList(uploaded)
                                 errorMessage = null
                                 onFileSaved(uploaded)
                                 isSaving = false
@@ -1436,6 +1482,89 @@ fun UploadFile(
                 isSaving = false
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeleting) {
+                    showDeleteConfirm = false
+                    pendingDelete = null
+                }
+            },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.delete_file),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = {
+                        val target = pendingDelete ?: return@TextButton
+                        isDeleting = true
+
+                        coroutineScope.launch {
+                            try {
+                                fileApi.deleteFile(
+                                    context = context,
+                                    fileId = target.fileId,
+                                    onSuccess = {
+                                        sharedViewModel.deleteFile(target.fileUrl)
+                                        isDeleting = false
+                                        showDeleteConfirm = false
+                                        pendingDelete = null
+                                        val updated = buildingFiles - target
+                                        sharedViewModel.updateBuildingFile(updated)
+                                    },
+                                    onError = { e ->
+                                        errorMessage = e.message ?: context.getString(R.string.failed)
+                                        isDeleting = false
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                errorMessage = e.message ?: context.getString(R.string.failed)
+                                isDeleting = false
+                            }
+                        }
+                    }
+                ) {
+                    if (isDeleting) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Text(
+                            LocalContext.current.getString(R.string.delete),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = {
+                        showDeleteConfirm = false
+                        pendingDelete = null
+                    }
+
+                ) {
+                    Text(
+                        text = LocalContext.current.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -1477,12 +1606,14 @@ fun UploadFile(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(items = buildingFiles) { path ->
+            items(items = buildingFiles, key = { it.fileUrl }) { file ->
                 FileItem(
-                    filePath = path.fileUrl,
-                    onClick = { openFile(context, path.fileUrl) },
+                    filePath = file.fileUrl,
+                    onClick = { openFile(context, file.fileUrl) },
                     onDelete = {
-                        sharedViewModel.deleteFile(path.fileUrl)
+                        if (!isEditing) return@FileItem
+                        pendingDelete = file
+                        showDeleteConfirm = true
                     },
                     modifier = Modifier.size(84.dp)
                 )
@@ -1490,8 +1621,6 @@ fun UploadFile(
         }
     }
 }
-
-
 
 
 // Helper function to get file size from Uri

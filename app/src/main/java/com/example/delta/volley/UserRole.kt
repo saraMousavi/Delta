@@ -11,7 +11,7 @@ import org.json.JSONObject
 
 class UserRole {
 
-        private val BASE_URL = "http://217.144.107.231:3000/"
+        private val BASE_URL = "http://185.129.197.6:443/"
 
         fun getRolesByMobile(
             context: Context,
@@ -20,7 +20,6 @@ class UserRole {
             onError: (Throwable) -> Unit
         ) {
             val url = "${BASE_URL}userRoles/by-mobile/$mobile"
-            Log.d("url", url.toString())
             val queue = Volley.newRequestQueue(context)
             val req = object : StringRequest(
                 Request.Method.GET, url,

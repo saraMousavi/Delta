@@ -35,7 +35,7 @@ class AuthUtils {
     }
 
     object AuthorizationFieldsHome {
-        const val SETTINGS_BUTTON = "دکمه تنظیمات"
+        const val SETTINGS_BUTTON = "شارژ ساختمان"
         const val CREATE_BUILDING_BUTTON = "دکمه ایجاد ساختمان"
         const val DELETE_BUILDING_BUTTON = "حذف ساختمان"
         const val DASHBOARD_BUTTON = "داشبورد"
@@ -50,6 +50,8 @@ class AuthUtils {
         const val CREATE_EARNING_BUTTON = "ایجاد درآمد"
         const val CREATE_CAPITAL_COST_BUTTON = "ایجاد سند عمرانی"
         const val CREATE_OPERATIONAL_COST_BUTTON = "ایجاد سند جاری"
+        const val PAY_OPERATIONAL_DOC_BUTTON = "پرداخت سند جاری"
+        const val PAY_CAPITAL_DOC_BUTTON = "پرداخت سند عمرانی"
 
         const val OWNERS_TAB = "مالکین"
         const val CREATE_OWNER_BUTTON = "ایجاد مالک"

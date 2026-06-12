@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,6 +75,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 
 class ChargeCalculationActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
@@ -165,7 +167,8 @@ fun CostInputRow(
     val transformation = remember { NumberCommaTransformation() }
 
     val filteredMethods = remember {
-        CalculateMethod.entries.filter { it != CalculateMethod.DANG && it != CalculateMethod.AUTOMATIC && it != CalculateMethod.NONE }
+        CalculateMethod.entries
+            .filter { it != CalculateMethod.DANG && it != CalculateMethod.AUTOMATIC && it != CalculateMethod.NONE }
             .toMutableList()
     }.apply {
         if (calculateMethod !in this) add(calculateMethod)
@@ -200,11 +203,13 @@ fun CostInputRow(
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 if (showDeleteIcon) {
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onDeleteClick) {
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier.padding(top = 18.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = context.getString(R.string.delete),
@@ -212,45 +217,66 @@ fun CostInputRow(
                     }
                 }
 
-                OutlinedTextField(
-                    value = if (localText == "0.0") "" else localText,
-                    onValueChange = { newText ->
-                        val raw = newText.replace(",", "")
-                        if (raw.isEmpty()) {
-                            localText = ""
-                            onAmountChange("")
-                        } else if (raw.matches(Regex("^\\d*$"))) {
-                            localText = formatWithComma(raw)
-                            onAmountChange(raw)
-                        }
-                    },
-                    label = {
-                        Text(costInput.costName, style = MaterialTheme.typography.bodyLarge)
-                    },
-                    singleLine = true,
-                    enabled = isEditMode,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(0.6f)
-                )
-                if (isAuto) {
-                    Spacer(Modifier.width(8.dp))
-                    ExposedDropdownMenuBoxExample(
-                        sharedViewModel = sharedViewModel,
-                        items = filteredMethods,
-                        selectedItem = calculateMethod,
-                        onItemSelected = onCalculateMethodChange,
-                        label = context.getString(R.string.calculate_method),
-                        modifier = Modifier.weight(0.4f),
-                        itemLabel = { it.getDisplayName(context) }
+                Column(modifier = Modifier.weight(0.6f)) {
+                    Text(
+                        text = costInput.costName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = if (localText == "0.0") "" else localText,
+                        onValueChange = { newText ->
+                            val raw = newText.replace(",", "")
+                            if (raw.isEmpty()) {
+                                localText = ""
+                                onAmountChange("")
+                            } else if (raw.matches(Regex("^\\d*$"))) {
+                                localText = formatWithComma(raw)
+                                onAmountChange(raw)
+                            }
+                        },
+                        singleLine = true,
+                        enabled = isEditMode,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = {
+                            Text(
+                                text = context.getString(R.string.amount_toman),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                if (isAuto) {
+                    Spacer(Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(0.4f)) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        ExposedDropdownMenuBoxExample(
+                            sharedViewModel = sharedViewModel,
+                            items = filteredMethods,
+                            selectedItem = calculateMethod,
+                            onItemSelected = onCalculateMethodChange,
+                            label = context.getString(R.string.calculate_method),
+                            modifier = Modifier.fillMaxWidth(),
+                            itemLabel = { it.getDisplayName(context) }
+                        )
+                    }
+                }
             }
+
             Text(
                 text = " $amountInWords ${context.getString(R.string.toman)}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(context.getColor(R.color.grey)),
                 modifier = Modifier.padding(top = 4.dp)
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
         }
     } else {
         Row(
@@ -277,7 +303,7 @@ fun CostInputRow(
                 )
             }
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
@@ -317,14 +343,29 @@ fun ChargeResultDialog(
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     results.forEach { (unit, charge) ->
-                        Text(
-                            text = " ${context.getString(R.string.unit)} ${unit.unitNumber} : ${
-                                formatNumberWithCommas(charge)
-                            } ${context.getString(R.string.toman)}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${context.getString(R.string.unit)} ${unit.unitNumber}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Start,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Text(
+                                text = "${formatNumberWithCommas(charge)} ${context.getString(R.string.toman)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
                         Spacer(Modifier.height(8.dp))
                     }
+
                 }
             }
         },

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.BorderStroke
@@ -59,6 +60,12 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.example.delta.init.NumberCommaTransformation
 import androidx.compose.ui.platform.LocalFocusManager
+import com.example.delta.enums.PermissionLevel
+import com.example.delta.init.AuthUtils
+import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
+import com.example.delta.init.AuthUtils.AuthorizationFieldsBuildingProfile
+import com.example.delta.init.AuthUtils.AuthorizationObjects
+import com.example.delta.init.Preference
 import kotlin.collections.sortedBy
 import kotlin.math.roundToLong
 
@@ -70,34 +77,65 @@ class TenantsDetailsActivity : ComponentActivity() {
         val unitId = intent.getLongExtra("UNIT_DATA", -1L)
         val tenantId = intent.getLongExtra("TENANT_DATA", -1L)
         val buildingId = intent.getLongExtra("BUILDING_ID", -1L)
+        val hasOwnerAuth = intent.getBooleanExtra("hasOwnerAuth", false)
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+//                    val resultIntent = Intent().apply {
+//                        putExtra("NEED_REFRESH", NEED_REFRESH)
+//                    }
+                    setResult(RESULT_OK)
+                    finish()
+                }
+            }
+        )
         setContent {
             AppTheme (useDarkTheme = sharedViewModel.isDarkModeEnabled){
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+
                     TenantDetailsScreen(
                         unitId = unitId,
                         tenantId = tenantId,
                         buildingId = buildingId,
-                        sharedViewModel = sharedViewModel
+                        hasOwnerAuth = hasOwnerAuth,
+                        sharedViewModel = sharedViewModel,
+                        onBack = { changed ->
+                            if (changed) setResult(RESULT_OK)
+                            finish()
+                        }
                     )
                 }
             }
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TenantDetailsScreen(
     unitId: Long,
     tenantId: Long,
     buildingId: Long,
+    hasOwnerAuth: Boolean,
     sharedViewModel: SharedViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: (changed: Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val effectiveRoleId = Preference().getRoleId(context)
+    LaunchedEffect(effectiveRoleId) {
+        if (effectiveRoleId != 0L) {
+            sharedViewModel.loadRolePermissions(context, effectiveRoleId)
+        }
+    }
     val snackBarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    // --- NEW: load tenant name from server, not Room
+
     var tenantName by remember { mutableStateOf<String?>(null) }
+
+    var changed by rememberSaveable { mutableStateOf(false) }
+
 
     LaunchedEffect(unitId, tenantId) {
         Tenant().getTenantWithUnit(
@@ -123,7 +161,7 @@ fun TenantDetailsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
+                    IconButton(onClick = { onBack(changed) }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = context.getString(R.string.back)
@@ -155,11 +193,16 @@ fun TenantDetailsScreen(
                     unitId = unitId,
                     tenantId = tenantId,
                     buildingId = buildingId,
+                    hasOwnerAuth = hasOwnerAuth,
                     sharedViewModel = sharedViewModel,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    onChanged = { isChanged ->
+                        if (isChanged) changed = true
+                    }
                 )
+
                 OwnerTabType.FINANCIALS -> TenantFinancialsTab(
-                    unitId,
+                    unitId = unitId,
                     sharedViewModel = sharedViewModel,
                     tenantId = tenantId,
                     buildingId = buildingId,
@@ -171,6 +214,7 @@ fun TenantDetailsScreen(
         }
     }
 }
+
 
 fun formatWithCommaTenant(input: String): String {
     if (input.isBlank()) return ""
@@ -186,8 +230,10 @@ fun TenantOverviewTab(
     unitId: Long,
     tenantId: Long,
     buildingId: Long,
+    hasOwnerAuth : Boolean,
     sharedViewModel: SharedViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onChanged: (changed: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -196,9 +242,11 @@ fun TenantOverviewTab(
     var isEditing by remember { mutableStateOf(false) }
     var activeDateField by remember { mutableStateOf<DateField?>(null) }
     val focusManager = LocalFocusManager.current
-
+    var currentRoleId = Preference().getRoleId(context)
     val tenantApi = remember { Tenant() }
-    val costApi = remember { Cost() }
+    val costApi = remember { Cost(context) }
+    var hasChanges by rememberSaveable { mutableStateOf(false) }
+    var cantEdit by rememberSaveable { mutableStateOf(true) }
 
     var tenantWithRelation by remember { mutableStateOf<TenantsUnitsCrossRef?>(null) }
     var user by remember { mutableStateOf<User?>(null) }
@@ -209,6 +257,16 @@ fun TenantOverviewTab(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var hasPaidAny by remember { mutableStateOf(false) }
+    val perms = sharedViewModel.rolePermissions
+
+    var hasOwnerForSelectedUnit by remember { mutableStateOf(true) }
+    var isCheckingOwner by remember { mutableStateOf(false) }
+    var selectedOwnerId by remember { mutableStateOf<Long?>(null) }
+
+    val perm = perms.permissionFor(
+        AuthorizationObjects.HOME,
+        AuthUtils.AuthorizationFieldsHome.CREATE_BUILDING_BUTTON
+    )
     LaunchedEffect(unitId, tenantId) {
         isLoading = true
         errorMessage = null
@@ -233,9 +291,9 @@ fun TenantOverviewTab(
         )
 
         costApi.fetchCostsWithDebts(
-            context = context,
             ownerId = null,
             unitId = unitId,
+            buildingId = buildingId,
             onSuccess = { costs, debts ->
                 val rentCostIds = costs
                     .filter { it.costName == "اجاره" && it.fundType == FundType.NONE }
@@ -310,7 +368,11 @@ fun TenantOverviewTab(
         startDate.isNotBlank() &&
                 endDate.isNotBlank() &&
                 numberOfTenant.isNotBlank() && numberOfTenant.toInt() > 0 &&
-                selectedStatus.isNotBlank()
+                selectedStatus.isNotBlank() &&
+                cantEdit &&
+                !isCheckingOwner
+
+
 
     val listState = rememberLazyListState()
     var units by remember { mutableStateOf<List<Units>>(emptyList()) }
@@ -338,6 +400,37 @@ fun TenantOverviewTab(
             }
         )
     }
+
+    fun checkOwnerFor(unitIdToCheck: Long) {
+        if (unitIdToCheck <= 0L) return
+        isCheckingOwner = true
+        tenantApi.checkOwnerUnitExistsForTenantUnit(
+            context = context,
+            tenantId = tenantId,
+            buildingId = buildingId,
+            unitId = unitIdToCheck,
+            onSuccess = { exists, ownerId ->
+                hasOwnerForSelectedUnit = exists
+                selectedOwnerId = ownerId
+                cantEdit = true
+                isCheckingOwner = false
+            },
+            onError = {
+                hasOwnerForSelectedUnit = false
+                selectedOwnerId = null
+                cantEdit = true
+                isCheckingOwner = false
+            }
+        )
+    }
+
+    val selectedUnitIdForCheck = tenantWithRelation?.unitId ?: unitId
+
+    LaunchedEffect(isEditing, selectedUnitIdForCheck) {
+        if (!isEditing) return@LaunchedEffect
+        checkOwnerFor(selectedUnitIdForCheck)
+    }
+
 
     Box(
         modifier = modifier
@@ -380,194 +473,261 @@ fun TenantOverviewTab(
                         Icons.Default.Email,
                         "${context.getString(R.string.email)}: ${user!!.email}"
                     )
-                    Spacer(Modifier.height(8.dp))
                 }
 
                 if (isEditing) {
                     item {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(8.dp))
 
                         if (!noOwnerUnits) {
-                            ExposedDropdownMenuBoxExample(
-                                sharedViewModel = sharedViewModel,
-                                items = units,
-                                selectedItem = selectedUnit,
-                                onItemSelected = {
-                                    selectedUnit = it
-                                    tenantWithRelation = tenantWithRelation!!.copy(
-                                        unitId = it.unitId
-                                    )
-                                },
-                                label = context.getString(R.string.unit_number),
-                                modifier = Modifier.fillMaxWidth(),
-                                itemLabel = { it.unitNumber }
-                            )
+                            if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL  ) {
+                                ExposedDropdownMenuBoxExample(
+                                    sharedViewModel = sharedViewModel,
+                                    items = units,
+                                    selectedItem = selectedUnit,
+                                    onItemSelected = {
+                                        selectedUnit = it
+                                        tenantWithRelation = tenantWithRelation!!.copy(unitId = it.unitId)
+                                        checkOwnerFor(it.unitId)
+                                    },
+
+                                    label = context.getString(R.string.unit_number),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    itemLabel = { it.unitNumber }
+                                )
+                            } else {
+                                OwnerInfoRow(
+                                    Icons.Default.Person,
+                                    "${context.getString(R.string.unit_number)}: ${unit!!.unitNumber}"
+                                )
+                            }
                         }
                     }
                     item {
-                        OutlinedTextField(
-                            value = numberOfTenant,
-                            onValueChange = { value ->
-                                if (value.isEmpty() || value.matches(Regex("^\\d*\\.?\\d*\$"))) {
-                                    numberOfTenant = value
-                                    tenantWithRelation = tenantWithRelation!!.copy( numberOfTenants = numberOfTenant)
-                                }
-                            },
-                            singleLine = true,
-                            label = {
-                                Text(
-                                    context.getString(R.string.number_of_tenants),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = startDate,
-                            onValueChange = {
-                                tenantWithRelation = tenantWithRelation!!.copy(startDate =  startDate)
-                            },
-                            label = { Text(context.getString(R.string.start_date)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        activeDateField = DateField.START
+                        if (perm == PermissionLevel.WRITE || perm == PermissionLevel.FULL  ) {
+                            OutlinedTextField(
+                                value = numberOfTenant,
+                                onValueChange = { value ->
+                                    if (value.isEmpty() || value.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                                        numberOfTenant = value
+                                        tenantWithRelation = tenantWithRelation!!.copy( numberOfTenants = numberOfTenant)
                                     }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = endDate,
-                            onValueChange = {
-                                tenantWithRelation = tenantWithRelation!!.copy(endDate =  endDate)
-                            },
-                            label = { Text(context.getString(R.string.end_date)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        activeDateField = DateField.END
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                        )
-
-                        if (activeDateField != null) {
-                            PersianDatePickerDialogContent(
-                                sharedViewModel = sharedViewModel,
-                                onDateSelected = { selected ->
-                                    when (activeDateField) {
-                                        DateField.START -> {tenantWithRelation = tenantWithRelation!!.copy(startDate = selected.toString())}
-                                        DateField.END   -> {tenantWithRelation = tenantWithRelation!!.copy(endDate = selected.toString())}
-                                        null -> {}
-                                    }
-                                    activeDateField = null
                                 },
-                                onDismiss = { activeDateField = null }
+                                singleLine = true,
+                                label = {
+                                    Text(
+                                        context.getString(R.string.number_of_tenants),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = startDate,
+                                onValueChange = {
+                                    tenantWithRelation = tenantWithRelation!!.copy(startDate =  startDate)
+                                },
+                                label = { Text(context.getString(R.string.start_date)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                readOnly = true,
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            activeDateField = DateField.START
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = null
+                                        )
+                                    }
+                                }
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = endDate,
+                                onValueChange = {
+                                    tenantWithRelation = tenantWithRelation!!.copy(endDate =  endDate)
+                                },
+                                label = { Text(context.getString(R.string.end_date)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                readOnly = true,
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            activeDateField = DateField.END
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = null
+                                        )
+                                    }
+                                }
+                            )
+
+                            if (activeDateField != null) {
+                                PersianDatePickerDialogContent(
+                                    sharedViewModel = sharedViewModel,
+                                    onDateSelected = { selected ->
+                                        when (activeDateField) {
+                                            DateField.START -> {tenantWithRelation = tenantWithRelation!!.copy(startDate = selected.toString())}
+                                            DateField.END   -> {tenantWithRelation = tenantWithRelation!!.copy(endDate = selected.toString())}
+                                            null -> {}
+                                        }
+                                        activeDateField = null
+                                    },
+                                    onDismiss = { activeDateField = null }
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            StatusDropdown(
+                                selectedStatus = selectedStatus,
+                                onStatusSelected = { st ->
+                                    if (isCheckingOwner) return@StatusDropdown
+
+                                    val activeLabel = context.getString(R.string.active)
+
+                                    if (st == activeLabel) {
+                                        if (hasOwnerForSelectedUnit) {
+                                            cantEdit = true
+                                            selectedStatus = st
+                                            tenantWithRelation = tenantWithRelation!!.copy(status = st)
+                                        } else {
+                                            cantEdit = false
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.first_define_owner),
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    } else {
+                                        cantEdit = true
+                                        selectedStatus = st
+                                        tenantWithRelation = tenantWithRelation!!.copy(status = st)
+                                    }
+                                }
+                            )
+
+                            if (isCheckingOwner) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                                }
+                            }
+
+
+                            Spacer(Modifier.height(8.dp))
+                        } else {
+
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.Person,
+                                "${context.getString(R.string.number_of_tenants)}: ${tenantWithRelation!!.numberOfTenants}"
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.DateRange,
+                                "${context.getString(R.string.start_date)}: ${tenantWithRelation!!.startDate}"
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.DateRange,
+                                "${context.getString(R.string.end_date)}: ${tenantWithRelation!!.endDate}"
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.Info,
+                                "${context.getString(R.string.status)}: ${tenantWithRelation!!.status}"
                             )
                         }
 
-                        Spacer(Modifier.height(8.dp))
+                        if(hasOwnerAuth) {
+                            OutlinedTextField(
+                                value = if (rentText == "0.0") "" else rentText,
+                                onValueChange = { value ->
+                                    val raw = value.replace(",", "")
+                                    if (raw.isEmpty()) {
+                                        rentText = ""
+                                        rentDebt = 0.0
+                                    } else if (raw.matches(Regex("^\\d*$"))) {
+                                        rentText = formatWithComma(raw)
+                                        rentDebt = raw.toDouble()
+                                    }
+                                },
+                                singleLine = true,
+                                label = {
+                                    Text(
+                                        context.getString(R.string.rent),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
 
-                        StatusDropdown(
-                            selectedStatus = selectedStatus,
-                            onStatusSelected = {
-                                selectedStatus = it
-                                tenantWithRelation = tenantWithRelation!!.copy(status = it)
-                            }
-                        )
+                            Spacer(Modifier.height(8.dp))
 
-                        Spacer(Modifier.height(8.dp))
+                            val amountVal = rentDebt.toLong()
+                            val amountInWords =
+                                NumberCommaTransformation().numberToWords(context, amountVal)
+                            Text(
+                                text = "$amountInWords ${context.getString(R.string.toman)}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
 
-                        OutlinedTextField(
-                            value = if (rentText == "0.0") "" else rentText,
-                            onValueChange = { value ->
-                                val raw = value.replace(",", "")
-                                if (raw.isEmpty()) {
-                                    rentText = ""
-                                    rentDebt = 0.0
-                                } else if (raw.matches(Regex("^\\d*$"))) {
-                                    rentText = formatWithComma(raw)
-                                     rentDebt = raw.toDouble()
-                                }
-                            },
-                            singleLine = true,
-                            label = {
-                                Text(
-                                    context.getString(R.string.rent),
-                                    style = MaterialTheme.typography.bodyLarge
+                            Spacer(Modifier.height(8.dp))
+
+
+                            OutlinedTextField(
+                                value = if (mortgageText == "0.0") "" else mortgageText,
+                                onValueChange = { value ->
+                                    val raw = value.replace(",", "")
+                                    if (raw.isEmpty()) {
+                                        mortgageText = ""
+                                        mortgageDebt = 0.0
+                                    } else if (raw.matches(Regex("^\\d*$"))) {
+                                        mortgageText = formatWithComma(raw)
+                                        mortgageDebt = raw.toDouble()
+                                    }
+                                },
+                                singleLine = true,
+                                label = {
+                                    Text(
+                                        context.getString(R.string.mortgage),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+
+                            val amountMortgageVal = mortgageDebt.toLong()
+                            val amountMortgageInWords =
+                                NumberCommaTransformation().numberToWords(
+                                    context,
+                                    amountMortgageVal
                                 )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        val amountVal = rentDebt.toLong()
-                        val amountInWords =
-                            NumberCommaTransformation().numberToWords(context, amountVal)
-                        Text(
-                            text = "$amountInWords ${context.getString(R.string.toman)}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-
-                        OutlinedTextField(
-                            value = if (mortgageText == "0.0") "" else mortgageText,
-                            onValueChange = { value ->
-                                val raw = value.replace(",", "")
-                                if (raw.isEmpty()) {
-                                    mortgageText = ""
-                                    mortgageDebt = 0.0
-                                } else if (raw.matches(Regex("^\\d*$"))) {
-                                    mortgageText = formatWithComma(raw)
-                                    mortgageDebt = raw.toDouble()
-                                    Log.d("mortgageDebt", mortgageDebt.toString())
-                                }
-                            },
-                            singleLine = true,
-                            label = {
-                                Text(
-                                    context.getString(R.string.mortgage),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        val amountMortgageVal = mortgageDebt.toLong()
-                        val amountMortgageInWords =
-                            NumberCommaTransformation().numberToWords(context, amountMortgageVal)
-                        Text(
-                            text = "$amountMortgageInWords ${context.getString(R.string.toman)}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                            Text(
+                                text = "$amountMortgageInWords ${context.getString(R.string.toman)}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                     }
 
                     item {
@@ -615,6 +775,8 @@ fun TenantOverviewTab(
                                                 mortgageDebt = mortgageDebt,
                                                 onSuccess = {
                                                     isEditing = false
+                                                    hasChanges = true
+                                                    onChanged(true)
                                                     coroutineScope.launch {
                                                         snackBarHostState.showSnackbar(
                                                             context.getString(R.string.success_update)
@@ -656,7 +818,7 @@ fun TenantOverviewTab(
                                 enabled = isInsertEnabled
                             ) {
                                 Text(
-                                    context.getString(R.string.insert),
+                                    context.getString(R.string.edit),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -688,28 +850,30 @@ fun TenantOverviewTab(
                             Icons.Default.Info,
                             "${context.getString(R.string.status)}: ${tenantWithRelation!!.status}"
                         )
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(
-                            Icons.Default.AttachMoney,
-                            "${context.getString(R.string.rent)}: ${
-                                formatNumberWithCommas(rentDebt)
-                            } ${context.getString(R.string.toman)}"
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OwnerInfoRow(
-                            Icons.Default.AccountBalanceWallet,
-                            "${context.getString(R.string.mortgage)}: ${
-                                formatNumberWithCommas(
-                                    mortgageDebt
-                                )
-                            } ${context.getString(R.string.toman)}"
-                        )
+                        if(hasOwnerAuth) {
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.AttachMoney,
+                                "${context.getString(R.string.rent)}: ${
+                                    formatNumberWithCommas(rentDebt)
+                                } ${context.getString(R.string.toman)}"
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OwnerInfoRow(
+                                Icons.Default.AccountBalanceWallet,
+                                "${context.getString(R.string.mortgage)}: ${
+                                    formatNumberWithCommas(
+                                        mortgageDebt
+                                    )
+                                } ${context.getString(R.string.toman)}"
+                            )
+                        }
                     }
                 }
             }
         }
 
-        if (!isEditing) {
+        if (!isEditing && (currentRoleId != 7L && currentRoleId != 9L && currentRoleId != 10L )) {
             FloatingActionButton(
                 onClick = {
 //                    if (hasPaidAny) {
@@ -787,10 +951,10 @@ fun TenantFinancialsTab(
         isLoading = true
         errorMessage = null
 
-        Cost().fetchCostsWithDebts(
-            context = context,
+        Cost(context).fetchCostsWithDebts(
             ownerId = null,
             unitId = unitId,
+            buildingId = buildingId,
             onSuccess = { costs, debts ->
                 val start = tenant.startDate.padStartDate()
                 val end   = tenant.endDate.padStartDate()
@@ -803,14 +967,13 @@ fun TenantFinancialsTab(
                         .filter { it.ownerId == null || it.ownerId == 0L }
                         .filter { d ->
                             val due = d.dueDate.padStartDate()
-                            Log.d("due", due)
                             due >= start && due <= end
                         }
 
                 isLoading = false
             },
             onError = { e ->
-                errorMessage = e.message ?: "خطا در دریافت اطلاعات"
+                errorMessage = e.message ?: context.getString(R.string.failed)
                 isLoading = false
                 coroutineScope.launch {
                     snackBarHostState.showSnackbar(errorMessage ?: "")
@@ -894,7 +1057,10 @@ fun TenantFinancialsTab(
                         color = if (filterType == type)
                             Color(context.getColor(R.color.white))
                         else
-                            Color(context.getColor(R.color.grey)),
+                            if(sharedViewModel.isDarkModeEnabled)
+                                Color(context.getColor(R.color.white))
+                            else
+                                Color(context.getColor(R.color.grey)),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }

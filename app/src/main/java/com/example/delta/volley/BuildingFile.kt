@@ -10,7 +10,7 @@ import com.example.delta.data.entity.UploadedFileEntity
 import org.json.JSONObject
 
 class BuildingFile(
-    private val baseUrl: String = "http://217.144.107.231:3000/file"
+    private val baseUrl: String = "http://185.129.197.6:443/file"
 ) {
 
     private fun formatVolleyError(tag: String, error: com.android.volley.VolleyError): Exception {

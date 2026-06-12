@@ -27,7 +27,7 @@ data class NotificationWithCrossRef(
 
 class Notification {
 
-    private val baseUrl = "http://217.144.107.231:3000/notification"
+    private val baseUrl = "http://185.129.197.6:443/notification"
 
     suspend fun createNotificationSuspend(
         context: Context,
@@ -96,6 +96,7 @@ class Notification {
                 body,
                 {
                     cont.resume(Unit)
+                    Log.d("response", it.toString())
                 },
                 { error ->
                     cont.resumeWithException(error)
@@ -130,18 +131,23 @@ class Notification {
                         }.getOrElse { NotificationType.MANAGER }
 
                         val notificationId = o.optLong("notificationId")
-                        val createdByUserId =
-                            if (o.isNull("createdByUserId")) null else o.optLong("createdByUserId")
+
+                        var firstName = o.optJSONObject("senderName")?.optString("firstName", "") ?: ""
+                        var lastName = o.optJSONObject("senderName")?.optString("lastName", "") ?: ""
+                        val senderName = firstName + lastName
+
                         val ts = o.optLong("timestamp")
                         val isRead = o.optBoolean("isRead", false)
+                        val buildingName = o.optString("buildingName", "")
 
                         val notification = Notification(
                             notificationId = notificationId,
                             title = o.optString("title"),
                             message = o.optString("message"),
                             type = typeEnum,
-                            userId = createdByUserId,
-                            timestamp = ts
+                            senderName = senderName,
+                            timestamp = ts,
+                            buildingName = buildingName
                         )
 
                         val crossRef = UsersNotificationCrossRef(

@@ -79,7 +79,7 @@ data class DashboardPrintDataResponse(
 
 class Reports {
 
-    private val baseUrl = "http://217.144.107.231:3000/reports"
+    private val baseUrl = "http://185.129.197.6:443/reports"
 
     private fun formatVolleyError(
         tag: String,
@@ -154,7 +154,6 @@ class Reports {
             null,
             { resp ->
                 try {
-                    Log.d("resp", resp.toString())
                     val ok = resp.optBoolean("ok", false)
                     val bId = resp.optLong("buildingId", 0L)
                     val s = resp.optString("startDate", "")
@@ -203,7 +202,6 @@ class Reports {
             { resp ->
                 try {
                     val result = parseDashboardResponse(resp)
-                    Log.d("dashBoardResult", result.toString())
                     onSuccess(result)
                 } catch (e: Exception) {
                     onError(e)

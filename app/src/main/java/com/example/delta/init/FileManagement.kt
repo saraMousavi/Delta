@@ -3,6 +3,7 @@ package com.example.delta.init
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.delta.HomePageActivity
@@ -45,7 +46,7 @@ class FileManagement {
             workbook.close()
 
             CoroutineScope(Dispatchers.IO).launch {
-                Building().sendBulk(context = context , payload,
+                Building(context).sendBulk(payload,
                     onSuccess = {
                         activity.runOnUiThread {
                             val intent = Intent(activity, HomePageActivity::class.java)
@@ -55,7 +56,11 @@ class FileManagement {
                     },
                     onError = {
                         activity.runOnUiThread {
-                            Toast.makeText(activity, it.message, Toast.LENGTH_LONG).show()
+//                            Toast.makeText(activity, it.message, Toast.LENGTH_LONG).show()
+                            Log.e("Insert(Excel)Error", it.message.toString())
+                            val intent = Intent(activity, HomePageActivity::class.java)
+                            activity.startActivity(intent)
+                            activity.finish()
                         }
                     }
                 )
@@ -71,8 +76,8 @@ class FileManagement {
     private fun readBuildingsFromSheet(
         sheet: org.apache.poi.ss.usermodel.Sheet,
         context: Context
-    ): List<Buildings> {
-        val list = mutableListOf<Buildings>()
+    ): List<ExcelBuilding> {
+        val list = mutableListOf<ExcelBuilding>()
         val userId = Preference().getUserId(context)
         for (row in sheet) {
             if (row.rowNum == 0) continue
@@ -86,25 +91,31 @@ class FileManagement {
             val floorCount = getCellStringValue(row.getCell(5))
             val unitCount = getCellStringValue(row.getCell(6))
             val parkingCount = getCellStringValue(row.getCell(7))
+            val serialNumber = getCellStringValue(row.getCell(8))
+            val province = getCellStringValue(row.getCell(9))
+            val state = getCellStringValue(row.getCell(10))
+            val buildingTypeName = getCellStringValue(row.getCell(11))
+            val buildingUsageName = getCellStringValue(row.getCell(12))
 
-            val building = Buildings(
-                buildingId = 0,
+            val building = ExcelBuilding(
                 name = name,
-                serialNumber = "",
+                serialNumber = serialNumber,
                 postCode = postCode,
                 street = street,
-                province = "Tehran",
-                state = "Central",
-                buildingTypeId = 1,
+                province = province,
+                state = state,
+                buildingTypeId = 2,
                 buildingUsageId = 1,
                 fund = 0.0,
                 userId = userId,
-                floorCount = floorCount.toInt(),
-                unitCount = unitCount.toInt(),
-                parkingCount = parkingCount.toInt(),
+                floorCount = floorCount,
+                unitCount = unitCount,
+                parkingCount = parkingCount,
                 phone = phone,
-                mobileNumber = mobileNumber
-
+                mobileNumber = mobileNumber,
+                buildingTypeName = buildingTypeName,
+                buildingUsageName = buildingUsageName,
+                creatorMobile = Preference().getUserMobile(context).toString()
             )
             list.add(building)
         }
@@ -123,13 +134,14 @@ class FileManagement {
             val warehouse = getCellStringValue(row.getCell(4))
             val buildingName = getCellStringValue(row.getCell(5))
             val postCode = getCellStringValue(row.getCell(6))
+            val floorNumber = getCellStringValue(row.getCell(7))
 
             list.add(
                 Units(
                     unitId = 0,
                     buildingId = null,
                     unitNumber = unitNumber,
-                    floorNumber = 0,
+                    floorNumber = floorNumber,
                     area = area,
                     postCode = postCode,
                     numberOfRooms = rooms,
@@ -160,8 +172,8 @@ class FileManagement {
                     excelUnitsNumber = getCellStringValue(row.getCell(6)),
                     excelBuildingName = getCellStringValue(row.getCell(7)),
                     excelIsManager = getCellStringValue(row.getCell(8)).toBoolean(),
-                    excelDang = getCellStringValue(row.getCell(9)).toDoubleOrNull() ?: 0.0,
-                    excelIsResident = getCellStringValue(row.getCell(10)).toBoolean(),
+//                    excelDang = getCellStringValue(row.getCell(9)).toDoubleOrNull() ?: 0.0,
+                    excelIsResident = false,//getCellStringValue(row.getCell(9)).toBoolean(),
                 )
             )
         }

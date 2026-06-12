@@ -9,21 +9,17 @@ import com.example.delta.enums.NotificationType
 
 
 @Entity(
-    tableName = "notification",
-    foreignKeys = [ForeignKey(
-        entity = User::class,
-        parentColumns = ["userId"],
-        childColumns = ["userId"],
-        onDelete = ForeignKey.CASCADE
-    )],
-    indices = [Index(value = ["userId"])]
+    tableName = "notification"
 )
 data class Notification(
     @PrimaryKey(autoGenerate = true) var notificationId: Long = 0,
     @ColumnInfo(name = "title") val title: String,
+    @ColumnInfo(name = "building_name") val buildingName: String? = "",
+    @ColumnInfo(name = "userId") val userId: Long? = 0L,
     @ColumnInfo(name = "message") val message: String,
     @ColumnInfo(name = "type") val type: NotificationType,
-    @ColumnInfo(name = "userId") val userId: Long?,
+    @ColumnInfo(name = "sender_name") val senderName: String? = "",
+    @ColumnInfo(name = "buildingId") val buildingId: Long? = 0L,
     @ColumnInfo(name = "timestamp") val timestamp: Long
 )
 

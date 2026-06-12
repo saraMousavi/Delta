@@ -18,7 +18,7 @@ import kotlin.coroutines.resumeWithException
 
 class Chats {
 
-    private val baseUrl = "http://217.144.107.231:3000/chat"
+    private val baseUrl = "http://185.129.197.6:443/chat"
 
     fun fetchManagersForUser(
         context: Context,
@@ -175,7 +175,6 @@ class Chats {
                             unreadCount = o.optInt("unreadCount", 0)
                         )
                     }
-                    Log.d("messageList", list.toString())
                     onSuccess(list)
                 } catch (e: Exception) {
                     onError(e)

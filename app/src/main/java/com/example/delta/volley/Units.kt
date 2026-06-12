@@ -10,7 +10,7 @@ import com.example.delta.data.entity.Units
 import org.json.JSONObject
 
 class Units {
-    private val baseUrl = "http://217.144.107.231:3000/units"
+    private val baseUrl = "http://185.129.197.6:443/units"
 
     fun fetchUnitsForBuilding(
         context: Context,
@@ -40,7 +40,9 @@ class Units {
                                 "" else obj.optString("numberOfWarehouse", "0"),
                             numberOfParking = if(obj.optString("numberOfParking", "0") == "null" || obj.optString("numberOfParking", "0") == null)
                                 "" else obj.optString("numberOfParking", "0"),
-                            postCode = obj.optString("postCode", "")
+                            postCode = obj.optString("postCode", ""),
+                            buildingId = obj.optLong("buildingId", 0L),
+                            floorNumber = obj.optString("floorNumber", ""),
                         )
                         list += item
                     }
@@ -64,7 +66,6 @@ class Units {
     ) {
         val queue = Volley.newRequestQueue(context)
         val url = "$baseUrl/with-owner?buildingId=$buildingId"
-        Log.d("buildingId", buildingId.toString())
         val request = JsonArrayRequest(
             Request.Method.GET,
             url,
@@ -83,7 +84,6 @@ class Units {
                             numberOfParking = obj.optString("numberOfParking", "0"),
                             postCode = obj.optString("postCode", "")
                         )
-                        Log.d("item", item.toString())
                         list += item
                     }
                     onSuccess(list)
@@ -135,7 +135,7 @@ class Units {
                         numberOfWarehouse = obj.optString("numberOfWarehouse", "0"),
                         numberOfParking = obj.optString("numberOfParking", "0"),
                         postCode = obj.optString("postCode"),
-                        floorNumber = obj.optInt("floorNumber")
+                        floorNumber = obj.optString("floorNumber")
                     )
                     onSuccess(created)
                 } catch (e: Exception) {
@@ -148,6 +148,43 @@ class Units {
         )
         queue.add(request)
     }
+
+    fun deleteUnit(
+        context: Context,
+        unit: Units,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val queue = Volley.newRequestQueue(context)
+        val url = "$baseUrl/${unit.unitId}"
+
+        val request = JsonObjectRequest(
+            Request.Method.DELETE,
+            url,
+            null,
+            { _ -> onSuccess() },
+            { error ->
+                val body = try {
+                    val data = error.networkResponse?.data
+                    if (data != null) String(data, Charsets.UTF_8) else null
+                } catch (_: Exception) {
+                    null
+                }
+
+                val serverMessage = try {
+                    if (body.isNullOrBlank()) null
+                    else JSONObject(body).optString("message").takeIf { it.isNotBlank() }
+                } catch (_: Exception) {
+                    null
+                }
+
+                onError(serverMessage ?: "unknown")
+            }
+        )
+
+        queue.add(request)
+    }
+
 
     fun updateUnit(
         context: Context,
@@ -187,7 +224,7 @@ class Units {
                         numberOfWarehouse = obj.optString("numberOfWarehouse", "0"),
                         numberOfParking = obj.optString("numberOfParking", "0"),
                         postCode = obj.optString("postCode"),
-                        floorNumber = obj.optInt("floorNumber")
+                        floorNumber = obj.optString("floorNumber")
                     )
                     onSuccess(updated)
                 } catch (e: Exception) {

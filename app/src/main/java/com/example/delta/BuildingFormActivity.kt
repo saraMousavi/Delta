@@ -2,29 +2,31 @@ package com.example.delta
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
+import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -102,7 +104,6 @@ import com.example.delta.data.entity.TenantsUnitsCrossRef
 import com.example.delta.data.entity.Units
 import com.example.delta.data.entity.User
 import com.example.delta.data.entity.UserRoleBuildingUnitCrossRef
-import com.example.delta.enums.BuildingProfileFields
 import com.example.delta.enums.CalculateMethod
 import com.example.delta.enums.FundType
 import com.example.delta.enums.Gender
@@ -111,31 +112,44 @@ import com.example.delta.enums.Period
 import com.example.delta.enums.Responsible
 import com.example.delta.enums.Roles
 import com.example.delta.factory.SharedViewModelFactory
-import com.example.delta.init.FloorFormatter
 import com.example.delta.init.Preference
 import com.example.delta.init.Validation
 import com.example.delta.viewmodel.SharedViewModel
 import com.example.delta.viewmodel.UnitsViewModel
 import com.example.delta.volley.Cost
 import com.example.delta.volley.Owner
-import com.example.delta.volley.Owner.OwnerWithUnitsDto
 import com.example.delta.volley.Users
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.round
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import com.example.delta.enums.PermissionLevel
-import com.example.delta.init.AuthUtils
 import com.example.delta.init.AuthUtils.AuthUtils.permissionFor
 import com.example.delta.init.AuthUtils.AuthorizationFieldsBuildingProfile
 import com.example.delta.init.AuthUtils.AuthorizationObjects
+import com.example.delta.server.JsonParser.OwnerWithUnitsDto
+import com.example.delta.volley.Building
 import com.example.delta.volley.BuildingType
 import com.example.delta.volley.BuildingUsage
 import com.example.delta.volley.CityComplex
+import ir.hamsaa.persiandatepicker.util.PersianCalendar
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.time.delay
 
 
 class BuildingFormActivity : ComponentActivity() {
@@ -149,6 +163,24 @@ class BuildingFormActivity : ComponentActivity() {
 
         sharedViewModel.resetState()
 
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+
+                    Building(this@BuildingFormActivity)
+                        .clearTempBuildingTypesAndUsages(
+                            context = this@BuildingFormActivity,
+                            onSuccess = { _, _ ->
+                                finish()
+                            },
+                            onError = {
+                                finish()
+                            }
+                        )
+                }
+            }
+        )
         setContent {
             AppTheme(useDarkTheme = sharedViewModel.isDarkModeEnabled) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -191,7 +223,6 @@ class BuildingFormActivity : ComponentActivity() {
         super.onResume()
         Log.d("onResume", true.toString())
     }
-}
 @Composable
 fun BuildingFormScreen(
     unitsViewModel: UnitsViewModel,
@@ -259,19 +290,867 @@ fun BuildingFormScreen(
         }
     }
 }
+
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun BuildingInfoPage(
+        sharedViewModel: SharedViewModel,
+        unitsViewModel: UnitsViewModel,
+        buildingTypes: List<BuildingTypes>,
+        buildingUsages: List<BuildingUsages>,
+        cityComplexes: List<CityComplexes>,
+        onSave: () -> Unit
+    ) {
+        var showIntro by rememberSaveable { mutableStateOf(true) }
+        var showBuildingTypeDialog by remember { mutableStateOf(false) }
+        var showBuildingUsageDialog by remember { mutableStateOf(false) }
+        var showAddCityComplexDialog by remember { mutableStateOf(false) }
+        var showSameAreaUnitDialog by remember { mutableStateOf(false) }
+
+        var showDeleteBuildingUsageDialog by remember{mutableStateOf(false)}
+        var showDeleteBuildingTypeDialog by remember{mutableStateOf(false)}
+
+        var deletedBuildingUsage by remember{mutableStateOf<BuildingUsages?>(null)}
+        var deletedBuildingType by remember{mutableStateOf<BuildingTypes?>(null)}
+
+        val context = LocalContext.current
+        val validation = remember { Validation() }
+        val isValid = validation.isBuildingInfoValid(sharedViewModel)
+        val lifecycleOwner = LocalLifecycleOwner.current
+        val scope = rememberCoroutineScope()
+        val listState = rememberLazyListState()
+        val scrollState = rememberScrollState()
+
+        var phoneError by remember { mutableStateOf(false) }
+        var mobileError by remember { mutableStateOf(false) }
+        fun scrollToBottom() {
+            scope.launch {
+                val lastIndex = listState.layoutInfo.totalItemsCount - 1
+                if (lastIndex >= 0) {
+                    listState.animateScrollToItem(lastIndex)
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxSize()
+                .background(color = if(sharedViewModel.isDarkModeEnabled) Color(0xFF121212) else Color.White)
+                .imePadding()
+                .verticalScroll(scrollState)
+        ) {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = context.getString(R.string.buildings_info),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        Building(this@BuildingFormActivity)
+                            .clearTempBuildingTypesAndUsages(
+                                context = this@BuildingFormActivity,
+                                onSuccess = { _, _ ->
+                                    finish()
+                                },
+                                onError = {
+                                    finish()
+                                }
+                            )
+                        context.startActivity(Intent(context, HomePageActivity::class.java))
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = context.getString(R.string.back)
+                        )
+                    }
+                }
+            )
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(color = if(sharedViewModel.isDarkModeEnabled) Color(0xFF121212) else SurfaceGray)
+                    .padding(8.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = sharedViewModel.name,
+                        onValueChange = {
+                            sharedViewModel.name = it
+                        },
+                        label = { RequiredLabel(context.getString(R.string.building_name)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item {
+                    OutlinedTextField(
+                        value = sharedViewModel.phone,
+                        onValueChange = {
+                            sharedViewModel.phone = it
+                            phoneError = !validation.isValidPhone(it)
+                        },
+                        label = { RequiredLabel(context.getString(R.string.phone_number)) },
+                        isError = phoneError,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (phoneError) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = context.getString(R.string.invalid_phone_number),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+                }
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item {
+                    OutlinedTextField(
+                        value = sharedViewModel.mobileNumber,
+                        onValueChange = {
+                            sharedViewModel.mobileNumber = it
+                            mobileError = !validation.isValidIranMobile(it)
+                        },
+                        label = { RequiredLabel(context.getString(R.string.mobile_number)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = mobileError,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+                item {
+                    if (mobileError) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = context.getString(R.string.invalid_mobile_number),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+                }
+                item {
+                    val serialError =
+                        sharedViewModel.serialNumber.isNotBlank() &&
+                                !validation.isValidDeedSerial(sharedViewModel.serialNumber)
+
+                    Column {
+                        OutlinedTextField(
+                            value = sharedViewModel.serialNumber,
+                            onValueChange = {
+                                sharedViewModel.serialNumber = it
+                            },
+                            label = { Text(context.getString(R.string.building_serial_number)) },
+//                        isError = serialError,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyLarge
+                        )
+//                    if (serialError) {
+//                        Spacer(modifier = Modifier.height(4.dp))
+//                        Text(
+//                            text = context.getString(R.string.invalid_serial_number),
+//                            color = MaterialTheme.colorScheme.error,
+//                            style = MaterialTheme.typography.bodyMedium
+//                        )
+//                    }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = sharedViewModel.floorCount,
+                            onValueChange = { input ->
+                                if (input.isEmpty() || input.all { it.isDigit() }) {
+                                    sharedViewModel.floorCount = input
+                                }
+                            },
+                            label = { RequiredLabel(context.getString(R.string.floor_count)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        OutlinedTextField(
+                            value = sharedViewModel.unitCount,
+                            onValueChange = { input ->
+                                if (input.isEmpty() || input.all { it.isDigit() }) {
+                                    sharedViewModel.unitCount = input
+                                }
+                            },
+                            label = { RequiredLabel(context.getString(R.string.unit_ount)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            ExposedDropdownMenuBoxExample(
+                                sharedViewModel = sharedViewModel,
+                                items = buildingTypes + BuildingTypes(
+                                    0,
+                                    context.getString(R.string.addNew)
+                                ),
+                                selectedItem = sharedViewModel.selectedBuildingTypes,
+                                onItemSelected = {
+                                    if (it.buildingTypeName == context.getString(R.string.addNew)) {
+                                        showBuildingTypeDialog = true
+                                    } else {
+                                        sharedViewModel.selectedBuildingTypes = it
+                                    }
+                                },
+                                label = context.getString(R.string.building_type),
+                                modifier = Modifier.fillMaxWidth(),
+                                itemLabel = { it.buildingTypeName },
+                                showDeleteFor = { type ->
+                                    val c =
+                                        buildingTypes.firstOrNull { it.buildingTypeName == type.buildingTypeName }
+                                    val bId = c?.forBuildingId ?: 0L
+                                    val tempBuildingType = c?.addedBeforeCreateBuilding
+                                    bId != 0L || tempBuildingType == true
+                                },
+                                onDeleteRequest = { type ->
+                                    showDeleteBuildingTypeDialog = true
+                                    deletedBuildingType = type
+                                }
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            ExposedDropdownMenuBoxExample(
+                                sharedViewModel = sharedViewModel,
+                                items = buildingUsages + BuildingUsages(
+                                    0,
+                                    context.getString(R.string.addNew)
+                                ),
+                                selectedItem = sharedViewModel.selectedBuildingUsages,
+                                onItemSelected = {
+                                    if (it.buildingUsageName == context.getString(R.string.addNew)) {
+                                        showBuildingUsageDialog = true
+                                    } else {
+                                        sharedViewModel.selectedBuildingUsages = it
+                                    }
+                                },
+                                label = context.getString(R.string.building_usage),
+                                modifier = Modifier.fillMaxWidth(),
+                                itemLabel = { it.buildingUsageName },
+                                showDeleteFor = { usage ->
+                                    val c =
+                                        buildingUsages.firstOrNull { it.buildingUsageName == usage.buildingUsageName }
+                                    val bId = c?.forBuildingId ?: 0L
+                                    val tempBuildingUsage = c?.addedBeforeCreateBuilding
+                                    bId != 0L || tempBuildingUsage == true
+                                },
+                                onDeleteRequest = { usage ->
+                                    showDeleteBuildingUsageDialog = true
+                                    deletedBuildingUsage = usage
+                                }
+                            )
+                        }
+                    }
+                }
+
+
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                item {
+                    ProvinceStateSelector(sharedViewModel = sharedViewModel)
+                }
+
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                item {
+                    OutlinedTextField(
+                        value = sharedViewModel.street,
+                        onValueChange = {
+                            sharedViewModel.street = it
+//                        scrollToBottom()
+                        },
+                        label = { RequiredLabel(context.getString(R.string.street)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                item {
+                    val postCodeError =
+                        sharedViewModel.postCode.isNotBlank() &&
+                                !Validation().isValidPostalCode(sharedViewModel.postCode)
+
+                    Column {
+                        OutlinedTextField(
+                            value = sharedViewModel.postCode,
+                            onValueChange = {
+                                sharedViewModel.postCode = it
+//                            scrollToBottom()
+                            },
+                            label = { RequiredLabel(context.getString(R.string.post_code)) },
+                            isError = postCodeError,
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        if (postCodeError) {
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = context.getString(R.string.invalid_post_code),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                // here we switch between checkbox and "registered" text
+                item {
+                    if (sharedViewModel.unitsAdded) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = context.getString(R.string.units_registered_for_building),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = sharedViewModel.sameArea,
+                                onCheckedChange = { checked ->
+                                    sharedViewModel.sameArea = checked
+                                    if (checked) {
+                                        if(sharedViewModel.unitCount == ""){
+                                            sharedViewModel.sameArea = false
+                                            Toast.makeText(context, context.getString(R.string.first_insert_unitcount),
+                                                Toast.LENGTH_LONG).show()
+                                        }
+                                        sharedViewModel.unitCount.toIntOrNull()?.let {
+                                            if(it > 0){
+                                                showSameAreaUnitDialog = true
+                                            } else {
+                                                sharedViewModel.sameArea = false
+                                                Toast.makeText(context, context.getString(R.string.first_insert_unitcount),
+                                                    Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+
+                                    } else {
+                                        sharedViewModel.numberOfUnits = ""
+                                        sharedViewModel.unitArea = ""
+                                        sharedViewModel.unitsAdded = false
+                                    }
+                                    scrollToBottom()
+                                }
+                            )
+                            Text(
+                                text = context.getString(R.string.all_units_same_area),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if(sharedViewModel.isDarkModeEnabled) DarkColorScheme.onSurface else LightColorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item {
+                    ChargesChipGroup(sharedViewModel)
+                }
+
+                item {
+                    UploadFile(
+                        sharedViewModel = sharedViewModel,
+                        context = context,
+                        isEditing = true
+                    ) { uploaded ->
+                        sharedViewModel.addFileList(uploaded)
+                    }
+
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = { onSave() },
+                    enabled = isValid
+                ) {
+                    Text(
+                        context.getString(R.string.insert),
+                        modifier = Modifier.padding(2.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+
+
+            if(showDeleteBuildingTypeDialog){
+                AlertDialog(
+                    onDismissRequest = { showDeleteBuildingTypeDialog = false },
+                    title = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.delete_buildingtype),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.are_you_sure),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteBuildingTypeDialog = false
+                                BuildingType().deleteBuildingType(
+                                    context,
+                                    deletedBuildingType!!.buildingTypeId,
+                                    onSuccess = {
+                                        sharedViewModel.selectedBuildingTypes = null
+                                        sharedViewModel.updateBuildingType(buildingTypes - deletedBuildingType!!)
+                                    },
+                                    onError = {}
+                                )
+                            }
+                        ) {
+                            Text(
+                                LocalContext.current.getString(R.string.delete),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showDeleteBuildingTypeDialog = false }
+                        ) {
+                            Text(
+                                text = LocalContext.current.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                )
+            }
+
+            if(showDeleteBuildingUsageDialog){
+                AlertDialog(
+                    onDismissRequest = { showDeleteBuildingUsageDialog = false },
+                    title = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.delete_buildingusage),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = LocalContext.current.getString(R.string.are_you_sure),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteBuildingUsageDialog = false
+                                BuildingUsage().deleteBuildingUsage(
+                                    context,
+                                    deletedBuildingUsage!!.buildingUsageId,
+                                    onSuccess = {
+                                        sharedViewModel.selectedBuildingUsages = null
+                                        sharedViewModel.updateBuildingUsage(buildingUsages - deletedBuildingUsage!!)
+                                    },
+                                    onError = {}
+                                )
+                            }
+                        ) {
+                            Text(
+                                LocalContext.current.getString(R.string.delete),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showDeleteBuildingUsageDialog = false }
+                        ) {
+                            Text(
+                                text = LocalContext.current.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                )
+            }
+
+            if (showAddCityComplexDialog) {
+                AddCityComplexDialog(
+                    onDismiss = { showAddCityComplexDialog = false },
+                    onInsert = { newName, newAddress ->
+                        val newCityComplex = CityComplexes(
+                            name = newName,
+                            address = newAddress,
+                            addedBeforeCreateBuilding = true
+                        )
+                        sharedViewModel.insertCityComplexRemote(
+                            context = context,
+                            cityComplexes = newCityComplex
+                        ) { created ->
+                            if (created != null) {
+                                sharedViewModel.selectedCityComplexes = created
+                            }
+                            showAddCityComplexDialog = false
+                        }
+                    }
+                )
+            }
+
+            if (showBuildingTypeDialog) {
+                AddItemDialog(
+                    sharedViewModel = sharedViewModel,
+                    onDismiss = { showBuildingTypeDialog = false },
+                    onInsert = { newItem ->
+                        var newBuildingType = BuildingTypes(
+                            buildingTypeName = newItem,
+                            addedBeforeCreateBuilding = true
+                        )
+                        if(buildingTypes.any{ it.buildingTypeName == newBuildingType.buildingTypeName}){
+                            Toast.makeText(context, context.getString(R.string.repeated_item), Toast.LENGTH_LONG).show()
+                        } else {
+                            sharedViewModel.insertBuildingTypeRemote(
+                                context = context,
+                                buildingTypes = newBuildingType
+                            ) { created ->
+                                if (created != null) {
+                                    sharedViewModel.selectedBuildingTypes = created
+                                }
+                                showBuildingTypeDialog = false
+                            }
+                        }
+
+                    }
+                )
+            }
+
+            if (showBuildingUsageDialog) {
+                AddItemDialog(
+                    sharedViewModel = sharedViewModel,
+                    onDismiss = { showBuildingUsageDialog = false },
+                    onInsert = { name ->
+                        var newBuildingUsage = BuildingUsages(
+                            buildingUsageName = name,
+                            addedBeforeCreateBuilding = true
+                        )
+                        if(buildingUsages.any{it.buildingUsageName == newBuildingUsage.buildingUsageName}){
+                            Toast.makeText(context, context.getString(R.string.repeated_item), Toast.LENGTH_LONG).show()
+                        } else {
+                            sharedViewModel.insertBuildingUsageRemote(
+                                context = context,
+                                buildingUsages = newBuildingUsage
+                            ) { created ->
+                                if (created != null) {
+                                    sharedViewModel.selectedBuildingUsages = created
+                                }
+                                showBuildingUsageDialog = false
+                            }
+                        }
+                    }
+                )
+            }
+
+            if (showSameAreaUnitDialog) {
+                SameAreaUnitDialog(
+                    sharedViewModel = sharedViewModel,
+                    onDismiss = {
+                        showSameAreaUnitDialog = false
+                        if (!sharedViewModel.unitsAdded) {
+                            sharedViewModel.sameArea = false
+                        }
+                    },
+                    onAddUnits = { area, rooms, parking, warehouse ->
+                        lifecycleOwner.lifecycleScope.launch {
+                            var count = sharedViewModel.unitCount.toIntOrNull() ?: 0
+                            for (i in 1..count) {
+                                val newUnit = Units(
+                                    unitNumber = i.toString(),
+                                    area = area,
+                                    numberOfRooms = rooms,
+                                    numberOfParking = parking,
+                                    numberOfWarehouse = warehouse,
+                                    floorNumber = "",
+                                    postCode = ""
+                                )
+                                try {
+                                    val unitId = unitsViewModel.insertUnit(newUnit)
+                                    sharedViewModel.unitsList.add(newUnit.copy(unitId = unitId))
+                                } catch (e: Exception) {
+                                    Log.e("InsertUnitError", "Failed to insert unit: ${e.message}")
+                                }
+                            }
+                            sharedViewModel.numberOfUnits = count.toString()
+                            sharedViewModel.unitArea = area
+                            sharedViewModel.unitsAdded = true
+                        }
+                        showSameAreaUnitDialog = false
+                    }
+                )
+            }
+        }
+    }
+
+
+    @Composable
+    fun SameAreaUnitDialog(
+        sharedViewModel: SharedViewModel,
+        onDismiss: () -> Unit,
+        onAddUnits: (
+            area: String,
+            numberOfRooms: String,
+            numberOfParking: String,
+            numberOfWarehouse: String
+        ) -> Unit
+    ) {
+//        var unitCount by remember { mutableStateOf("") }
+        var area by remember { mutableStateOf("") }
+        var numberOfRooms by remember { mutableStateOf("") }
+        var numberOfParking by remember { mutableStateOf("") }
+        var numberOfWarehouse by remember { mutableStateOf("") }
+        var maxUnitCount by remember { mutableStateOf(false) }
+
+        val context = LocalContext.current
+        val validation = remember { Validation() }
+        val scrollState = rememberScrollState()
+        val configuration = LocalConfiguration.current
+        val maxHeight = configuration.screenHeightDp.dp * 0.9f
+        Dialog(
+            onDismissRequest = { },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false   // Allow the dialog to handle window insets (IME, status/nav bars)
+            )
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()  // Dialog takes full width of screen
+            ) {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())  // Make content scrollable
+                        .imePadding()                           // Apply padding for the on-screen keyboard
+                        .padding(16.dp)                         // Content padding inside dialog
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = context.getString(R.string.units_info),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+//                    OutlinedTextField(
+//                        value = unitCount,
+//                        onValueChange = { input ->
+//                            if (input.isEmpty() || input.all { it.isDigit() }) {
+//                                unitCount = input
+//                                val currentUnitCount = input.toIntOrNull() ?: 0
+//                                val savedUniCount = sharedViewModel.unitCount.toIntOrNull() ?: 0
+//                                maxUnitCount = currentUnitCount > savedUniCount
+//                            }
+//                        },
+//                        label = { RequiredLabel(context.getString(R.string.number_of_units)) },
+//                        isError = maxUnitCount,
+//                        textStyle = MaterialTheme.typography.bodyLarge,
+//                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+//                        modifier = Modifier.fillMaxWidth()
+//                    )
+//                    if(maxUnitCount){
+//                        Spacer(Modifier.height(8.dp))
+//                        Text(
+//                            text = context.getString(R.string.its_more_than_inserted_units),
+//                            color = MaterialTheme.colorScheme.error,
+//                            style = MaterialTheme.typography.bodyLarge,
+//                            textAlign = TextAlign.Center
+//                        )
+//                    }
+//
+//                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = area,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) {
+                                area = input
+                            }
+                        },
+                        label = { RequiredLabel(context.getString(R.string.area)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfRooms,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) {
+                                numberOfRooms = input
+                            }
+                        },
+                        label = { RequiredLabel(context.getString(R.string.number_of_rooms)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfParking,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) {
+                                numberOfParking = input
+                            }
+                        },
+                        label = { RequiredLabel(context.getString(R.string.number_of_parking_for_each_unit)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfWarehouse,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) {
+                                numberOfWarehouse = input
+                            }
+                        },
+                        label = { RequiredLabel(context.getString(R.string.number_of_warehouse_of_each_unit)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text(
+                                text = context.getString(R.string.cancel),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            enabled = !maxUnitCount,
+                            onClick = {
+                                if (area.isBlank() ||
+                                    numberOfRooms.isBlank() ||
+                                    numberOfParking.isBlank() ||
+                                    numberOfWarehouse.isBlank()
+                                ) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.fill_required_fields),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@Button
+                                }
+
+                                onAddUnits(
+                                    area,
+                                    numberOfRooms,
+                                    numberOfParking,
+                                    numberOfWarehouse
+                                )
+                            }
+                        ) {
+                            Text(
+                                text = context.getString(R.string.insert),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}
 @Composable
 fun ChargesChipGroup(
     sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val costApi = remember { Cost() }
+    val costApi = remember { Cost(context) }
 
     val costs by sharedViewModel.costsList.collectAsState()
     val addNewLabel = context.getString(R.string.addNew)
 
-    var selectedCostNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    val chipItems = costs.filter { it.chargeFlag == true } + Costs(
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deletedCost by remember { mutableStateOf<Costs?>(null) }
+
+    val chipItems = (costs.filter { it.chargeFlag == true } + Costs(
         costName = addNewLabel,
         chargeFlag = true,
         fundType = FundType.OPERATIONAL,
@@ -283,39 +1162,39 @@ fun ChargesChipGroup(
         tempAmount = 0.0,
         costFor = "",
         documentNumber = ""
-    )
+    ))
 
     var showChargeCostDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    val selectedCostNames = remember(costs) {
+        costs
+            .asSequence()
+            .filter { it.chargeFlag == true && it.tempAmount > 0.0 }
+            .map { it.costName }
+            .toList()
+    }
 
     ChipGroupShared(
         selectedItems = selectedCostNames,
         onSelectionChange = { newSelectionStrings ->
             if (newSelectionStrings.contains(addNewLabel)) {
                 showChargeCostDialog = true
-                selectedCostNames =
-                    newSelectionStrings.filter { it != addNewLabel }
-            } else {
-                val newlySelected = newSelectionStrings - selectedCostNames
-                val newlyDeselected = selectedCostNames - newSelectionStrings
-
-                selectedCostNames = newSelectionStrings
-
-                val updatedCosts: List<Costs> = costs.map { cost ->
-                    when {
-                        cost.costName in newlySelected ->
-                            cost.copy(tempAmount = 1.0)
-
-                        cost.costName in newlyDeselected ->
-                            cost.copy(tempAmount = 0.0)
-
-                        else -> cost
-                    }
-                }
-
-                // persist in ViewModel
-                sharedViewModel.updateCosts(updatedCosts)
+                return@ChipGroupShared
             }
+
+            val newlySelected = newSelectionStrings - selectedCostNames
+            val newlyDeselected = selectedCostNames - newSelectionStrings
+
+            val updatedCosts: List<Costs> = costs.map { cost ->
+                when {
+                    cost.costName in newlySelected -> cost.copy(tempAmount = 1.0)
+                    cost.costName in newlyDeselected -> cost.copy(tempAmount = 0.0)
+                    else -> cost
+                }
+            }
+
+            sharedViewModel.updateCosts(updatedCosts)
         },
         items = chipItems.map { it.costName },
         modifier = modifier,
@@ -329,19 +1208,62 @@ fun ChargesChipGroup(
         },
         onDeleteRequest = { costName ->
             val c = chipItems.firstOrNull { it.costName == costName }
-            Cost().deleteCost(context, c!!.costId, onSuccess = {
-                val updated = costs - c
-                sharedViewModel.updateCosts(updated)
-            },
-                onError = {})
+            deletedCost = c
+            showDeleteDialog = true
         }
     )
 
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = {
+                Text(
+                    text = LocalContext.current.getString(R.string.delete_cost),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            text = {
+                Text(
+                    text = LocalContext.current.getString(R.string.are_you_sure),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        val target = deletedCost ?: return@TextButton
+                        Cost(context).deleteCost(
+                            target.costId,
+                            onSuccess = {
+                                val updated = costs - target
+                                sharedViewModel.updateCosts(updated)
+                            },
+                            onError = {}
+                        )
+                    }
+                ) {
+                    Text(
+                        LocalContext.current.getString(R.string.delete),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(
+                        text = LocalContext.current.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        )
+    }
+
     if (showChargeCostDialog) {
         AddNewCostDialog(
-            onDismiss = {
-                showChargeCostDialog = false
-            },
+            fundType = FundType.OPERATIONAL,
+            onDismiss = { showChargeCostDialog = false },
             onConfirm = { newCostName ->
                 coroutineScope.launch {
                     val newCost = Costs(
@@ -359,16 +1281,25 @@ fun ChargesChipGroup(
                         addedBeforeCreateBuilding = true
                     )
 
+                    if (chipItems.any { it.costName == newCostName }) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.repeated_cost),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@launch
+                    }
+
                     costApi.createGlobalCost(
-                        context = context,
                         cost = newCost,
                         onSuccess = { created ->
-                            val updated = costs + created.copy(tempAmount = 1.0, addedBeforeCreateBuilding = true)
+                            val updated = costs + created.copy(
+                                tempAmount = 1.0,
+                                addedBeforeCreateBuilding = true
+                            )
                             sharedViewModel.updateCosts(updated)
-                            selectedCostNames = selectedCostNames + created.costName
                             showChargeCostDialog = false
-                        }
-                        ,
+                        },
                         onError = {
                             showChargeCostDialog = false
                         }
@@ -381,6 +1312,7 @@ fun ChargesChipGroup(
 
 @Composable
 fun AddNewCostDialog(
+    fundType: FundType,
     onDismiss: () -> Unit,
     onChargeConfirm: ((newCostNameList: List<String>) -> Unit)? = null,
     onConfirm: ((newCostName: String) -> Unit)? = null,
@@ -407,27 +1339,41 @@ fun AddNewCostDialog(
         },
         text = {
             LazyColumn {
-                if (costs.isNotEmpty()) {
-                    item {
-                        ChipGroupShared(
-                            selectedItems = selectedCostNames,
-                            onSelectionChange = { newSelected ->
-                                if (newSelected.contains(context.getString(R.string.addNew))) {
-                                    showInputField = true
-                                    selectedCostNames = newSelected.filter { it != context.getString(R.string.addNew) }
-                                } else {
-                                    selectedCostNames = newSelected
-                                }
-                            },
-                            items = chipItems,
-                            modifier = Modifier,
-                            label = context.getString(R.string.charges_parameter),
-                            singleSelection = false
-                        )
-                    }
-                    if (showInputField) {
+                if(fundType == FundType.OPERATIONAL) {
+                    if (costs.isNotEmpty()) {
                         item {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            ChipGroupShared(
+                                selectedItems = selectedCostNames,
+                                onSelectionChange = { newSelected ->
+                                    if (newSelected.contains(context.getString(R.string.addNew))) {
+                                        showInputField = true
+                                        selectedCostNames =
+                                            newSelected.filter { it != context.getString(R.string.addNew) }
+                                    } else {
+                                        selectedCostNames = newSelected
+                                    }
+                                },
+                                items = chipItems,
+                                modifier = Modifier,
+                                label = context.getString(R.string.charges_parameter),
+                                singleSelection = false
+                            )
+                        }
+                        if (showInputField) {
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = costName,
+                                    onValueChange = { costName = it },
+                                    label = { Text(context.getString(R.string.cost_name)) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    } else {
+                        showInputField = true
+                        item {
                             OutlinedTextField(
                                 value = costName,
                                 onValueChange = { costName = it },
@@ -438,6 +1384,7 @@ fun AddNewCostDialog(
                         }
                     }
                 } else {
+                    showInputField = true
                     item {
                         OutlinedTextField(
                             value = costName,
@@ -494,700 +1441,6 @@ fun AddNewCostDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BuildingInfoPage(
-    sharedViewModel: SharedViewModel,
-    unitsViewModel: UnitsViewModel,
-    buildingTypes: List<BuildingTypes>,
-    buildingUsages: List<BuildingUsages>,
-    cityComplexes: List<CityComplexes>,
-    onSave: () -> Unit
-) {
-    var showBuildingTypeDialog by remember { mutableStateOf(false) }
-    var showBuildingUsageDialog by remember { mutableStateOf(false) }
-    var showAddCityComplexDialog by remember { mutableStateOf(false) }
-    var showSameAreaUnitDialog by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    val validation = remember { Validation() }
-    val isValid = validation.isBuildingInfoValid(sharedViewModel)
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-    val scrollState = rememberScrollState()
-
-    var phoneError by remember { mutableStateOf(false) }
-    var mobileError by remember { mutableStateOf(false) }
-    fun scrollToBottom() {
-        scope.launch {
-            val lastIndex = listState.layoutInfo.totalItemsCount - 1
-            if (lastIndex >= 0) {
-                listState.animateScrollToItem(lastIndex)
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize()
-            .imePadding()
-            .verticalScroll(scrollState)
-    ) {
-        CenterAlignedTopAppBar(
-            title = {
-                Text(
-                    text = context.getString(R.string.buildings_info),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = {
-                    context.startActivity(Intent(context, HomePageActivity::class.java))
-                }) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = context.getString(R.string.back)
-                    )
-                }
-            }
-        )
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            item {
-                OutlinedTextField(
-                    value = sharedViewModel.name,
-                    onValueChange = {
-                        sharedViewModel.name = it
-                    },
-                    label = { RequiredLabel(context.getString(R.string.building_name)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-            item{
-                OutlinedTextField(
-                    value = sharedViewModel.phone,
-                    onValueChange = {
-                        sharedViewModel.phone = it
-                        phoneError = !validation.isValidPhone(it)
-                    },
-                    label = { RequiredLabel(context.getString(R.string.phone_number)) },
-                    isError = phoneError,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
-
-            item{
-                Spacer(modifier = Modifier.height(8.dp))
-                if (phoneError) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = context.getString(R.string.invalid_phone_number),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
-            }
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-            item{
-                OutlinedTextField(
-                    value = sharedViewModel.mobileNumber,
-                    onValueChange = {
-                        sharedViewModel.mobileNumber = it
-                        mobileError = !validation.isValidIranMobile(it)
-                    },
-                    label = { RequiredLabel(context.getString(R.string.mobile_number)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = mobileError,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
-            item{
-            if (mobileError) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = context.getString(R.string.invalid_mobile_number),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
-                }
-            item {
-                val serialError =
-                    sharedViewModel.serialNumber.isNotBlank() &&
-                            !validation.isValidDeedSerial(sharedViewModel.serialNumber)
-
-                Column {
-                    OutlinedTextField(
-                        value = sharedViewModel.serialNumber,
-                        onValueChange = {
-                            sharedViewModel.serialNumber = it
-                        },
-                        label = { Text(context.getString(R.string.building_serial_number)) },
-//                        isError = serialError,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge
-                    )
-//                    if (serialError) {
-//                        Spacer(modifier = Modifier.height(4.dp))
-//                        Text(
-//                            text = context.getString(R.string.invalid_serial_number),
-//                            color = MaterialTheme.colorScheme.error,
-//                            style = MaterialTheme.typography.bodyMedium
-//                        )
-//                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                OutlinedTextField(
-                    value = sharedViewModel.floorCount,
-                    onValueChange = {
-                        sharedViewModel.floorCount = it
-                    },
-                    label = { RequiredLabel(context.getString(R.string.floor_count)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        ExposedDropdownMenuBoxExample(
-                            sharedViewModel = sharedViewModel,
-                            items = buildingTypes + BuildingTypes(
-                                0,
-                                context.getString(R.string.addNew)
-                            ),
-                            selectedItem = sharedViewModel.selectedBuildingTypes,
-                            onItemSelected = {
-                                if (it.buildingTypeName == context.getString(R.string.addNew)) {
-                                    showBuildingTypeDialog = true
-                                } else {
-                                    sharedViewModel.selectedBuildingTypes = it
-                                }
-                            },
-                            label = context.getString(R.string.building_type),
-                            modifier = Modifier.fillMaxWidth(),
-                            itemLabel = { it.buildingTypeName },
-                            showDeleteFor = { type ->
-                                val c = buildingTypes.firstOrNull { it.buildingTypeName == type.buildingTypeName }
-                                val bId = c?.forBuildingId ?: 0L
-                                val tempBuildingType = c?.addedBeforeCreateBuilding
-                                bId != 0L || tempBuildingType == true
-                            },
-                            onDeleteRequest = { type ->
-                                BuildingType().deleteBuildingType(context, type.buildingTypeId, onSuccess = {
-                                    sharedViewModel.updateBuildingType(buildingTypes - type)
-                                    sharedViewModel.selectedBuildingTypes = null
-                                }, onError = {})
-                            }
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        ExposedDropdownMenuBoxExample(
-                            sharedViewModel = sharedViewModel,
-                            items = buildingUsages + BuildingUsages(
-                                0,
-                                context.getString(R.string.addNew)
-                            ),
-                            selectedItem = sharedViewModel.selectedBuildingUsages,
-                            onItemSelected = {
-                                if (it.buildingUsageName == context.getString(R.string.addNew)) {
-                                    showBuildingUsageDialog = true
-                                } else {
-                                    sharedViewModel.selectedBuildingUsages = it
-                                }
-                            },
-                            label = context.getString(R.string.building_usage),
-                            modifier = Modifier.fillMaxWidth(),
-                            itemLabel = { it.buildingUsageName },
-                            showDeleteFor = { usage ->
-                                val c = buildingUsages.firstOrNull { it.buildingUsageName == usage.buildingUsageName }
-                                val bId = c?.forBuildingId ?: 0L
-                                val tempBuildingUsage = c?.addedBeforeCreateBuilding
-                                bId != 0L || tempBuildingUsage == true
-                            },
-                            onDeleteRequest = { usage ->
-                                BuildingUsage().deleteBuildingUsage(context, usage.buildingUsageId, onSuccess = {
-                                    sharedViewModel.updateBuildingUsage(buildingUsages - usage)
-                                    sharedViewModel.selectedBuildingUsages = null
-                                }, onError = {})
-                            }
-                        )
-                    }
-                }
-            }
-
-            val buildingTypeName = context.getString(R.string.city_complex)
-            if (sharedViewModel.selectedBuildingTypes?.buildingTypeName == buildingTypeName) {
-                item { Spacer(modifier = Modifier.height(8.dp)) }
-
-                item {
-                    ExposedDropdownMenuBoxExample(
-                        sharedViewModel = sharedViewModel,
-                        items = cityComplexes + CityComplexes(
-                            complexId = 0L,
-                            name = context.getString(R.string.addNew),
-                            address = null
-                        ),
-                        selectedItem = sharedViewModel.selectedCityComplexes,
-                        onItemSelected = {
-                            if (it.name == context.getString(R.string.addNew)) {
-                                showAddCityComplexDialog = true
-                            } else {
-                                sharedViewModel.selectedCityComplexes = it
-                            }
-                        },
-                        label = context.getString(R.string.city_complex),
-                        modifier = Modifier.fillMaxWidth(),
-                        itemLabel = { it.name },
-                        showDeleteFor = { complex ->
-                            val c = cityComplexes.firstOrNull { it.name == complex.name }
-                            val bId = c?.forBuildingId ?: 0L
-                            val tempCityComplex = c?.addedBeforeCreateBuilding
-                            bId != 0L || tempCityComplex == true
-                        },
-                        onDeleteRequest = { cityComplex ->
-                            CityComplex().deleteCityComplex(context, cityComplex.complexId, onSuccess = {
-                                sharedViewModel.updateCityComplex(cityComplexes - cityComplex)
-                                sharedViewModel.selectedCityComplexes = null
-                            }, onError = {})
-                        }
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            item {
-                ProvinceStateSelector(sharedViewModel = sharedViewModel)
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            item {
-                OutlinedTextField(
-                    value = sharedViewModel.street,
-                    onValueChange = {
-                        sharedViewModel.street = it
-//                        scrollToBottom()
-                    },
-                    label = { RequiredLabel(context.getString(R.string.street)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                val postCodeError =
-                    sharedViewModel.postCode.isNotBlank() &&
-                            !Validation().isValidPostalCode(sharedViewModel.postCode)
-
-                Column {
-                    OutlinedTextField(
-                        value = sharedViewModel.postCode,
-                        onValueChange = {
-                            sharedViewModel.postCode = it
-//                            scrollToBottom()
-                        },
-                        label = { RequiredLabel(context.getString(R.string.post_code)) },
-                        isError = postCodeError,
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    if (postCodeError) {
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_post_code),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            // here we switch between checkbox and "registered" text
-            item {
-                if (sharedViewModel.unitsAdded) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = context.getString(R.string.units_registered_for_building),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = sharedViewModel.sameArea,
-                            onCheckedChange = { checked ->
-                                sharedViewModel.sameArea = checked
-                                if (checked) {
-                                    showSameAreaUnitDialog = true
-                                } else {
-                                    sharedViewModel.numberOfUnits = ""
-                                    sharedViewModel.unitArea = ""
-                                    sharedViewModel.unitsAdded = false
-                                }
-                                scrollToBottom()
-                            }
-                        )
-                        Text(
-                            text = context.getString(R.string.all_units_same_area),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-            item { Spacer(modifier = Modifier.width(8.dp)) }
-            item {
-                ChargesChipGroup(sharedViewModel)
-            }
-
-            item {
-                UploadFile(
-                    sharedViewModel = sharedViewModel,
-                    context = context,
-                    isEditing = true
-                ) { uploaded ->
-                    sharedViewModel.addFileList(uploaded)
-                }
-
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, end = 4.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Button(
-                onClick = { onSave() },
-                enabled = isValid
-            ) {
-                Text(
-                    context.getString(R.string.insert),
-                    modifier = Modifier.padding(2.dp),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-
-        if (showAddCityComplexDialog) {
-            AddCityComplexDialog(
-                onDismiss = { showAddCityComplexDialog = false },
-                onInsert = { newName, newAddress ->
-                    val newCityComplex = CityComplexes(
-                        name = newName,
-                        address = newAddress,
-                        addedBeforeCreateBuilding = true
-                    )
-                    sharedViewModel.insertCityComplexRemote(
-                        context = context,
-                        cityComplexes = newCityComplex
-                    ) { created ->
-                        if (created != null) {
-                            sharedViewModel.selectedCityComplexes = created
-                        }
-                        showAddCityComplexDialog = false
-                    }
-                }
-            )
-        }
-
-        if (showBuildingTypeDialog) {
-            AddItemDialog(
-                sharedViewModel = sharedViewModel,
-                onDismiss = { showBuildingTypeDialog = false },
-                onInsert = { newItem ->
-                    var newBuildingType = BuildingTypes(
-                        buildingTypeName = newItem,
-                        addedBeforeCreateBuilding = true
-                    )
-                    sharedViewModel.insertBuildingTypeRemote(
-                        context = context,
-                        buildingTypes = newBuildingType
-                    ) { created ->
-                        if (created != null) {
-                            sharedViewModel.selectedBuildingTypes = created
-                        }
-                        showBuildingTypeDialog = false
-                    }
-                }
-            )
-        }
-
-        if (showBuildingUsageDialog) {
-            AddItemDialog(
-                sharedViewModel = sharedViewModel,
-                onDismiss = { showBuildingUsageDialog = false },
-                onInsert = { name ->
-                    var newBuildingUsage = BuildingUsages(
-                        buildingUsageName = name,
-                        addedBeforeCreateBuilding = true
-                    )
-                    sharedViewModel.insertBuildingUsageRemote(
-                        context = context,
-                        buildingUsages = newBuildingUsage
-                    ) { created ->
-                        if (created != null) {
-                            sharedViewModel.selectedBuildingUsages = created
-                        }
-                        showBuildingUsageDialog = false
-                    }
-                }
-            )
-        }
-
-        if (showSameAreaUnitDialog) {
-            SameAreaUnitDialog(
-                onDismiss = {
-                    showSameAreaUnitDialog = false
-                    if (!sharedViewModel.unitsAdded) {
-                        sharedViewModel.sameArea = false
-                    }
-                },
-                onAddUnits = { count, area, rooms, parking, warehouse ->
-                    lifecycleOwner.lifecycleScope.launch {
-                        for (i in 1..count) {
-                            val newUnit = Units(
-                                unitNumber = i.toString(),
-                                area = area,
-                                numberOfRooms = rooms,
-                                numberOfParking = parking,
-                                numberOfWarehouse = warehouse,
-                                floorNumber = 0,
-                                postCode = ""
-                            )
-                            try {
-                                val unitId = unitsViewModel.insertUnit(newUnit)
-                                sharedViewModel.unitsList.add(newUnit.copy(unitId = unitId))
-                            } catch (e: Exception) {
-                                Log.e("InsertUnitError", "Failed to insert unit: ${e.message}")
-                            }
-                        }
-                        sharedViewModel.numberOfUnits = count.toString()
-                        sharedViewModel.unitArea = area
-                        sharedViewModel.unitsAdded = true
-                    }
-                    showSameAreaUnitDialog = false
-                }
-            )
-        }
-    }
-}
-
-
-@Composable
-fun SameAreaUnitDialog(
-    onDismiss: () -> Unit,
-    onAddUnits: (
-        count: Int,
-        area: String,
-        numberOfRooms: String,
-        numberOfParking: String,
-        numberOfWarehouse: String
-    ) -> Unit
-) {
-    var unitCount by remember { mutableStateOf("") }
-    var area by remember { mutableStateOf("") }
-    var numberOfRooms by remember { mutableStateOf("") }
-    var numberOfParking by remember { mutableStateOf("") }
-    var numberOfWarehouse by remember { mutableStateOf("") }
-
-    val context = LocalContext.current
-    val validation = remember { Validation() }
-    val scrollState = rememberScrollState()
-    val configuration = LocalConfiguration.current
-    val maxHeight = configuration.screenHeightDp.dp * 0.9f
-    Dialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false   // Allow the dialog to handle window insets (IME, status/nav bars)
-        )
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            tonalElevation = 8.dp,
-            modifier = Modifier.fillMaxWidth()  // Dialog takes full width of screen
-        ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())  // Make content scrollable
-                    .imePadding()                           // Apply padding for the on-screen keyboard
-                    .padding(16.dp)                         // Content padding inside dialog
-            ) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = context.getString(R.string.add_new_unit),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = unitCount,
-                    onValueChange = { unitCount = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_units)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    label = { RequiredLabel(context.getString(R.string.area)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfRooms,
-                    onValueChange = { numberOfRooms = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_rooms)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfParking,
-                    onValueChange = { numberOfParking = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_parking_for_each_unit)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfWarehouse,
-                    onValueChange = { numberOfWarehouse = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_warehouse_of_each_unit)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(
-                            text = context.getString(R.string.cancel),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            val countInt = unitCount.toIntOrNull()
-                            if (countInt == null || countInt <= 0) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_number_of_units),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }
-                            if (area.isBlank() ||
-                                numberOfRooms.isBlank() ||
-                                numberOfParking.isBlank() ||
-                                numberOfWarehouse.isBlank()
-                            ) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.fill_required_fields),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }
-
-                            onAddUnits(
-                                countInt,
-                                area,
-                                numberOfRooms,
-                                numberOfParking,
-                                numberOfWarehouse
-                            )
-                        }
-                    ) {
-                        Text(
-                            text = context.getString(R.string.insert),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-
 
 @Composable
 fun OwnerItem(
@@ -1196,16 +1449,18 @@ fun OwnerItem(
     modifier: Modifier = Modifier,
     sharedViewModel: SharedViewModel,
     onDelete: (List<OwnersUnitsCrossRef>, List<UserRoleBuildingUnitCrossRef>) -> Unit,
-    activity: Activity?
+    activity: Activity?,
+    onClick: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val mobile = Preference().getUserMobile(context)
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
-
+    var currentRoleId = Preference().getRoleId(context)
     val unitsDangForOwners = ownerUnit.ownerUnits
     val unitsForOwners = ownerUnit.units
+    val tenantForOwners = ownerUnit.tenants
 
     val dangSumsMap = remember(unitsDangForOwners) {
         unitsDangForOwners
@@ -1224,6 +1479,9 @@ fun OwnerItem(
         AuthorizationFieldsBuildingProfile.OWNERS_TAB
     )
 
+
+
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -1235,11 +1493,8 @@ fun OwnerItem(
 
                     is BuildingProfileActivity -> {
                         if( ownerPerm != PermissionLevel.FULL) {
-                            if (ownerUnit.user!!.mobileNumber == mobile) {
-                                val intent = Intent(context, OwnerDetailsActivity::class.java)
-                                intent.putExtra("ownerId", ownerUnit.user.userId)
-                                intent.putExtra("buildingId", buildingId)
-                                context.startActivity(intent)
+                            if (ownerUnit.user!!.mobileNumber == mobile || currentRoleId == 7L) {
+                                onClick(false)
                             } else {
                                 Toast.makeText(
                                     context,
@@ -1248,10 +1503,7 @@ fun OwnerItem(
                                 ).show()
                             }
                         } else {
-                            val intent = Intent(context, OwnerDetailsActivity::class.java)
-                            intent.putExtra("ownerId", ownerUnit.user!!.userId)
-                            intent.putExtra("buildingId", buildingId)
-                            context.startActivity(intent)
+                            onClick(true)
                         }
                     }
                 }
@@ -1301,6 +1553,7 @@ fun OwnerItem(
                                     color = MaterialTheme.colorScheme.onSecondary
                                 )
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
 
@@ -1323,6 +1576,7 @@ fun OwnerItem(
                 }
 
                 if (unitsDangForOwners.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = context.getString(R.string.units),
                         style = MaterialTheme.typography.bodyLarge,
@@ -1330,18 +1584,38 @@ fun OwnerItem(
                     )
                     unitsDangForOwners.forEach { ownerUnitRef ->
                         val unit = unitsForOwners.firstOrNull { it.unitId == ownerUnitRef.unitId }
+                        val tenant = tenantForOwners.firstOrNull{ownerUnitRef.unitId == it.unitId}
 
+                        var tenantInfo = if( ownerPerm != PermissionLevel.FULL) {
+                            if (ownerUnit.user!!.mobileNumber == mobile || currentRoleId == 7L) {
+                                if (tenant != null){
+                                    ",${context.getString(R.string.tenant)}: ${tenant.tenant.firstName} ${tenant.tenant.lastName}"
+                                } else {
+                                    if(ownerUnitRef.isResident){
+                                        ", ${context.getString(R.string.owner_is_resident_in_this_unit)}"
+                                    } else {
+                                        ", ${context.getString(R.string.empty)}"
+                                    }
+                                }
+                            } else {
+                                ""
+                            }
+                        } else {
+                            if (tenant != null){
+                                ", ${context.getString(R.string.tenant)}: ${tenant.tenant.firstName} ${tenant.tenant.lastName}"
+                            } else {
+                                if(ownerUnitRef.isResident){
+                                    ", ${context.getString(R.string.owner_is_resident_in_this_unit)}"
+                                } else {
+                                    ", ${context.getString(R.string.empty)}"
+                                }
+                            }
+                        }
                         if (unit != null) {
                             Row {
                                 Text(
-                                    text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}, " +
-                                            "${context.getString(R.string.area)}: ${unit.area}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.width(16.dp))
-                                Text(
-                                    text = "${context.getString(R.string.dang)}: ${ownerUnitRef.dang}",
+                                    text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber} " + tenantInfo ,
+
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1351,7 +1625,7 @@ fun OwnerItem(
 
                 }
             }
-
+            Box {
             IconButton(onClick = { showMenu = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
@@ -1361,8 +1635,41 @@ fun OwnerItem(
             }
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier
+                    .background(Color.White)
+                    .width(180.dp)
             ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = context.getString(R.string.detail),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        if (ownerPerm != PermissionLevel.FULL) {
+                            if (ownerUnit.user!!.mobileNumber == mobile || currentRoleId == 7L) {
+                                onClick(false)
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.auth_profile_cancel),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
+                            onClick(true)
+                        }
+                    }
+                )
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    thickness = 1.dp
+                )
+
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -1383,6 +1690,7 @@ fun OwnerItem(
                         }
                     }
                 )
+            }
             }
         }
 
@@ -1439,8 +1747,7 @@ fun OwnerItem(
                 onDismiss = { showEditDialog = false },
                 onSave = { updatedCrossRefs, isManager ->
 
-                    Owner().updateOwnerUnitsAndRole(
-                        context = context,
+                    Owner(context).updateOwnerUnitsAndRole(
                         userId = ownerUnit.user!!.userId,
                         buildingId = buildingId,
                         units = updatedCrossRefs,
@@ -1471,36 +1778,29 @@ fun OwnerItem(
 
 
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MutableCollectionMutableState", "StringFormatInvalid")
 @Composable
 fun OwnerDialog(
-    sharedViewModel: SharedViewModel,
     units: List<Units>,
     dangSums: Map<Long, Double>,
     onDismiss: () -> Unit,
     onAddOwner: (
         firstName: String,
         lastName: String,
-        address: String,
-        email: String,
-        phoneNumber: String,
         mobileNumber: String,
         isManager: Boolean,
-        isResident: Boolean,
         units: List<OwnersUnitsCrossRef>
     ) -> Unit
 ) {
     val context = LocalContext.current
     val validation = remember { Validation() }
     val usersApi = remember { Users() }
+    val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
     var isManager by remember { mutableStateOf(false) }
     var isResident by remember { mutableStateOf(false) }
@@ -1508,6 +1808,9 @@ fun OwnerDialog(
     var emailError by remember { mutableStateOf(false) }
     var phoneError by remember { mutableStateOf(false) }
     var mobileError by remember { mutableStateOf(false) }
+
+    var mobileStatusText by remember { mutableStateOf<String?>(null) }
+    var mobileStatusIsError by remember { mutableStateOf(false) }
 
     val selectedUnitsList = remember { mutableStateListOf<OwnersUnitsCrossRef>() }
     var showUnitsSheet by remember { mutableStateOf(false) }
@@ -1541,480 +1844,495 @@ fun OwnerDialog(
 
     val controlsEnabled by remember {
         derivedStateOf {
-            !noUnits && !isCheckingUser && (userExists == false)
+            !noUnits &&
+                    !isCheckingUser &&
+                    userExists == false &&
+                    mobileStatusText == null
         }
     }
+
+    var selectedUnitsText by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedUnits by remember { mutableStateOf<List<Units>>(emptyList()) }
+    var selectedUnitText by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val isFormValid by remember {
         derivedStateOf {
-            !noUnits &&
-                    !isCheckingUser &&
-                    mobileNumber.isNotBlank() &&
-                    !mobileError &&
-                    selectedUnitsList.isNotEmpty() &&
-                    allSelectedDangValid &&
-                    if (userExists == true) {
-                        true
-                    } else {
-                        firstName.isNotBlank() &&
-                                lastName.isNotBlank() &&
-                                !emailError &&
-                                !phoneError
+            val baseValid =
+                !noUnits &&
+                        !isCheckingUser &&
+                        mobileNumber.isNotBlank() &&
+                        !mobileError &&
+                        mobileStatusText == null &&
+                        selectedUnitsList.isNotEmpty() &&
+                        allSelectedDangValid &&
+                        if (userExists == true) {
+                            true
+                        } else {
+                            firstName.isNotBlank() &&
+                                    lastName.isNotBlank() &&
+                                    !emailError &&
+                                    !phoneError
+                        }
+
+            val residentValid =
+                if (!isResident) {
+                    true
+                } else {
+                    when (selectedUnitsList.size) {
+                        0 -> false
+                        1 -> true
+                        else -> selectedUnitsList.count { it.isResident } == 1
                     }
+                }
+
+            baseValid && residentValid
         }
     }
 
-    val selectedUnitsText by remember {
-        derivedStateOf {
-            if (selectedUnitsList.isEmpty()) ""
-            else {
-                val count = selectedUnitsList.size
-                val totalDang = selectedUnitsList.sumOf { it.dang }
-                context.getString(R.string.selected_units_count, count, totalDang)
-            }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val nestedScrollConnection = remember { androidx.compose.foundation.gestures.Orientation.Vertical }
+    val scrollState = rememberScrollState()
+
+    val density = LocalDensity.current
+    val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+
+    LaunchedEffect(Unit) {
+        scope.launch { sheetState.show() }
+    }
+
+    fun requestDismiss() {
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
         }
     }
 
-
-    val dialogScrollState = rememberScrollState()
-
-    AlertDialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        ),
-        title = {
+    ModalBottomSheet(
+        onDismissRequest = { requestDismiss() },
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = context.getString(R.string.add_new_owner),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Box(
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(dialogScrollState)
+                    .weight(1f, fill = false)
+                    .verticalScroll(scrollState)
             ) {
-                Column {
-                    if (noUnits) {
-                        Text(
-                            text = context.getString(R.string.first_compete_units),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                if (noUnits) {
+                    Text(
+                        text = context.getString(R.string.first_compete_units),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
 
-                    if(selectableUnits.isEmpty()){
-                        Text(
-                            text = context.getString(R.string.units_are_finished),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                if (selectableUnits.isEmpty()) {
+                    Text(
+                        text = context.getString(R.string.units_are_finished),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
 
-                    OutlinedTextField(
-                        value = mobileNumber,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                        onValueChange = { new ->
-                            if (noUnits) return@OutlinedTextField
+                OutlinedTextField(
+                    value = mobileNumber,
+                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    onValueChange = { new ->
+                        if (noUnits) return@OutlinedTextField
 
-                            mobileNumber = new
-                            mobileError = !validation.isValidIranMobile(new)
+                        mobileNumber = new
+                        mobileError = !validation.isValidIranMobile(new)
 
-                            userExists = null
-                            firstName = ""
-                            lastName = ""
-                            address = ""
-                            email = ""
-                            phoneNumber = ""
-                            emailError = false
-                            phoneError = false
+                        mobileStatusText = null
+                        mobileStatusIsError = false
 
-                            if (!mobileError && new.isNotBlank()) {
-                                isCheckingUser = true
-                                usersApi.fetchUserByMobile(
-                                    context = context,
-                                    mobileNumber = new,
-                                    onSuccess = { user ->
-                                        if (user != null) {
-                                            userExists = true
-                                            firstName = user.firstName
-                                            lastName = user.lastName
-                                            address = user.address ?: ""
-                                            email = user.email ?: ""
-                                            phoneNumber = user.phoneNumber ?: ""
-                                        } else {
-                                            userExists = false
-                                        }
-                                        isCheckingUser = false
-                                    },
-                                    onNotFound = {
+                        userExists = null
+                        firstName = ""
+                        lastName = ""
+
+                        if (!mobileError && new.isNotBlank()) {
+                            isCheckingUser = true
+                            mobileStatusText = context.getString(R.string.fetching)
+                            mobileStatusIsError = false
+
+                            usersApi.fetchUserByMobile(
+                                context = context,
+                                mobileNumber = new,
+                                onSuccess = { user ->
+                                    if (user != null) {
+                                        userExists = true
+                                        firstName = user.firstName
+                                        lastName = user.lastName
+                                    } else {
                                         userExists = false
-                                        firstName = ""
-                                        lastName = ""
-                                        address = ""
-                                        email = ""
-                                        phoneNumber = ""
-                                        emailError = false
-                                        phoneError = false
-                                        isCheckingUser = false
-                                    },
-                                    onError = {
-                                        userExists = false
-                                        isCheckingUser = false
                                     }
-                                )
-                            }
-                        },
-                        label = { RequiredLabel(context.getString(R.string.mobile_number)) },
-                        isError = mobileError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !noUnits && !isCheckingUser
-                    )
-                    if (mobileError) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_mobile_number),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = firstName,
-                        onValueChange = { if (controlsEnabled) firstName = it },
-                        label = { RequiredLabel(context.getString(R.string.first_name)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
-                    )
-                    OutlinedTextField(
-                        value = lastName,
-                        onValueChange = { if (controlsEnabled) lastName = it },
-                        label = { RequiredLabel(context.getString(R.string.last_name)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
-                    )
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { if (controlsEnabled) address = it },
-                        label = { Text(context.getString(R.string.address)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = {
-                            if (!controlsEnabled) return@OutlinedTextField
-                            email = it
-                            emailError = !validation.isValidEmail(it)
-                        },
-                        label = { Text(context.getString(R.string.email)) },
-                        isError = emailError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
-                    )
-                    if (emailError) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_email),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = phoneNumber,
-                        onValueChange = {
-                            if (!controlsEnabled) return@OutlinedTextField
-                            phoneNumber = it
-                            phoneError = it.isNotBlank() && !validation.isValidPhone(it)
-                        },
-                        label = {
-                            Text(
-                                text = context.getString(R.string.phone_number),
-                                style = MaterialTheme.typography.bodyLarge
+                                    isCheckingUser = false
+                                    mobileStatusText = null
+                                    mobileStatusIsError = false
+                                },
+                                onNotFound = {
+                                    userExists = false
+                                    firstName = ""
+                                    lastName = ""
+                                    emailError = false
+                                    phoneError = false
+                                    isCheckingUser = false
+                                    mobileStatusText = null
+                                    mobileStatusIsError = false
+                                },
+                                onError = { e ->
+                                    userExists = null
+                                    isCheckingUser = false
+                                    mobileStatusText = e.message ?: context.getString(R.string.failed)
+                                    mobileStatusIsError = true
+                                }
                             )
-                        },
-                        isError = phoneError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
+                        }
+                    },
+                    label = { RequiredLabel(context.getString(R.string.mobile_number)) },
+                    isError = mobileError || mobileStatusIsError,
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !noUnits && !isCheckingUser
+                )
+
+                if (mobileError) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = context.getString(R.string.invalid_mobile_number),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
-                    if (phoneError) {
-                        Spacer(Modifier.height(4.dp))
+                } else if (mobileStatusText != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (mobileStatusText == context.getString(R.string.fetching)) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        }
                         Text(
-                            text = context.getString(R.string.invalid_phone_number),
-                            color = MaterialTheme.colorScheme.error,
+                            text = mobileStatusText!!,
+                            color = if (mobileStatusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                            modifier = Modifier.padding(start = 12.dp)
                         )
                     }
+                }
 
-                    Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isManager,
-                            onCheckedChange = { isManager = it },
-                            enabled = !noUnits
-                        )
-                        Text(
-                            text = context.getString(R.string.manager_teams),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
+                OutlinedTextField(
+                    value = firstName,
+                    onValueChange = { if (controlsEnabled) firstName = it },
+                    label = { RequiredLabel(context.getString(R.string.first_name)) },
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
+                )
 
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = lastName,
+                    onValueChange = { if (controlsEnabled) lastName = it },
+                    label = { RequiredLabel(context.getString(R.string.last_name)) },
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = controlsEnabled
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isManager,
+                        onCheckedChange = { isManager = it },
+                        enabled = !noUnits
+                    )
+                    Text(
+                        text = context.getString(R.string.manager_teams),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Column {
+                    RequiredLabel(context.getString(R.string.units))
                     Spacer(Modifier.height(4.dp))
 
-                    Row(
+                    OutlinedButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            showUnitsSheet = true
+                            unitsError = false
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        enabled = !noUnits && !isCheckingUser
                     ) {
-                        Checkbox(
-                            checked = isResident,
-                            onCheckedChange = { checked ->
-                                isResident = checked
-                                if (!checked) {
-                                    residentUnitId = null
-                                }
-                            },
-                            enabled = !noUnits && !isCheckingUser
-                        )
                         Text(
-                            text = context.getString(R.string.owner_is_resident),
+                            text = "انتخاب واحدها (${selectedUnitsList.size})",
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Column {
-                        RequiredLabel(context.getString(R.string.units))
-                        Spacer(Modifier.height(4.dp))
-
-                        OutlinedButton(
-                            onClick = {
-                                showUnitsSheet = true
-                                unitsError = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !noUnits && !isCheckingUser
-                        ) {
-                            Text(
-                                text = if (selectedUnitsText.isBlank()) {
-                                    "انتخاب واحدها (${selectedUnitsList.size})"
-                                } else {
-                                    selectedUnitsText
-                                },
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-
-                    if (unitsError && selectedUnitsList.isEmpty()) {
-                        Text(
-                            text = context.getString(R.string.select_at_least_one_unit),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onAddOwner(
-                        firstName,
-                        lastName,
-                        address,
-                        email,
-                        phoneNumber,
-                        mobileNumber,
-                        isManager,
-                        isResident,
-                        selectedUnitsList.toList()
+
+                if (unitsError && selectedUnitsList.isEmpty()) {
+                    Text(
+                        text = context.getString(R.string.select_at_least_one_unit),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
-                },
-                enabled = isFormValid
-            ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-    )
+                }
 
-    if (showUnitsSheet && !noUnits) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                Spacer(Modifier.height(8.dp))
 
-        ModalBottomSheet(
-            onDismissRequest = { showUnitsSheet = false },
-            sheetState = sheetState
-        ) {
-            val scrollState = rememberLazyListState()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isResident,
+                        onCheckedChange = { checked ->
+                            isResident = checked
+                            if (!checked) {
+                                residentUnitId = null
+                                selectedUnitText = emptyList()
 
-            Text(
-                text = context.getString(R.string.select_units),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            )
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                state = scrollState
-            ) {
-                items(selectableUnits) { unit ->
-                    val usedDang = dangSums[unit.unitId] ?: 0.0
-                    val maxAllowed = (6.0 - usedDang).coerceAtLeast(0.0)
-
-                    val currentSelection =
-                        selectedUnitsList.firstOrNull { it.unitId == unit.unitId }
-
-                    var localDangText by remember(
-                        unit.unitId,
-                        currentSelection?.dang
-                    ) {
-                        mutableStateOf(
-                            currentSelection?.dang
-                                ?.takeIf { it > 0.0 }
-                                ?.toString()
-                                ?: ""
-                        )
-                    }
-
-                    val isChecked = currentSelection != null
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                if (checked) {
-//                                    val v = localDangText.toDoubleOrNull() ?: 0.0
-//                                    val clamped = v.coerceIn(0.0, maxAllowed)
-                                    selectedUnitsList.removeAll { it.unitId == unit.unitId }
-                                    selectedUnitsList.add(
-                                        OwnersUnitsCrossRef(
-                                            ownerId = 0L,
-                                            unitId = unit.unitId,
-                                            dang = 6.0
-                                        )
-                                    )
-                                } else {
-                                    selectedUnitsList.removeAll { it.unitId == unit.unitId }
+                                val idx = selectedUnitsList.indexOfFirst { it.isResident }
+                                if (idx != -1) {
+                                    val old = selectedUnitsList[idx]
+                                    selectedUnitsList[idx] = old.copy(isResident = false)
+                                }
+                            } else {
+                                if (selectedUnitsList.size == 1) {
+                                    val only = selectedUnitsList.first()
+                                    selectedUnitsList[0] = only.copy(isResident = true)
+                                    selectedUnitText = listOf(selectedUnits.firstOrNull()?.unitNumber ?: "")
                                 }
                             }
-                        )
-
-                        Row(modifier = Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(
-                                text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Text(
-                                text = "${context.getString(R.string.area)}: ${unit.area}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-
-//                            if (isChecked) {
-//                                OutlinedTextField(
-//                                    value = localDangText,
-//                                    onValueChange = { text ->
-//                                        localDangText = text
-//
-//                                        val v = text.toDoubleOrNull()
-//                                        if (v != null) {
-//                                            val clamped = v.coerceIn(0.0, maxAllowed)
-//                                            val idx = selectedUnitsList.indexOfFirst {
-//                                                it.unitId == unit.unitId
-//                                            }
-//                                            if (idx >= 0) {
-//                                                selectedUnitsList[idx] =
-//                                                    selectedUnitsList[idx].copy(dang = clamped)
-//                                            }
-//                                        }
-//                                    },
-//                                    label = {
-//                                        Text(
-//                                            text = context.getString(R.string.dang),
-//                                            style = MaterialTheme.typography.bodyLarge
-//                                        )
-//                                    },
-//                                    textStyle = MaterialTheme.typography.bodyLarge,
-//                                    modifier = Modifier.fillMaxWidth()
-//                                )
-//                            }
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        },
+                        enabled = !noUnits && !isCheckingUser
+                    )
+                    Text(
+                        text = context.getString(R.string.owner_is_resident),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
+
+                if (isResident && selectedUnitsList.size > 1) {
+                    ChipGroupShared(
+                        selectedItems = selectedUnitText,
+                        onSelectionChange = { newSelectionStrings ->
+                            val chosenUnitNumber = newSelectionStrings.firstOrNull()
+                            if (chosenUnitNumber != null) {
+                                val chosenUnit = selectedUnits.firstOrNull { it.unitNumber == chosenUnitNumber }
+                                if (chosenUnit != null) {
+                                    for (i in selectedUnitsList.indices) {
+                                        val item = selectedUnitsList[i]
+                                        selectedUnitsList[i] =
+                                            item.copy(isResident = item.unitId == chosenUnit.unitId)
+                                    }
+                                }
+                            }
+                            selectedUnitText = newSelectionStrings
+                        },
+                        items = selectedUnitsText,
+                        label = context.getString(R.string.unit_for_resident),
+                        singleSelection = true,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(imeBottom + 16.dp))
             }
 
-            Button(
-                onClick = { showUnitsSheet = false },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                OutlinedButton(
+                    onClick = { requestDismiss() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (selectedUnitsList.isEmpty()) {
+                            unitsError = true
+                            return@Button
+                        }
+                        onAddOwner(
+                            firstName,
+                            lastName,
+                            mobileNumber,
+                            isManager,
+                            selectedUnitsList.toList()
+                        )
+                    },
+                    enabled = isFormValid,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+
+        if (showUnitsSheet && !noUnits) {
+            val unitsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+            ModalBottomSheet(
+                onDismissRequest = { showUnitsSheet = false },
+                sheetState = unitsSheetState
+            ) {
+                val listState = rememberLazyListState()
+
                 Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
+                    text = context.getString(R.string.select_units),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    state = listState
+                ) {
+                    items(selectableUnits) { unit ->
+                        val usedDang = dangSums[unit.unitId] ?: 0.0
+                        val maxAllowed = (6.0 - usedDang).coerceAtLeast(0.0)
+
+                        val currentSelection =
+                            selectedUnitsList.firstOrNull { it.unitId == unit.unitId }
+
+                        val isChecked = currentSelection != null
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        selectedUnitsList.removeAll { it.unitId == unit.unitId }
+
+                                        selectedUnitsText = selectedUnitsText + unit.unitNumber
+                                        selectedUnits = selectedUnits + unit
+
+                                        val afterAddCount = selectedUnitsList.size + 1
+                                        val residentFlag = isResident && afterAddCount == 1
+
+                                        selectedUnitsList.add(
+                                            OwnersUnitsCrossRef(
+                                                ownerId = 0L,
+                                                unitId = unit.unitId,
+                                                dang = 6.0,
+                                                isResident = residentFlag
+                                            )
+                                        )
+
+                                        if (residentFlag) {
+                                            selectedUnitText = listOf(unit.unitNumber)
+                                        }
+                                    } else {
+                                        selectedUnitsList.removeAll { it.unitId == unit.unitId }
+                                        selectedUnitsText = selectedUnitsText - unit.unitNumber
+                                        selectedUnits = selectedUnits - unit
+
+                                        if (selectedUnitText.contains(unit.unitNumber)) {
+                                            selectedUnitText = emptyList()
+                                        }
+
+                                        if (isResident && selectedUnitsList.size == 1) {
+                                            val only = selectedUnitsList.first()
+                                            selectedUnitsList[0] = only.copy(isResident = true)
+
+                                            val onlyUnitNumber =
+                                                selectedUnits.firstOrNull { it.unitId == only.unitId }?.unitNumber
+                                            selectedUnitText = listOfNotNull(onlyUnitNumber)
+                                        }
+                                    }
+                                }
+                            )
+
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${context.getString(R.string.unit_number)}: ${unit.unitNumber}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "${context.getString(R.string.area)}: ${unit.area}",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
+                }
+
+                Button(
+                    onClick = { showUnitsSheet = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
     }
 }
 
-
-
-
 @Composable
 fun TenantItem(
     user: User?,
+    owner: User?,
     unit: Units,
     relation: TenantsUnitsCrossRef?,
     sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier,
     onDelete: (TenantsUnitsCrossRef) -> Unit,
-    onClick: () -> Unit,
+    onClick: (Boolean) -> Unit,
     activity: Activity?
 ) {
     val context = LocalContext.current
@@ -2046,6 +2364,9 @@ fun TenantItem(
     val firstName = user?.firstName ?: ""
     val lastName = user?.lastName ?: ""
 
+    val ownerFirstName = owner?.firstName ?: ""
+    val ownerLastName = owner?.lastName ?: ""
+
     val displayStartDate = relation?.startDate ?: ""
     val displayEndDate = relation?.endDate ?: ""
     val displayStatus = relation?.status ?: ""
@@ -2064,7 +2385,7 @@ fun TenantItem(
                     is BuildingProfileActivity -> {
                         if( clickPerm != PermissionLevel.FULL) {
                             if (user!!.mobileNumber == userMobile) {
-                                onClick()
+                                onClick(true)
                             } else {
                                 Toast.makeText(
                                     context,
@@ -2073,12 +2394,12 @@ fun TenantItem(
                                 ).show()
                             }
                         } else {
-                            onClick()
+                            onClick(false)
                         }
                     }
 
                     else -> {
-                        onClick()
+                        onClick(false)
                     }
                 }
             },
@@ -2128,6 +2449,22 @@ fun TenantItem(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if( clickPerm != PermissionLevel.FULL) {
+                    if (user!!.mobileNumber == userMobile) {
+                        Text(
+                            text = "${context.getString(R.string.owner_name)}: $ownerFirstName $ownerLastName",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                        Text(
+                            text = "${context.getString(R.string.owner_name)}: $ownerFirstName $ownerLastName",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                }
+
                 if (displayStartDate.isNotBlank()) {
                     Text(
                         text = "${context.getString(R.string.start_date)}: $displayStartDate",
@@ -2150,7 +2487,7 @@ fun TenantItem(
                     )
                 }
             }
-
+            Box{
             IconButton(onClick = { showMenu = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
@@ -2160,8 +2497,41 @@ fun TenantItem(
             }
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier
+                    .background(Color.White)
+                    .width(180.dp)
             ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = context.getString(R.string.detail),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        if( clickPerm != PermissionLevel.FULL) {
+                            if (user!!.mobileNumber == userMobile) {
+                                onClick(true)
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.auth_profile_cancel),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
+                            onClick(false)
+                        }
+                    }
+                )
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    thickness = 1.dp
+                )
+
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -2185,6 +2555,7 @@ fun TenantItem(
                     }
                 )
             }
+                }
         }
 
         if (showDeleteDialog && relation != null) {
@@ -2255,6 +2626,20 @@ fun TenantItem(
     }
 }
 
+fun fixPersianShortDate(date: String): String {
+    val parts = date.split("/")
+    if (parts.size != 3) return date
+
+    val year = parts[0]
+    val month = parts[1].padStart(2, '0')
+    val day = parts[2].padStart(2, '0')
+
+    return "$year/$month/$day"
+}
+
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TenantDialog(
     sharedViewModel: SharedViewModel,
@@ -2267,8 +2652,6 @@ fun TenantDialog(
     var mobileNumber by remember { mutableStateOf("") }
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
     var numberOfTenants by remember { mutableStateOf("") }
@@ -2283,18 +2666,36 @@ fun TenantDialog(
     var isCheckingUser by remember { mutableStateOf(false) }
     var existingUser by remember { mutableStateOf<User?>(null) }
 
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
     val noOwnerUnits = units.isEmpty()
     val controlsEnabled = !noOwnerUnits
 
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val bringScope = rememberCoroutineScope()
+
+    val mobileFR = remember { FocusRequester() }
+    val firstNameFR = remember { FocusRequester() }
+    val lastNameFR = remember { FocusRequester() }
+    val tenantsCountFR = remember { FocusRequester() }
+
+    fun bringFieldIntoView() {
+        bringScope.launch {
+            delay(50)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
     LaunchedEffect(startDate) {
         if (startDate.isNotEmpty()) {
-            endDate = sharedViewModel
-                .getNextYearSameDaySafe(sharedViewModel.parsePersianDate(startDate))
-                .persianShortDate
+            endDate = fixPersianShortDate(
+                sharedViewModel
+                    .getNextYearSameDaySafe(
+                        sharedViewModel.parsePersianDate(startDate),
+                        startDate
+                    )
+                    .persianShortDate
+            )
         }
     }
 
@@ -2303,13 +2704,12 @@ fun TenantDialog(
 
         val valid = Validation().isValidIranMobile(mobileNumber)
         mobileError = mobileNumber.isNotBlank() && !valid
+
         if (!valid) {
             existingUser = null
             isCheckingUser = false
             firstName = ""
             lastName = ""
-            email = ""
-            phoneNumber = ""
             return@LaunchedEffect
         }
 
@@ -2329,8 +2729,6 @@ fun TenantDialog(
                 existingUser = user
                 firstName = user!!.firstName
                 lastName = user.lastName
-                email = user.email ?: ""
-                phoneNumber = user.phoneNumber ?: ""
                 emailError = false
                 phoneError = false
                 isCheckingUser = false
@@ -2339,8 +2737,6 @@ fun TenantDialog(
                 existingUser = null
                 firstName = ""
                 lastName = ""
-                email = ""
-                phoneNumber = ""
                 emailError = false
                 phoneError = false
                 isCheckingUser = false
@@ -2358,8 +2754,6 @@ fun TenantDialog(
         mobileNumber,
         firstName,
         lastName,
-        email,
-        phoneNumber,
         numberOfTenants,
         startDate,
         endDate,
@@ -2387,17 +2781,44 @@ fun TenantDialog(
         )
     }
 
-    AlertDialog(
-        onDismissRequest = { },
-        title = {
-            Text(
-                context.getString(R.string.add_new_tenant),
-                style = MaterialTheme.typography.bodyLarge
-            )
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            focusManager.clearFocus()
+            onDismiss()
         },
-        text = {
-            LazyColumn(state = listState) {
-                item {
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text(
+                text = context.getString(R.string.add_new_tenant),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+                    .bringIntoViewRequester(bringIntoViewRequester)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
                     if (noOwnerUnits) {
                         Text(
                             text = context.getString(R.string.no_units_with_owner),
@@ -2406,30 +2827,30 @@ fun TenantDialog(
                             modifier = Modifier.padding(8.dp)
                         )
                     }
-                }
 
-                item {
                     OutlinedTextField(
                         value = mobileNumber,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                         onValueChange = {
                             if (!controlsEnabled) return@OutlinedTextField
                             mobileNumber = it
                         },
                         label = { RequiredLabel(context.getString(R.string.mobile_number)) },
-                        isError = mobileError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { fs ->
-                                if (controlsEnabled && fs.isFocused) {
-                                    scope.launch {
-                                        listState.animateScrollToItem(0)
-                                    }
-                                }
-                            },
-                        enabled = controlsEnabled
+                            .focusRequester(mobileFR)
+                            .onFocusChanged { if (it.isFocused) bringFieldIntoView() },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { firstNameFR.requestFocus() }
+                        ),
+                        enabled = controlsEnabled,
+                        isError = mobileError,
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
+
                     if (mobileError) {
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -2439,112 +2860,87 @@ fun TenantDialog(
                             modifier = Modifier.padding(start = 16.dp)
                         )
                     }
+
                     if (isCheckingUser) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = context.getString(R.string.loading),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 16.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(
+                                text = context.getString(R.string.fetching),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
+                        }
                     }
-                }
 
-                item {
                     Text(
                         text = context.getString(R.string.personal_information),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                     )
-                }
 
-                item {
                     OutlinedTextField(
                         value = firstName,
                         onValueChange = { if (personalFieldsEnabled) firstName = it },
                         label = { RequiredLabel(context.getString(R.string.first_name)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = personalFieldsEnabled
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(firstNameFR)
+                            .onFocusChanged { if (it.isFocused) bringFieldIntoView() },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(
+                            onNext = { lastNameFR.requestFocus() }
+                        ),
+                        enabled = personalFieldsEnabled,
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
+
                     Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = lastName,
                         onValueChange = { if (personalFieldsEnabled) lastName = it },
                         label = { RequiredLabel(context.getString(R.string.last_name)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = personalFieldsEnabled
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(lastNameFR)
+                            .onFocusChanged { if (it.isFocused) bringFieldIntoView() },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(
+                            onNext = { tenantsCountFR.requestFocus() }
+                        ),
+                        enabled = personalFieldsEnabled,
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
 
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = {
-                            if (!personalFieldsEnabled) return@OutlinedTextField
-                            email = it
-                            emailError = it.isNotBlank() && !Validation().isValidEmail(it)
-                        },
-                        label = { Text(context.getString(R.string.email)) },
-                        isError = emailError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = personalFieldsEnabled
-                    )
-
-                    if (emailError) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_email),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = phoneNumber,
-                        onValueChange = {
-                            if (!personalFieldsEnabled) return@OutlinedTextField
-                            phoneNumber = it
-                            phoneError = it.isNotBlank() && !Validation().isValidPhone(it)
-                        },
-                        label = { Text(context.getString(R.string.phone_number)) },
-                        isError = phoneError,
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = personalFieldsEnabled
-                    )
-                    if (phoneError) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = context.getString(R.string.invalid_phone_number),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 16.dp)
-                        )
-                    }
-                }
-
-                item {
                     Text(
                         text = context.getString(R.string.lease_information),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                     )
-                }
 
-                item {
                     OutlinedTextField(
                         value = numberOfTenants,
-                        onValueChange = { if (controlsEnabled) numberOfTenants = it },
+                        onValueChange = { input ->
+                            if (!controlsEnabled) return@OutlinedTextField
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfTenants = input
+                        },
                         label = { RequiredLabel(context.getString(R.string.number_of_tenants)) },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = controlsEnabled
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(tenantsCountFR)
+                            .onFocusChanged { if (it.isFocused) bringFieldIntoView() },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        ),
+                        enabled = controlsEnabled,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -2606,9 +3002,7 @@ fun TenantDialog(
                         onStatusSelected = { if (controlsEnabled) selectedStatus = it },
                         enabled = controlsEnabled
                     )
-                }
 
-                item {
                     Spacer(Modifier.height(12.dp))
 
                     if (!noOwnerUnits) {
@@ -2622,97 +3016,117 @@ fun TenantDialog(
                             itemLabel = { it.unitNumber }
                         )
                     }
+
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                if (controlsEnabled && activeDateField != null) {
+                    PersianDatePickerDialogContent(
+                        sharedViewModel = sharedViewModel,
+                        onDateSelected = { selected ->
+                            when (activeDateField) {
+                                DateField.START -> startDate = selected
+                                DateField.END -> endDate = selected
+                                null -> {}
+                            }
+                            activeDateField = null
+                        },
+                        onDismiss = { activeDateField = null }
+                    )
                 }
             }
 
-            if (controlsEnabled && activeDateField != null) {
-                PersianDatePickerDialogContent(
-                    sharedViewModel = sharedViewModel,
-                    onDateSelected = { selected ->
-                        when (activeDateField) {
-                            DateField.START -> startDate = selected
-                            DateField.END   -> endDate = selected
-                            null -> {}
-                        }
-                        activeDateField = null
-                    },
-                    onDismiss = { activeDateField = null }
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (!isFormValid) return@Button
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
 
-                    val unit = selectedUnit ?: return@Button
-
-                    if (selectedStatus == context.getString(R.string.active)) {
-                        val conflict = Validation().isTenantPeriodConflicted(
-                            unit.unitId, startDate, endDate, sharedViewModel
-                        )
-                        if (conflict) {
-                            periodConflictError = true
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.tenant_period_conflict),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@Button
-                        }
-                    }
-
-                    val finalUser = existingUser?.copy(
-                        mobileNumber = mobileNumber,
-                        phoneNumber = phoneNumber,
-                        email = email
-                    ) ?: User(
-                        userId = 0L,
-                        mobileNumber = mobileNumber,
-                        password = "",
-                        firstName = firstName,
-                        lastName = lastName,
-                        email = email,
-                        gender = Gender.FEMALE,
-                        profilePhoto = "",
-                        nationalCode = "",
-                        address = "",
-                        phoneNumber = phoneNumber,
-                        birthday = ""
-                    )
-
-                    val tenantUnit = TenantsUnitsCrossRef(
-                        tenantId = 0L,
-                        unitId = unit.unitId,
-                        startDate = startDate,
-                        endDate = endDate,
-                        status = selectedStatus,
-                        numberOfTenants = numberOfTenants
-                    )
-
-                    onAddTenant(finalUser, unit, tenantUnit)
-                },
-                enabled = isFormValid
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (!isFormValid) return@Button
+
+                        val unit = selectedUnit ?: return@Button
+
+                        if (selectedStatus == context.getString(R.string.active)) {
+                            val conflict = Validation().isTenantPeriodConflicted(
+                                unit.unitId, startDate, endDate, sharedViewModel
+                            )
+                            if (conflict) {
+                                periodConflictError = true
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.tenant_period_conflict),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@Button
+                            }
+                        }
+
+                        val finalUser = existingUser?.copy(
+                            mobileNumber = mobileNumber,
+                        ) ?: User(
+                            userId = 0L,
+                            mobileNumber = mobileNumber,
+                            password = "",
+                            firstName = firstName,
+                            lastName = lastName,
+                            email = "",
+                            gender = Gender.FEMALE,
+                            profilePhoto = "",
+                            nationalCode = "",
+                            address = "",
+                            phoneNumber = "",
+                            birthday = ""
+                        )
+
+                        val tenantUnit = TenantsUnitsCrossRef(
+                            tenantId = 0L,
+                            unitId = unit.unitId,
+                            startDate = startDate,
+                            endDate = endDate,
+                            status = selectedStatus,
+                            numberOfTenants = numberOfTenants
+                        )
+
+                        onAddTenant(finalUser, unit, tenantUnit)
+
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    enabled = isFormValid,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
-    )
+    }
 }
-
-
-
 
 
 
@@ -2771,37 +3185,27 @@ fun StatusDropdown(selectedStatus: String, onStatusSelected: (String) -> Unit, e
         }
     }
 }
-
 @SuppressLint("SuspiciousIndentation")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnitDialog(
-    units: List<Units>,
-    floorCount: Int,
     onDismiss: () -> Unit,
     onAddUnit: (Units) -> Unit
 ) {
-    val nextUnitNumber = remember(units) {
-        val max = units
-            .mapNotNull { it.unitNumber.toIntOrNull() }
-            .maxOrNull()
-        ((max ?: 0) + 1).toString()
-    }
-
-    var unitNumber by remember { mutableStateOf(nextUnitNumber) }
+    var unitNumber by remember { mutableStateOf("") }
     var area by remember { mutableStateOf("") }
     var numberOfRooms by remember { mutableStateOf("") }
     var numberOfParking by remember { mutableStateOf("") }
     var numberOfWarehouse by remember { mutableStateOf("") }
     var postCode by remember { mutableStateOf("") }
+    var floorCount by remember { mutableStateOf("") }
 
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
     val validation = remember { Validation() }
-
     val postCodeError = postCode.isNotEmpty() && !validation.isValidPostalCode(postCode)
 
     val floorOptions = remember(floorCount) {
-        buildFloorOptionsForBuilding(context, floorCount)
+        buildFloorOptionsForBuilding(context, floorCount.toIntOrNull())
     }
     var selectedFloor by remember { mutableStateOf<Int?>(null) }
     var floorDropdownExpanded by remember { mutableStateOf(false) }
@@ -2810,202 +3214,210 @@ fun UnitDialog(
     val isFormValid =
         unitNumber.isNotBlank() &&
                 area.isNotBlank() &&
+                floorCount.isNotBlank() &&
                 numberOfRooms.isNotBlank() &&
                 numberOfParking.isNotBlank() &&
-                !postCodeError &&
-                selectedFloor != null
+                !postCodeError
 
-    AlertDialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        ),
-        title = {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            focusManager.clearFocus()
+            onDismiss()
+        },
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = context.getString(R.string.add_new_unit),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Column(
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
-                    .verticalScroll(scrollState)
+                    .weight(1f, fill = true)
             ) {
-                OutlinedTextField(
-                    value = unitNumber,
-                    onValueChange = { },
-                    enabled = false,
-                    label = { RequiredLabel(context.getString(R.string.unit_number)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    label = { RequiredLabel(context.getString(R.string.area)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfRooms,
-                    onValueChange = { numberOfRooms = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_rooms)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfParking,
-                    onValueChange = { numberOfParking = it },
-                    label = { RequiredLabel(context.getString(R.string.number_of_parking)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfWarehouse,
-                    onValueChange = { numberOfWarehouse = it },
-                    label = {
-                        Text(
-                            text = context.getString(R.string.number_of_warehouse),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = postCode,
-                    onValueChange = { postCode = it },
-                    label = {
-                        Text(
-                            text = context.getString(R.string.post_code),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    },
-                    isError = postCodeError,
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                if (postCodeError) {
-                    Text(
-                        text = context.getString(R.string.invalid_post_code),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
+                ) {
                     OutlinedTextField(
-                        value = selectedFloorLabel,
-                        onValueChange = { },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { floorDropdownExpanded = true },
-                        readOnly = true,
-                        label = { RequiredLabel(text = context.getString(R.string.floor)) },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                floorDropdownExpanded = !floorDropdownExpanded
-                            }) {
-                                Icon(
-                                    imageVector = if (floorDropdownExpanded)
-                                        Icons.Default.KeyboardArrowUp
-                                    else
-                                        Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge
+                        value = unitNumber,
+                        onValueChange = { unitNumber = it },
+                        label = { RequiredLabel(context.getString(R.string.unit_number)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    DropdownMenu(
-                        expanded = floorDropdownExpanded,
-                        onDismissRequest = { floorDropdownExpanded = false }
-                    ) {
-                        floorOptions.forEach { opt ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        opt.label,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                },
-                                onClick = {
-                                    selectedFloor = opt.value
-                                    floorDropdownExpanded = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = area,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) area = input
+                        },
+                        label = { RequiredLabel(context.getString(R.string.area)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfRooms,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfRooms = input
+                        },
+                        label = { RequiredLabel(context.getString(R.string.number_of_rooms)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfParking,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfParking = input
+                        },
+                        label = { RequiredLabel(context.getString(R.string.number_of_parking)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfWarehouse,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfWarehouse = input
+                        },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.number_of_warehouse),
+                                style = MaterialTheme.typography.bodyLarge
                             )
-                        }
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = postCode,
+                        onValueChange = { postCode = it },
+                        label = {
+                            Text(
+                                text = context.getString(R.string.post_code),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        isError = postCodeError,
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    if (postCodeError) {
+                        Text(
+                            text = context.getString(R.string.invalid_post_code),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = floorCount,
+                        onValueChange = { floorCount = it },
+                        label = { RequiredLabel(context.getString(R.string.floor)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val floorVal = selectedFloor ?: return@Button
-                    val newUnit = Units(
-                        unitNumber = unitNumber,
-                        area = area,
-                        numberOfRooms = numberOfRooms,
-                        numberOfParking = numberOfParking,
-                        numberOfWarehouse = numberOfWarehouse,
-                        postCode = postCode,
-                        floorNumber = floorVal
-                    )
-                    onAddUnit(newUnit)
-                },
-                enabled = isFormValid
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = context.getString(R.string.insert),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val newUnit = Units(
+                            unitNumber = unitNumber,
+                            area = area,
+                            numberOfRooms = numberOfRooms,
+                            numberOfParking = numberOfParking,
+                            numberOfWarehouse = numberOfWarehouse,
+                            postCode = postCode,
+                            floorNumber = floorCount
+                        )
+                        onAddUnit(newUnit)
+
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    enabled = isFormValid,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.insert),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
-    )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditUnitDialog(
     unit: Units,
-    floorCount: Int,
     onDismiss: () -> Unit,
     onUpdateUnit: (Units) -> Unit
 ) {
@@ -3015,188 +3427,201 @@ fun EditUnitDialog(
     var numberOfParking by remember { mutableStateOf(unit.numberOfParking) }
     var numberOfWarehouse by remember { mutableStateOf(unit.numberOfWarehouse) }
     var postCode by remember { mutableStateOf(unit.postCode) }
+    var floorNumber by remember { mutableStateOf(unit.floorNumber) }
 
     val context = LocalContext.current
+    val postCodeError = postCode.isNotEmpty() && !Validation().isValidPostalCode(postCode)
 
-    val baseOptions = remember(floorCount) {
-        buildFloorOptionsForBuilding(context, floorCount)
-    }
+    val isFormValid =
+        unitNumber.isNotBlank() &&
+                area.isNotBlank() &&
+                numberOfRooms.isNotBlank() &&
+                numberOfParking.isNotBlank() &&
+                !postCodeError
 
-    val floorOptions = remember(baseOptions, unit.floorNumber) {
-        if (unit.floorNumber != 0 &&
-            baseOptions.none { it.value == unit.floorNumber }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            focusManager.clearFocus()
+            onDismiss()
+        },
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
         ) {
-            baseOptions + FloorOption(
-                value = unit.floorNumber,
-                label = FloorFormatter.toLabel(context, unit.floorNumber)
-            )
-        } else {
-            baseOptions
-        }
-    }
-
-    var selectedFloor by remember { mutableStateOf<Int?>(unit.floorNumber) }
-    var floorDropdownExpanded by remember { mutableStateOf(false) }
-    val selectedFloorLabel = floorOptions.firstOrNull { it.value == selectedFloor }?.label ?: ""
-
-    AlertDialog(
-        onDismissRequest = { },
-        title = {
             Text(
                 text = context.getString(R.string.edit_unit),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = unitNumber,
-                    enabled = false,
-                    onValueChange = { unitNumber = it },
-                    label = { Text(context.getString(R.string.unit_number)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    label = { Text(context.getString(R.string.area)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfRooms,
-                    onValueChange = { numberOfRooms = it },
-                    label = { Text(context.getString(R.string.number_of_rooms)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfParking,
-                    onValueChange = { numberOfParking = it },
-                    label = { Text(context.getString(R.string.number_of_parking)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = numberOfWarehouse,
-                    onValueChange = { numberOfWarehouse = it },
-                    label = { Text(context.getString(R.string.number_of_warehouse)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = postCode,
-                    onValueChange = { postCode = it },
-                    label = { Text(context.getString(R.string.post_code)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp)
                 ) {
                     OutlinedTextField(
-                        value = selectedFloorLabel,
-                        onValueChange = { },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { floorDropdownExpanded = true },
-                        readOnly = true,
-                        label = { Text(text = context.getString(R.string.floor)) },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                floorDropdownExpanded = !floorDropdownExpanded
-                            }) {
-                                Icon(
-                                    imageVector = if (floorDropdownExpanded)
-                                        Icons.Default.KeyboardArrowUp
-                                    else
-                                        Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge
+                        value = unitNumber,
+                        onValueChange = { unitNumber = it },
+                        label = { Text(context.getString(R.string.unit_number)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    DropdownMenu(
-                        expanded = floorDropdownExpanded,
-                        onDismissRequest = { floorDropdownExpanded = false }
-                    ) {
-                        floorOptions.forEach { opt ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        opt.label,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                },
-                                onClick = {
-                                    selectedFloor = opt.value
-                                    floorDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val floorVal = selectedFloor ?: unit.floorNumber
-                    val updatedUnit = Units(
-                        unitId = unit.unitId,
-                        buildingId = unit.buildingId,
-                        unitNumber = unitNumber,
-                        area = area,
-                        postCode = postCode,
-                        numberOfRooms = numberOfRooms,
-                        numberOfWarehouse = numberOfWarehouse,
-                        numberOfParking = numberOfParking,
-                        excelBuildingName = unit.excelBuildingName,
-                        floorNumber = floorVal
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = area,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) area = input
+                        },
+                        label = { Text(context.getString(R.string.area)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    onUpdateUnit(updatedUnit)
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfRooms,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfRooms = input
+                        },
+                        label = { Text(context.getString(R.string.number_of_rooms)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfParking,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfParking = input
+                        },
+                        label = { Text(context.getString(R.string.number_of_parking)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = numberOfWarehouse,
+                        onValueChange = { input ->
+                            if (input.isEmpty() || input.all { it.isDigit() }) numberOfWarehouse = input
+                        },
+                        label = { Text(context.getString(R.string.number_of_warehouse)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = postCode,
+                        onValueChange = { postCode = it },
+                        label = { Text(context.getString(R.string.post_code)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        isError = postCodeError,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (postCodeError) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = context.getString(R.string.invalid_post_code),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = floorNumber,
+                        onValueChange = { floorNumber = it },
+                        label = { Text(context.getString(R.string.floor)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-            ) {
-                Text(
-                    text = context.getString(R.string.update),
-                    style = MaterialTheme.typography.bodyLarge
-                )
             }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(
-                    text = context.getString(R.string.cancel),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.cancel),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Button(
+                    enabled = isFormValid,
+                    onClick = {
+                        val updatedUnit = Units(
+                            unitId = unit.unitId,
+                            buildingId = unit.buildingId,
+                            unitNumber = unitNumber,
+                            area = area,
+                            postCode = postCode,
+                            numberOfRooms = numberOfRooms,
+                            numberOfWarehouse = numberOfWarehouse,
+                            numberOfParking = numberOfParking,
+                            excelBuildingName = unit.excelBuildingName,
+                            floorNumber = floorNumber
+                        )
+                        onUpdateUnit(updatedUnit)
+
+                        focusManager.clearFocus()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = context.getString(R.string.update),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
-    )
+    }
 }
-
-
 
 
 fun String.persianToEnglishDigits(): String {
@@ -3339,7 +3764,8 @@ fun EditOwnerDialog(
                         OwnersUnitsCrossRef(
                             ownerId = owner.user?.userId ?: 0L,
                             unitId = unitId,
-                            dang = dang
+                            dang = dang,
+                            isResident = false
                         )
                     }
                     onSave(updatedCrossRefs, isManager)
@@ -3400,9 +3826,16 @@ fun EditTenantDialog(
 
     LaunchedEffect(startDate) {
         if (startDate.isNotEmpty()) {
-            endDate = sharedViewModel
-                .getNextYearSameDaySafe(sharedViewModel.parsePersianDate(startDate))
-                .persianShortDate
+            endDate = fixPersianShortDate(
+                sharedViewModel
+                    .getNextYearSameDaySafe(
+                        sharedViewModel.parsePersianDate(startDate),
+                        startDate
+                    )
+                    .persianShortDate
+            )
+
+
         }
     }
 
@@ -3518,7 +3951,8 @@ fun EditTenantDialog(
                             )
                         },
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(

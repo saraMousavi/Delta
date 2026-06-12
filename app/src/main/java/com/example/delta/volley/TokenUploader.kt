@@ -12,10 +12,10 @@ import org.json.JSONObject
 
 object TokenUploader {
     private const val TAG = "TokenUploader"
-//    private const val TOKEN_URL = "http://217.144.107.231:3000/push/token"
+//    private const val TOKEN_URL = "http://185.129.197.6:443/push/token"
 // TokenUploader
 private const val TOKEN_URL =
-    "http://217.144.107.231:3000/push/device-token/upsert"
+    "http://185.129.197.6:443/push/device-token/upsert"
 
 
     fun uploadFcmToken(

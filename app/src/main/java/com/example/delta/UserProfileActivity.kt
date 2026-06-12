@@ -166,6 +166,7 @@ class UserProfileActivity : ComponentActivity() {
                                                 put("gender",  updatedUser.gender)
                                                 put("nationalCode", updatedUser.nationalCode)
                                                 put("address", updatedUser.address)
+                                                put("phoneNumber", updatedUser.phoneNumber)
                                             }
 
                                             Users().updateUser(
@@ -212,6 +213,7 @@ fun UserProfileScreen(
 
     var emailError by remember { mutableStateOf<String?>(null) }
     var mobileError by remember { mutableStateOf<String?>(null) }
+    var phoneError by remember { mutableStateOf(false) }
 
     fun displayValue(value: String?): String = value?.takeIf { it.isNotBlank() } ?: "--"
 
@@ -274,6 +276,11 @@ fun UserProfileScreen(
                         )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
+                            label = stringResource(R.string.phone_number),
+                            value = displayValue(userState.phoneNumber)
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        UserProfileDisplayRow(
                             label = stringResource(R.string.email),
                             value = displayValue(userState.email)
                         )
@@ -285,14 +292,14 @@ fun UserProfileScreen(
                                     ?: Gender.FEMALE.getDisplayName(context)
                             )
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        UserProfileDisplayRow(
-                            label = stringResource(R.string.role),
-                            value = roleDisplayFromId(
-                                Preference().getRoleId(context),
-                                context = context
-                            )
-                        )
+//                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+//                        UserProfileDisplayRow(
+//                            label = stringResource(R.string.role),
+//                            value = roleDisplayFromId(
+//                                Preference().getRoleId(context),
+//                                context = context
+//                            )
+//                        )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         UserProfileDisplayRow(
                             label = stringResource(R.string.national_code),
@@ -378,6 +385,7 @@ fun UserProfileScreen(
                         )
 
                         UserProfileEditableField(
+                            enable = false,
                             label = stringResource(id = R.string.mobile_number),
                             value = userState.mobileNumber,
                             onValueChange = { newValue ->
@@ -392,6 +400,20 @@ fun UserProfileScreen(
                             },
                             isError = mobileError != null,
                             errorText = mobileError,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone
+                            )
+                        )
+
+                        UserProfileEditableField(
+                            label = stringResource(id = R.string.phone_number),
+                            value = userState.phoneNumber.toString(),
+                            onValueChange = { newValue ->
+                                userState = userState.copy(phoneNumber = newValue)
+                                phoneError = newValue.isNotBlank() && !Validation().isValidPhone(newValue)
+                            },
+                            isError = phoneError,
+                            errorText = context.getString(R.string.invalid_phone_number),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Phone
                             )
@@ -504,6 +526,7 @@ private fun UserProfileDisplayRow(
 }
 @Composable
 fun UserProfileEditableField(
+    enable: Boolean = true,
     modifier: Modifier = Modifier,
     label: String,
     value: String,
@@ -514,6 +537,7 @@ fun UserProfileEditableField(
     required: Boolean = false
 ) {
     OutlinedTextField(
+        enabled = enable,
         value = value,
         onValueChange = onValueChange,
         label = { if(required) RequiredLabel(label) else Text(label, style = MaterialTheme.typography.bodyLarge) },
